@@ -6,177 +6,237 @@ Detailed pricing breakdown and rationale for VelocityPulse SaaS offering.
 
 ### Core Principles
 
-1. **Mass adoption first, revenue optimization later**
-   - Low barrier to entry
-   - Generous free tier to build word-of-mouth
-   - Convert through value, not limitations
+1. **Volume adoption, low barrier**
+   - Affordable entry point for everyone
+   - Professional monitoring shouldn't require a big budget
+   - Low price drives adoption, word-of-mouth
 
-2. **Predictable pricing**
-   - No per-device pricing complexity
-   - Clear tier boundaries
-   - No surprise overages
+2. **Predictable simplicity**
+   - Two clear tiers, no confusion
+   - No per-device calculations
+   - Annual billing keeps it simple
 
-3. **Annual billing simplicity**
-   - Monthly rate, billed annually
-   - Simpler cash flow management
-   - Higher LTV, lower churn
+3. **Partner-friendly economics**
+   - 50% margin for partners
+   - Per-customer model is fair
+   - Simple rules, no negotiations
 
-## Pricing Tiers
+## Pricing Structure
 
-### Free Forever - £0/month
+### 30-Day Trial - Free
 
-| Feature | Limit |
-|---------|-------|
-| Devices | 50 |
-| Agents | 1 |
-| Users | 2 |
-| Data retention | 7 days |
-| Email alerts | Yes |
-| Dashboard access | Full |
-| Support | Community |
-
-**Target users:** Individuals, small offices, evaluation
-
-**Why this works:**
-- 50 devices covers most small offices
-- Creates advocates who recommend to larger orgs
-- Low support burden (self-service)
-
----
-
-### Pro Trial - £0 for 30 days
-
-| Feature | Limit |
-|---------|-------|
+| Feature | Access |
+|---------|--------|
 | Devices | Unlimited |
-| Agents | 3 |
-| Users | 10 |
-| All Pro features | Yes |
-| No credit card | Required |
+| Agents | Unlimited |
+| Users | Unlimited |
+| All features | Full access |
+| Credit card | Not required |
 
-**Purpose:** Let users experience full value before committing
+**Purpose:** Let prospects experience full value with zero friction.
+
+**After 30 days:** Convert to Starter or Unlimited, or data retained 30 more days, then deleted.
 
 ---
 
-### Pro - £29/month (billed annually = £348/year)
+### Starter Tier - $50/year
 
-| Feature | Limit |
-|---------|-------|
-| Devices | 200 |
-| Agents | 5 |
-| Users | 10 |
-| Data retention | 30 days |
+| Currency | Annual Price |
+|----------|--------------|
+| USD | $50/year |
+| GBP | £50/year |
+| EUR | €50/year |
+
+| Feature | Included |
+|---------|----------|
+| Devices | Up to 100 |
+| Agents | Unlimited |
+| Users | Unlimited |
+| Data retention | 1 year |
+| All features | Yes |
 | Email alerts | Yes |
 | Slack/Teams alerts | Yes |
 | API access | Yes |
 | Support | Email (48h response) |
 
-**Target users:** Growing SMBs, small IT teams
+**Target:** Small businesses, single-site schools, home labs, getting started.
 
-**Why £29:**
-- Below psychological £30 threshold
-- Comparable to other SMB tools (Notion, Slack)
-- 6x cheaper than PRTG entry point
+**Value Proposition:** Less than $5/month for professional monitoring. Less than a coffee per month.
 
 ---
 
-### Business - £79/month (billed annually = £948/year)
+### Unlimited Tier - $950/year
 
-| Feature | Limit |
-|---------|-------|
-| Devices | 500 |
-| Agents | 10 |
-| Users | 25 |
-| Data retention | 90 days |
-| All Pro features | Yes |
-| SSO (SAML) | Yes |
-| Custom branding | Yes |
-| Priority support | Email (24h response) |
-| Onboarding call | 30 minutes |
+| Currency | Annual Price |
+|----------|--------------|
+| USD | $950/year |
+| GBP | £750/year |
+| EUR | €850/year |
 
-**Target users:** Established SMBs, schools, multi-site businesses
-
-**Why £79:**
-- Clear value jump from Pro (2.5x devices, SSO)
-- Still affordable for education budgets
-- Competitive with mid-tier alternatives
-
----
-
-### Enterprise - Custom pricing
-
-| Feature | Limit |
-|---------|-------|
-| Devices | Unlimited |
+| Feature | Included |
+|---------|----------|
+| Devices | Up to 5,000* |
 | Agents | Unlimited |
 | Users | Unlimited |
 | Data retention | 1 year |
-| All Business features | Yes |
+| All features | Yes |
+| SSO (SAML) | Yes |
 | White-label option | Yes |
-| Custom SLA | Yes |
-| Dedicated success manager | Yes |
-| Phone support | Yes |
-| Custom integrations | Yes |
+| Priority support | Email 24h, phone available |
+| Onboarding | Dedicated call |
 
-**Target users:** MSPs, large organizations, MATs
+*Can be unlocked on request for customers with legitimate needs above 5,000 devices
 
-**Starting point:** £500/month minimum
+**Target:** Growing SMBs, MATs, multi-site organizations.
 
-**Why custom:**
-- MSPs need flexibility (per-client billing)
-- Large orgs need procurement process
-- Higher touch = higher value
+**Value Proposition:** Less than $80/month for unlimited monitoring. Fraction of what competitors charge.
 
-## Annual Pricing Summary
+---
 
-| Tier | Monthly Rate | Annual Cost | Savings vs Monthly* |
-|------|--------------|-------------|---------------------|
-| Free | £0 | £0 | - |
-| Pro | £29 | £348 | - |
-| Business | £79 | £948 | - |
-| Enterprise | Custom | Custom | - |
+## Fair Use / Anti-Abuse Policy
 
-*We only offer annual billing to simplify operations.
+### Device Cap: 5,000 Devices
+
+| Scenario | Policy |
+|----------|--------|
+| Under 5,000 devices | No restrictions |
+| Over 5,000 devices | Must request unlock (free for legitimate use) |
+| Unusual usage patterns | Right to contact customer |
+
+**No-abuse clause:** We reserve the right to contact customers exhibiting unusual usage patterns to discuss their needs and ensure optimal service.
+
+**Why 5,000?** Lower than previous 10,000 to prevent abuse at the new lower price point. Genuine customers can request unlocking for free.
+
+---
+
+## Partner Program - 50% Off Retail
+
+### Simple Rules
+
+1. **50% off retail price** - no negotiations, no tiers
+2. **Per-customer licensing** - must declare every customer
+3. **No pooling** - cannot use one subscription for all clients
+
+### Partner Pricing
+
+| Tier | Retail (USD) | Partner Price (50% off) |
+|------|--------------|-------------------------|
+| Starter | $50/year | **$25/year per customer** |
+| Unlimited | $950/year | **$475/year per customer** |
+
+*GBP/EUR equivalents: Starter £25/€25, Unlimited £375/€425 per customer*
+
+### Who Qualifies
+
+- MSPs (Managed Service Providers)
+- IT resellers
+- VAR partners
+- Any company reselling to end customers
+
+### Requirements
+
+- Register as partner (simple form)
+- Declare each customer deployment
+- No minimum volume
+- White-label available at Unlimited tier
+
+---
 
 ## Competitive Pricing Analysis
 
-| Competitor | Entry Price | 100 Devices | Notes |
-|------------|-------------|-------------|-------|
-| **VelocityPulse** | £0 | £29/mo | Free tier, simple pricing |
-| PRTG Network Monitor | £1,350/year | £1,350/year | Per-sensor pricing |
-| Datadog | $15/host/mo | ~$1,500/mo | Enterprise-focused |
-| Nagios XI | $1,995/year | $1,995/year | Per-server, complex |
-| Zabbix | Free | Free | Self-hosted, complex setup |
-| UptimeRobot | $7/mo | N/A | URL monitoring only |
-| Better Stack | $24/mo | N/A | Limited device monitoring |
+### Break-Even Analysis
 
-**Our position:** Affordable like UptimeRobot, capable like PRTG
+| vs Competitor | Their Pricing | Break-Even Point |
+|---------------|---------------|------------------|
+| Datadog | $15/host/month | **5 devices** - VelocityPulse Starter wins |
+| PRTG | ~$3/sensor | **17 sensors** - VelocityPulse Starter wins |
+| UptimeRobot Pro | $84/year | Comparable, but full network monitoring |
 
-## Potential Add-Ons (Future)
+### Price Comparison at Scale
 
-| Add-On | Price | Description |
-|--------|-------|-------------|
-| Additional agents | £10/mo each | Beyond tier limit |
-| Extended retention | £20/mo | 1 year data retention |
-| White-label | £100/mo | Remove VelocityPulse branding |
-| API rate limit increase | £50/mo | 10x API calls |
-| Dedicated support | £200/mo | Slack channel, 4h response |
+| Device Count | VelocityPulse | Datadog | PRTG (est.) |
+|--------------|---------------|---------|-------------|
+| 5 devices | $50/yr (Starter) | $900/yr | ~$180/yr |
+| 50 devices | $50/yr (Starter) | $9,000/yr | ~$1,800/yr |
+| 100 devices | $50/yr (Starter) | $18,000/yr | ~$3,600/yr |
+| 200 devices | $950/yr (Unlimited) | $36,000/yr | ~$7,200/yr |
+| 500 devices | $950/yr (Unlimited) | $90,000/yr | ~$18,000/yr |
+| 1,000 devices | $950/yr (Unlimited) | $180,000/yr | ~$36,000/yr |
 
-## Discounts
+**Key insight:** VelocityPulse undercuts nearly everyone at any scale. At 100 devices, we're 360x cheaper than Datadog.
 
-### Education Discount (Proposed)
-- **50% off** Business tier for UK schools
-- Verification via school email domain
-- Stackable with annual billing
+---
 
-### Non-Profit Discount (Proposed)
-- **30% off** any paid tier
-- Verification via charity number
+## Why This Works for Each Segment
 
-### Volume Discount (Enterprise)
-- 10-24 sites: 10% off
-- 25-49 sites: 15% off
-- 50+ sites: 20% off
+### Home Labs / Hobbyists (5-50 devices)
+- **Value:** $50/year - cheaper than a domain name
+- **Benefit:** Professional-grade monitoring for personal projects
+- **Comparison:** Way cheaper than any alternative
+
+### Small Businesses (20-100 devices)
+- **Value:** $50/year for everything they need
+- **Benefit:** Real monitoring without enterprise budgets
+- **Comparison:** Datadog would be $3,600-$18,000/year
+
+### Schools & Single Sites (50-200 devices)
+- **Value:** $50-$950/year depending on size
+- **Benefit:** Fits any school budget
+- **Comparison:** No education discount needed at these prices
+
+### Growing SMBs / MATs (200-1,000+ devices)
+- **Value:** $950/year unlimited
+- **Benefit:** Scale without worrying about costs
+- **Comparison:** Datadog would be $36,000-$180,000/year
+
+### MSPs
+- **Value:** $25/customer (Starter) or $475/customer (Unlimited)
+- **Benefit:** 100% margin opportunity, white-label included
+- **Comparison:** Per-device tools eat margins; we preserve them
+
+---
+
+## Revenue Projections
+
+### Assumptions
+
+| Assumption | Value | Rationale |
+|------------|-------|-----------|
+| Trial conversion rate | 25% | Higher due to low price |
+| Mix | 70% Starter, 25% Unlimited, 5% Partner | Starter dominates at this price |
+| Monthly churn | 2% | Low due to low switching cost |
+
+### Revenue Math
+
+| Tier | Price | Mix | Avg per Customer |
+|------|-------|-----|------------------|
+| Starter | $50/yr | 70% | $35 |
+| Unlimited | $950/yr | 25% | $237.50 |
+| Partner (avg) | ~$250/yr | 5% | $12.50 |
+| **Blended Average** | | | **~$285/yr** |
+
+### 3-Year Projection
+
+| Year | Customers | Mix (S/U/P) | ARR | Actual Revenue |
+|------|-----------|-------------|-----|----------------|
+| Year 1 | 500 | 350/125/25 | ~$150K | ~$80K |
+| Year 2 | 2,000 | 1,400/500/100 | ~$550K | ~$350K |
+| Year 3 | 8,000 | 5,600/2,000/400 | ~$2.2M | ~$1.4M |
+
+*Note: Partner revenue counted at 50% rate*
+
+### Year 1 Quarterly Breakdown
+
+| Quarter | Trial Starts | Conversions (25%) | Active Customers | MRR Equivalent |
+|---------|--------------|-------------------|------------------|----------------|
+| Q1 | 200 | 50 | 50 | ~$1,200 |
+| Q2 | 400 | 100 | 145 | ~$3,450 |
+| Q3 | 600 | 150 | 280 | ~$6,650 |
+| Q4 | 800 | 200 | 500 | ~$11,900 |
+
+*Assumes 2% monthly churn applied each quarter*
+
+---
 
 ## Billing Operations
 
@@ -184,84 +244,75 @@ Detailed pricing breakdown and rationale for VelocityPulse SaaS offering.
 - Credit/debit card (Visa, Mastercard, Amex)
 - Apple Pay (via Stripe)
 - Google Pay (via Stripe)
-- Bank transfer (Enterprise only, invoice)
+- Bank transfer (invoice, Unlimited tier only)
 
-### Billing Cycle
-- Annual billing only for self-service
-- Monthly invoicing available for Enterprise
-- Prorated upgrades mid-cycle
-- No refunds for downgrades
+### Billing Options
+- **Annual only** - Keeps it simple, reduces churn
+- Prorated upgrades from Starter to Unlimited
+
+### Plan Changes
+- **Trial to Starter:** Immediate, data preserved
+- **Trial to Unlimited:** Immediate, data preserved
+- **Starter to Unlimited:** Prorated upgrade, immediate access
+- **Downgrade:** End of billing period
+- **Cancel:** Access until end of paid period
 
 ### Failed Payments
 1. Day 0: Payment fails, retry automatically
 2. Day 3: Email notification, second retry
 3. Day 7: Final warning email
-4. Day 14: Downgrade to Free tier
-5. Data retained for 30 days, then deleted
+4. Day 14: Service suspended
+5. Day 44: Data deleted (30-day retention after suspension)
 
-### Plan Changes
-- **Upgrade:** Immediate, prorated
-- **Downgrade:** End of billing period
-- **Cancel:** Access until end of paid period
-
-## Revenue Projections
-
-### Assumptions
-- 500 free users
-- 10% convert to Pro
-- 20% of Pro upgrade to Business
-- Average Enterprise deal: £6,000/year
-
-### Year 1 Projection
-
-| Tier | Customers | Annual Revenue |
-|------|-----------|----------------|
-| Free | 500 | £0 |
-| Pro | 50 | £17,400 |
-| Business | 10 | £9,480 |
-| Enterprise | 5 | £30,000 |
-| **Total** | **565** | **£56,880** |
-
-### Year 2 Projection (2x growth)
-
-| Tier | Customers | Annual Revenue |
-|------|-----------|----------------|
-| Free | 1,000 | £0 |
-| Pro | 100 | £34,800 |
-| Business | 20 | £18,960 |
-| Enterprise | 15 | £90,000 |
-| **Total** | **1,135** | **£143,760** |
+---
 
 ## Key Metrics to Track
 
 | Metric | Target |
 |--------|--------|
-| Free to Pro conversion | 10% |
-| Pro to Business upgrade | 20% |
-| Monthly churn (Pro) | <5% |
-| Monthly churn (Business) | <3% |
-| Average Contract Value | £500 |
-| Customer Acquisition Cost | <£100 |
-| Lifetime Value (Pro) | £1,000 |
-| LTV:CAC ratio | >3:1 |
-
-## Pricing FAQ
-
-**Q: Why no monthly billing option?**
-A: Annual billing simplifies operations, improves cash flow, and reduces churn. Our prices are low enough that annual commitment is reasonable.
-
-**Q: Can I pay monthly as Enterprise?**
-A: Yes, Enterprise customers can arrange monthly invoicing with a minimum 12-month commitment.
-
-**Q: What happens if I exceed my device limit?**
-A: We'll notify you at 80% and 90%. At 100%, new devices won't be added until you upgrade or remove existing devices. No automatic overage charges.
-
-**Q: Is there a startup discount?**
-A: Contact us for startup and accelerator program pricing. We're flexible for early-stage companies.
-
-**Q: Can I switch plans mid-year?**
-A: Upgrades are immediate and prorated. Downgrades take effect at your next renewal date.
+| Trial conversion rate | 25% |
+| Monthly churn | <2% |
+| Starter:Unlimited ratio | 70:25 |
+| Partner adoption | 5% of revenue |
+| Customer Acquisition Cost | <$100 |
+| Lifetime Value (Starter, 36mo) | ~$150 |
+| Lifetime Value (Unlimited, 36mo) | ~$2,850 |
+| LTV:CAC ratio (blended) | >5:1 |
 
 ---
 
-*Last updated: January 2026*
+## Pricing FAQ
+
+**Q: Why two tiers instead of one?**
+A: The old $950/month unlimited model was too expensive for small organizations. Now everyone can afford professional monitoring. Starter covers most small deployments; Unlimited is there when you need it.
+
+**Q: Is $50/year really enough for a business?**
+A: Yes. Up to 100 devices, all features, real support. We'd rather have 1,000 customers at $50 than 10 customers at $950/month. Volume makes this work.
+
+**Q: What if I have 101 devices?**
+A: You'll need the Unlimited tier at $950/year. Or remove a few devices and stay on Starter. Either way, it's affordable.
+
+**Q: What happens at 5,000 devices?**
+A: Contact us and we'll unlock higher limits for free if your use case is legitimate. The cap exists to prevent abuse, not to limit genuine customers.
+
+**Q: Why annual billing only?**
+A: At $50/year, monthly billing would be $4.17/month - not worth the overhead. Annual keeps it simple and reduces churn.
+
+**Q: Do you offer education/non-profit discounts?**
+A: No longer needed. At $50/year Starter and $950/year Unlimited, we're already affordable for everyone. The old discounts were for the $950/month model.
+
+**Q: How does the Partner Program work?**
+A: Register as a partner, declare each customer, pay 50% of retail. $25/customer/year for Starter, $475/customer/year for Unlimited. No minimum, no negotiations.
+
+**Q: Can I pool devices across customers as an MSP?**
+A: No. Each customer needs their own subscription. This is fairer for everyone and prevents abuse.
+
+**Q: What counts as a "device"?**
+A: Any monitored endpoint: servers, switches, routers, printers, IoT devices, VMs. If our agent can discover it and you want to monitor it, it's a device.
+
+**Q: Is there a contract?**
+A: No contracts. Annual billing is pre-paid, cancel anytime with access until the end of your paid period.
+
+---
+
+*Last updated: January 2026 (Two-tier pricing model)*

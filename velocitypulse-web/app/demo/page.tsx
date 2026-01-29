@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, Zap, Shield, Clock } from 'lucide-react'
 import Card from '@/components/ui/Card'
@@ -8,6 +7,7 @@ import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
+import { useDemoForm } from '@/hooks/useFormSubmit'
 
 const companySizeOptions = [
   { value: '1-10', label: '1-10 employees' },
@@ -33,22 +33,7 @@ const benefits = [
 ]
 
 export default function DemoPage() {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSubmitted, setIsSubmitted] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-
-    const formData = new FormData(e.currentTarget)
-    const data = Object.fromEntries(formData)
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    setIsSubmitted(true)
-    setIsSubmitting(false)
-  }
+  const { isSubmitting, isSubmitted, handleSubmit, reset } = useDemoForm()
 
   return (
     <div className="py-16 md:py-24">
@@ -102,9 +87,14 @@ export default function DemoPage() {
                   <p className="text-secondary mb-6">
                     Check your email for login instructions. Your 30-day trial starts now.
                   </p>
-                  <Button href="https://app.velocitypulse.io" variant="primary">
-                    Go to Dashboard
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Button href="https://app.velocitypulse.io" variant="primary">
+                      Go to Dashboard
+                    </Button>
+                    <Button onClick={reset} variant="secondary">
+                      Start another trial
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -114,12 +104,14 @@ export default function DemoPage() {
                       name="firstName"
                       placeholder="John"
                       required
+                      aria-required="true"
                     />
                     <Input
                       label="Last name"
                       name="lastName"
                       placeholder="Smith"
                       required
+                      aria-required="true"
                     />
                   </div>
 
@@ -129,6 +121,7 @@ export default function DemoPage() {
                     type="email"
                     placeholder="you@company.com"
                     required
+                    aria-required="true"
                   />
 
                   <Input
@@ -136,6 +129,7 @@ export default function DemoPage() {
                     name="company"
                     placeholder="Acme Inc"
                     required
+                    aria-required="true"
                   />
 
                   <div className="grid md:grid-cols-2 gap-6">
@@ -145,6 +139,7 @@ export default function DemoPage() {
                       options={companySizeOptions}
                       placeholder="Select size"
                       required
+                      aria-required="true"
                     />
                     <Select
                       label="Devices to monitor"
@@ -152,6 +147,7 @@ export default function DemoPage() {
                       options={deviceCountOptions}
                       placeholder="Select range"
                       required
+                      aria-required="true"
                     />
                   </div>
 

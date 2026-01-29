@@ -1,27 +1,42 @@
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia',
-})
-
-const PRICES = {
-  starter: process.env.STRIPE_PRICE_STARTER || 'price_starter_placeholder',
-  unlimited: process.env.STRIPE_PRICE_UNLIMITED || 'price_unlimited_placeholder',
-}
+import { getStripeServer, getStripePrices } from '@/lib/stripe'
+import { checkoutSchema, formatZodErrors } from '@/lib/validation'
+import { isDevelopment } from '@/lib/env'
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { plan, email, successUrl, cancelUrl } = body
 
-    // Validate plan
-    if (!plan || !['starter', 'unlimited'].includes(plan)) {
+    // Validate input
+    const result = checkoutSchema.safeParse(body)
+    if (!result.success) {
       return NextResponse.json(
-        { error: 'Invalid plan' },
+        { error: 'Validation failed', details: formatZodErrors(result.error) },
         { status: 400 }
       )
     }
+
+    const { plan, email, successUrl, cancelUrl } = result.data
+
+    // Get price ID for the selected plan
+    const prices = getStripePrices()
+    const priceId = plan === 'starter' ? prices.starter : prices.unlimited
+
+    if (!priceId || priceId.startsWith('price_placeholder')) {
+      if (isDevelopment()) {
+        return NextResponse.json(
+          { error: 'Stripe prices not configured. Set STRIPE_PRICE_STARTER and STRIPE_PRICE_UNLIMITED in .env.local' },
+          { status: 503 }
+        )
+      }
+      return NextResponse.json(
+        { error: 'Payment system temporarily unavailable' },
+        { status: 503 }
+      )
+    }
+
+    const stripe = getStripeServer()
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://velocitypulse.io'
 
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
@@ -29,29 +44,40 @@ export async function POST(request: Request) {
       payment_method_types: ['card'],
       line_items: [
         {
-          price: PRICES[plan as keyof typeof PRICES],
+          price: priceId,
           quantity: 1,
         },
       ],
-      customer_email: email,
-      success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
+      ...(email && { customer_email: email }),
+      success_url: successUrl || `${appUrl}/pricing?success=true`,
+      cancel_url: cancelUrl || `${appUrl}/pricing?canceled=true`,
+      billing_address_collection: 'required',
+      allow_promotion_codes: true,
       subscription_data: {
         trial_period_days: 30,
         metadata: {
           plan,
         },
       },
-      metadata: {
-        plan,
-      },
     })
 
-    return NextResponse.json({ sessionId: session.id, url: session.url })
+    return NextResponse.json({
+      sessionId: session.id,
+      url: session.url,
+    })
   } catch (error) {
-    console.error('Error creating checkout session:', error)
+    // Type-safe error handling
+    const message = error instanceof Error ? error.message : 'Unknown error'
+
+    if (isDevelopment()) {
+      return NextResponse.json(
+        { error: 'Failed to create checkout session', details: message },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json(
-      { error: 'Failed to create checkout session' },
+      { error: 'Failed to create checkout session. Please try again.' },
       { status: 500 }
     )
   }

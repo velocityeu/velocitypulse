@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, MessageSquare, Clock } from 'lucide-react'
+import { Mail, MessageSquare, Clock, AlertCircle } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
 import Button from '@/components/ui/Button'
+import { useFormSubmit } from '@/hooks/useFormSubmit'
 
 const subjectOptions = [
   { value: 'sales', label: 'Sales inquiry' },
@@ -18,32 +18,9 @@ const subjectOptions = [
 ]
 
 export default function ContactPage() {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSubmitted, setIsSubmitted] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-
-    const formData = new FormData(e.currentTarget)
-    const data = Object.fromEntries(formData)
-
-    try {
-      const response = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-
-      if (response.ok) {
-        setIsSubmitted(true)
-      }
-    } catch (error) {
-      console.error('Error submitting form:', error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+  const { isSubmitting, isSubmitted, error, fieldErrors, handleSubmit, reset } = useFormSubmit({
+    url: '/api/contact',
+  })
 
   return (
     <div className="py-16 md:py-24">
@@ -120,18 +97,32 @@ export default function ContactPage() {
                 <p className="text-secondary mb-6">
                   Thank you for reaching out. We&apos;ll get back to you within 24-48 hours.
                 </p>
-                <Button onClick={() => setIsSubmitted(false)} variant="secondary">
+                <Button onClick={reset} variant="secondary">
                   Send another message
                 </Button>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Error Banner */}
+                {error && (
+                  <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                        {error}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid md:grid-cols-2 gap-6">
                   <Input
                     label="Name"
                     name="name"
                     placeholder="Your name"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.name}
                   />
                   <Input
                     label="Email"
@@ -139,6 +130,8 @@ export default function ContactPage() {
                     type="email"
                     placeholder="you@example.com"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.email}
                   />
                 </div>
 
@@ -146,6 +139,7 @@ export default function ContactPage() {
                   label="Organization"
                   name="organization"
                   placeholder="Your company or organization (optional)"
+                  error={fieldErrors?.organization}
                 />
 
                 <Select
@@ -154,6 +148,8 @@ export default function ContactPage() {
                   options={subjectOptions}
                   placeholder="Select a subject"
                   required
+                  aria-required="true"
+                  error={fieldErrors?.subject}
                 />
 
                 <Textarea
@@ -161,6 +157,8 @@ export default function ContactPage() {
                   name="message"
                   placeholder="How can we help you?"
                   required
+                  aria-required="true"
+                  error={fieldErrors?.message}
                 />
 
                 <Button type="submit" disabled={isSubmitting} className="w-full md:w-auto">

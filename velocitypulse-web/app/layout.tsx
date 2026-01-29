@@ -20,9 +20,9 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://velocitypulse.io'),
-  title: 'VelocityPulse | Professional Network Monitoring from $50/year',
+  title: 'VelocityPulse.io | Professional Network Monitoring from $50/year',
   description: 'Professional network monitoring without the professional price tag. Start at $50/year for up to 100 devices. Scale to $950/year for unlimited. No per-device pricing, no surprises.',
-  keywords: ['network monitoring', 'infrastructure monitoring', 'IT dashboard', 'device monitoring', 'real-time alerts', 'affordable'],
+  keywords: ['network monitoring', 'infrastructure monitoring', 'IT dashboard', 'device monitoring', 'real-time alerts', 'affordable', 'VelocityPulse'],
   authors: [{ name: 'Velocity EU' }],
   icons: {
     icon: [
@@ -38,10 +38,10 @@ export const metadata: Metadata = {
   },
   manifest: '/manifest.json',
   openGraph: {
-    title: 'VelocityPulse | Professional Network Monitoring from $50/year',
+    title: 'VelocityPulse.io | Professional Network Monitoring from $50/year',
     description: 'Professional network monitoring without the professional price tag. Start at $50/year for up to 100 devices.',
     url: 'https://velocitypulse.io',
-    siteName: 'VelocityPulse',
+    siteName: 'VelocityPulse.io',
     locale: 'en_US',
     type: 'website',
     images: [
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'VelocityPulse | Professional Network Monitoring from $50/year',
+    title: 'VelocityPulse.io | Professional Network Monitoring from $50/year',
     description: 'Professional network monitoring without the professional price tag. Start at $50/year for up to 100 devices.',
     images: ['/og-image.png'],
   },
@@ -87,7 +87,7 @@ export default function RootLayout({
       <body className="font-sans bg-primary min-h-screen flex flex-col">
         <ThemeProvider>
           <Navbar />
-          <main className="flex-1">
+          <main id="main-content" className="flex-1">
             {children}
           </main>
           <Footer />

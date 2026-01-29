@@ -34,10 +34,12 @@ const footerLinks = {
 interface AccordionSectionProps {
   title: string
   links: { name: string; href: string }[]
+  sectionId: string
 }
 
-function AccordionSection({ title, links }: AccordionSectionProps) {
+function AccordionSection({ title, links, sectionId }: AccordionSectionProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const contentId = `footer-section-${sectionId}`
 
   return (
     <div className="border-b border-[var(--color-border-light)] md:border-none">
@@ -46,6 +48,8 @@ function AccordionSection({ title, links }: AccordionSectionProps) {
         className="flex w-full items-center justify-between py-4 md:hidden"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
+        aria-controls={contentId}
+        id={`footer-heading-${sectionId}`}
       >
         <h3 className="font-semibold text-sm text-primary uppercase tracking-wider">
           {title}
@@ -54,16 +58,20 @@ function AccordionSection({ title, links }: AccordionSectionProps) {
           className={`w-5 h-5 text-tertiary transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
+          aria-hidden="true"
         />
       </button>
 
       {/* Desktop: Static header */}
-      <h3 className="hidden md:block font-semibold text-sm text-primary mb-4">
+      <h3 className="hidden md:block font-semibold text-sm text-primary mb-4" id={`footer-heading-desktop-${sectionId}`}>
         {title}
       </h3>
 
       {/* Links - collapsible on mobile, always visible on desktop */}
       <ul
+        id={contentId}
+        role="region"
+        aria-labelledby={`footer-heading-${sectionId}`}
         className={`space-y-3 overflow-hidden transition-all duration-300 md:!max-h-none md:!opacity-100 md:!pb-0 ${
           isOpen ? 'max-h-96 opacity-100 pb-4' : 'max-h-0 opacity-0'
         }`}
@@ -95,12 +103,15 @@ export default function Footer() {
           <div className="pb-6 mb-6 border-b border-[var(--color-border-light)] md:border-none md:pb-0 md:mb-0">
             <Link href="/" className="flex items-center gap-2">
               <Image
-                src={mounted && resolvedTheme === 'dark' ? '/logo-white.png' : '/logo.svg'}
-                alt="VelocityPulse"
-                width={120}
-                height={35}
-                className="h-8 w-auto"
+                src={mounted && resolvedTheme === 'dark' ? '/symbol-white.png' : '/symbol.png'}
+                alt="VelocityPulse.io"
+                width={32}
+                height={32}
+                className="h-8 w-8"
               />
+              <span className="font-display font-semibold text-lg text-primary">
+                VelocityPulse.io
+              </span>
             </Link>
             <p className="mt-4 text-sm text-secondary leading-relaxed">
               Professional network monitoring from $50/year. Your network&apos;s heartbeat, at a glance.
@@ -109,7 +120,7 @@ export default function Footer() {
 
           {/* Link columns - accordion on mobile */}
           {Object.entries(footerLinks).map(([category, links]) => (
-            <AccordionSection key={category} title={category} links={links} />
+            <AccordionSection key={category} title={category} links={links} sectionId={category.toLowerCase()} />
           ))}
         </div>
 

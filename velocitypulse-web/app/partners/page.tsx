@@ -1,14 +1,14 @@
 'use client'
 
-import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Check, DollarSign, Users, Palette, ArrowRight } from 'lucide-react'
+import { Check, DollarSign, Users, Palette, ArrowRight, AlertCircle } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
+import { useFormSubmit } from '@/hooks/useFormSubmit'
 
 const benefits = [
   {
@@ -84,32 +84,9 @@ const whiteLabelOptions = [
 ]
 
 export default function PartnersPage() {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSubmitted, setIsSubmitted] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-
-    const formData = new FormData(e.currentTarget)
-    const data = Object.fromEntries(formData)
-
-    try {
-      const response = await fetch('/api/partners', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-
-      if (response.ok) {
-        setIsSubmitted(true)
-      }
-    } catch (error) {
-      console.error('Error submitting form:', error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+  const { isSubmitting, isSubmitted, error, fieldErrors, handleSubmit, reset } = useFormSubmit({
+    url: '/api/partners',
+  })
 
   return (
     <div className="py-16 md:py-24">
@@ -235,18 +212,32 @@ export default function PartnersPage() {
                   Thank you for your interest in the VelocityPulse Partner Program.
                   We&apos;ll review your application and get back to you within 2-3 business days.
                 </p>
-                <Button onClick={() => setIsSubmitted(false)} variant="secondary">
+                <Button onClick={reset} variant="secondary">
                   Submit another application
                 </Button>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Error Banner */}
+                {error && (
+                  <div className="flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                        {error}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid md:grid-cols-2 gap-6">
                   <Input
                     label="Company name"
                     name="companyName"
                     placeholder="Acme IT Services"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.companyName}
                   />
                   <Input
                     label="Website"
@@ -254,6 +245,8 @@ export default function PartnersPage() {
                     type="url"
                     placeholder="https://example.com"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.website}
                   />
                 </div>
 
@@ -263,6 +256,8 @@ export default function PartnersPage() {
                     name="contactName"
                     placeholder="John Smith"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.contactName}
                   />
                   <Input
                     label="Email"
@@ -270,6 +265,8 @@ export default function PartnersPage() {
                     type="email"
                     placeholder="john@example.com"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.email}
                   />
                 </div>
 
@@ -280,6 +277,8 @@ export default function PartnersPage() {
                     type="tel"
                     placeholder="+1 (555) 123-4567"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.phone}
                   />
                   <Select
                     label="Country"
@@ -287,6 +286,8 @@ export default function PartnersPage() {
                     options={countryOptions}
                     placeholder="Select country"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.country}
                   />
                 </div>
 
@@ -297,6 +298,8 @@ export default function PartnersPage() {
                     options={clientCountOptions}
                     placeholder="Select range"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.clientCount}
                   />
                   <Select
                     label="Average devices per client"
@@ -304,6 +307,8 @@ export default function PartnersPage() {
                     options={avgDevicesOptions}
                     placeholder="Select range"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.avgDevices}
                   />
                 </div>
 
@@ -314,6 +319,8 @@ export default function PartnersPage() {
                     options={tierOptions}
                     placeholder="Select tier"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.tierPreference}
                   />
                   <Select
                     label="White-label interest"
@@ -321,6 +328,8 @@ export default function PartnersPage() {
                     options={whiteLabelOptions}
                     placeholder="Select option"
                     required
+                    aria-required="true"
+                    error={fieldErrors?.whiteLabel}
                   />
                 </div>
 
@@ -328,12 +337,14 @@ export default function PartnersPage() {
                   label="Tax ID / VAT number"
                   name="taxId"
                   placeholder="Optional - for invoicing"
+                  error={fieldErrors?.taxId}
                 />
 
                 <Textarea
                   label="Tell us about your business"
                   name="businessDescription"
                   placeholder="What services do you offer? Who are your typical clients?"
+                  error={fieldErrors?.businessDescription}
                 />
 
                 <div className="space-y-4 pt-4">
@@ -342,6 +353,7 @@ export default function PartnersPage() {
                       type="checkbox"
                       name="termsAccepted"
                       required
+                      aria-required="true"
                       className="mt-1 w-4 h-4 rounded border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
                     />
                     <span className="text-sm text-secondary">
@@ -362,6 +374,7 @@ export default function PartnersPage() {
                       type="checkbox"
                       name="gdprConsent"
                       required
+                      aria-required="true"
                       className="mt-1 w-4 h-4 rounded border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
                     />
                     <span className="text-sm text-secondary">

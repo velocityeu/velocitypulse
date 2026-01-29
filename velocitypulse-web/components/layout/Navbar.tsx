@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Menu, X } from 'lucide-react'
@@ -19,11 +19,24 @@ const navigation = [
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { resolvedTheme, mounted } = useTheme()
+  const menuPanelRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const openButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Close menu with Escape key
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape' && isMenuOpen) {
+      setIsMenuOpen(false)
+      openButtonRef.current?.focus()
+    }
+  }, [isMenuOpen])
 
   // Prevent body scroll when menu is open
   useEffect(() => {
     if (isMenuOpen) {
       document.body.style.overflow = 'hidden'
+      // Focus close button when menu opens
+      closeButtonRef.current?.focus()
     } else {
       document.body.style.overflow = ''
     }
@@ -32,25 +45,63 @@ export default function Navbar() {
     }
   }, [isMenuOpen])
 
+  // Add keyboard listener
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [handleKeyDown])
+
+  // Focus trap within mobile menu
+  const handleTabKey = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab' || !menuPanelRef.current) return
+
+    const focusableElements = menuPanelRef.current.querySelectorAll<HTMLElement>(
+      'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const firstElement = focusableElements[0]
+    const lastElement = focusableElements[focusableElements.length - 1]
+
+    if (e.shiftKey && document.activeElement === firstElement) {
+      e.preventDefault()
+      lastElement?.focus()
+    } else if (!e.shiftKey && document.activeElement === lastElement) {
+      e.preventDefault()
+      firstElement?.focus()
+    }
+  }, [])
+
   return (
     <>
+      {/* Skip to content link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[10000] focus:px-4 focus:py-2 focus:bg-[var(--color-accent)] focus:text-white focus:rounded-lg"
+      >
+        Skip to main content
+      </a>
+
       <nav className="sticky top-0 z-50 border-b border-[var(--color-border-light)] bg-[var(--color-bg)]/80 backdrop-blur-xl">
         <div className="container-wide">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2">
               <Image
-                src={mounted && resolvedTheme === 'dark' ? '/logo-white.png' : '/logo.svg'}
-                alt="VelocityPulse"
-                width={120}
-                height={35}
-                className="h-8 w-auto"
+                src={mounted && resolvedTheme === 'dark' ? '/symbol-white.png' : '/symbol.png'}
+                alt="VelocityPulse.io"
+                width={32}
+                height={32}
+                className="h-8 w-8"
                 priority
               />
+              <span className="font-display font-semibold text-lg text-primary">
+                VelocityPulse.io
+              </span>
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-1" role="navigation" aria-label="Main navigation">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
@@ -71,9 +122,12 @@ export default function Navbar() {
 
               {/* Mobile menu button */}
               <button
+                ref={openButtonRef}
                 className="md:hidden p-2 text-secondary hover:text-primary transition-colors"
                 onClick={() => setIsMenuOpen(true)}
-                aria-label="Open menu"
+                aria-label="Open navigation menu"
+                aria-expanded={isMenuOpen}
+                aria-controls="mobile-menu"
               >
                 <Menu className="w-6 h-6" />
               </button>
@@ -85,17 +139,24 @@ export default function Navbar() {
       {/* Mobile Menu - Full screen overlay */}
       {isMenuOpen && (
         <div
+          id="mobile-menu"
           className="fixed inset-0 md:hidden"
           style={{ zIndex: 9999 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+          onKeyDown={handleTabKey}
         >
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50"
             onClick={() => setIsMenuOpen(false)}
+            aria-hidden="true"
           />
 
           {/* Slide-in panel */}
           <div
+            ref={menuPanelRef}
             className="absolute top-0 right-0 h-full w-80 max-w-[85vw] overflow-y-auto shadow-2xl"
             style={{
               backgroundColor: 'var(--color-bg)',
@@ -105,33 +166,47 @@ export default function Navbar() {
             {/* Close button */}
             <div className="flex justify-end p-4">
               <button
-                onClick={() => setIsMenuOpen(false)}
+                ref={closeButtonRef}
+                onClick={() => {
+                  setIsMenuOpen(false)
+                  openButtonRef.current?.focus()
+                }}
                 className="p-2 text-secondary hover:text-primary rounded-lg"
-                aria-label="Close menu"
+                aria-label="Close navigation menu"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
             {/* Menu content */}
-            <div className="px-4 pb-8">
+            <nav className="px-4 pb-8" role="navigation" aria-label="Mobile navigation">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
                   className="block px-4 py-3 text-sm text-secondary hover:text-primary hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    openButtonRef.current?.focus()
+                  }}
                 >
                   {item.name}
                 </Link>
               ))}
 
               <div className="mt-6 px-4">
-                <Button href="/demo" className="w-full justify-center" onClick={() => setIsMenuOpen(false)}>
+                <Button
+                  href="/demo"
+                  className="w-full justify-center"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    openButtonRef.current?.focus()
+                  }}
+                >
                   Start Free Trial
                 </Button>
               </div>
-            </div>
+            </nav>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 {
-  "name": "VelocityPulse",
+  "name": "VelocityPulse.io",
   "short_name": "VelocityPulse",
-  "description": "Professional network monitoring from $50/year",
+  "description": "Professional network monitoring from $50/year. Your network's heartbeat, at a glance.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -16,6 +16,12 @@
       "src": "/android-chrome-192x192.png",
       "sizes": "192x192",
       "type": "image/png"
+    },
+    {
+      "src": "/symbol.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

@@ -1,12 +1,28 @@
 'use client'
 
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, ArrowRight, HelpCircle } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
+import { createCheckoutSession } from '@/lib/stripe'
 
-const plans = [
+type PlanId = 'trial' | 'starter' | 'unlimited'
+
+const plans: Array<{
+  id: PlanId
+  name: string
+  price: string
+  period: string
+  description: string
+  features: string[]
+  cta: string
+  href?: string
+  popular?: boolean
+  variant: 'primary' | 'secondary'
+}> = [
   {
+    id: 'trial',
     name: 'Trial',
     price: 'Free',
     period: '30 days',
@@ -20,9 +36,10 @@ const plans = [
     ],
     cta: 'Start Free Trial',
     href: '/demo',
-    variant: 'secondary' as const,
+    variant: 'secondary',
   },
   {
+    id: 'starter',
     name: 'Starter',
     price: '$50',
     period: '/year',
@@ -37,11 +54,11 @@ const plans = [
       'Full API access',
       'Email support (48h)',
     ],
-    cta: 'Start Free Trial',
-    href: '/demo',
-    variant: 'secondary' as const,
+    cta: 'Buy Now',
+    variant: 'secondary',
   },
   {
+    id: 'unlimited',
     name: 'Unlimited',
     price: '$950',
     period: '/year',
@@ -57,10 +74,9 @@ const plans = [
       'Priority support (24h)',
       'Dedicated onboarding call',
     ],
-    cta: 'Start Free Trial',
-    href: '/demo',
+    cta: 'Buy Now',
     popular: true,
-    variant: 'primary' as const,
+    variant: 'primary',
   },
 ]
 
@@ -109,6 +125,25 @@ const faqs = [
 ]
 
 export default function PricingPage() {
+  const [loadingPlan, setLoadingPlan] = useState<PlanId | null>(null)
+
+  const handleCheckout = async (planId: 'starter' | 'unlimited') => {
+    setLoadingPlan(planId)
+    try {
+      const { url } = await createCheckoutSession({
+        plan: planId,
+        successUrl: `${window.location.origin}/checkout/success`,
+        cancelUrl: `${window.location.origin}/pricing`,
+      })
+      if (url) {
+        window.location.href = url
+      }
+    } catch (error) {
+      console.error('Checkout error:', error)
+      setLoadingPlan(null)
+    }
+  }
+
   return (
     <div className="py-16 md:py-24">
       {/* Header */}
@@ -166,13 +201,24 @@ export default function PricingPage() {
                 ))}
               </ul>
 
-              <Button
-                href={plan.href}
-                variant={plan.variant}
-                className="w-full justify-center"
-              >
-                {plan.cta}
-              </Button>
+              {plan.id === 'trial' ? (
+                <Button
+                  href={plan.href}
+                  variant={plan.variant}
+                  className="w-full justify-center"
+                >
+                  {plan.cta}
+                </Button>
+              ) : (
+                <Button
+                  variant={plan.variant}
+                  className="w-full justify-center"
+                  onClick={() => handleCheckout(plan.id as 'starter' | 'unlimited')}
+                  disabled={loadingPlan === plan.id}
+                >
+                  {loadingPlan === plan.id ? 'Loading...' : plan.cta}
+                </Button>
+              )}
             </motion.div>
           ))}
         </div>

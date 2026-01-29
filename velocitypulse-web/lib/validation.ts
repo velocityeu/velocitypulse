@@ -140,6 +140,15 @@ export const demoFormSchema = z.object({
 
 export type DemoFormData = z.infer<typeof demoFormSchema>
 
+// Allowed domains for Stripe redirects
+const isAllowedRedirectUrl = (url: string): boolean => {
+  return (
+    url.startsWith('https://velocitypulse.io') ||
+    url.startsWith('https://velocitypulse-web.vercel.app') ||
+    url.startsWith('http://localhost')
+  )
+}
+
 // Stripe checkout schema
 export const checkoutSchema = z.object({
   plan: z.enum(['starter', 'unlimited'], {
@@ -149,18 +158,12 @@ export const checkoutSchema = z.object({
   successUrl: z
     .string()
     .url()
-    .refine(
-      (url) => url.startsWith('https://velocitypulse.io') || url.startsWith('http://localhost'),
-      { message: 'Invalid redirect URL' }
-    )
+    .refine(isAllowedRedirectUrl, { message: 'Invalid redirect URL' })
     .optional(),
   cancelUrl: z
     .string()
     .url()
-    .refine(
-      (url) => url.startsWith('https://velocitypulse.io') || url.startsWith('http://localhost'),
-      { message: 'Invalid redirect URL' }
-    )
+    .refine(isAllowedRedirectUrl, { message: 'Invalid redirect URL' })
     .optional(),
 })
 
@@ -175,10 +178,7 @@ export const portalSchema = z.object({
   returnUrl: z
     .string()
     .url()
-    .refine(
-      (url) => url.startsWith('https://velocitypulse.io') || url.startsWith('http://localhost'),
-      { message: 'Invalid return URL' }
-    )
+    .refine(isAllowedRedirectUrl, { message: 'Invalid return URL' })
     .optional(),
 })
 

@@ -3,6 +3,9 @@ import { getStripeServer, getStripePrices } from '@/lib/stripe'
 import { checkoutSchema, formatZodErrors } from '@/lib/validation'
 import { isDevelopment } from '@/lib/env'
 
+// Force Node.js runtime (not Edge)
+export const runtime = 'nodejs'
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()

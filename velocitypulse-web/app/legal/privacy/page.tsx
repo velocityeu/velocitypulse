@@ -29,7 +29,7 @@ export default function PrivacyPage() {
             <div className="prose prose-gray dark:prose-invert max-w-none">
               <h2 className="font-display text-title text-primary">1. Introduction</h2>
               <p className="text-secondary">
-                VelocityPulse ("we", "our", or "us") is committed to protecting your privacy.
+                VelocityPulse (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) is committed to protecting your privacy.
                 This Privacy Policy explains how we collect, use, disclose, and safeguard your
                 information when you use our network monitoring service.
               </p>

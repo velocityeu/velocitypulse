@@ -103,7 +103,7 @@ export default function Footer() {
               />
             </Link>
             <p className="mt-4 text-sm text-secondary leading-relaxed">
-              Professional network monitoring from $50/year. Your network's heartbeat, at a glance.
+              Professional network monitoring from $50/year. Your network&apos;s heartbeat, at a glance.
             </p>
           </div>
 

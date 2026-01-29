@@ -233,7 +233,7 @@ export default function PartnersPage() {
                 </h3>
                 <p className="text-secondary mb-6">
                   Thank you for your interest in the VelocityPulse Partner Program.
-                  We'll review your application and get back to you within 2-3 business days.
+                  We&apos;ll review your application and get back to you within 2-3 business days.
                 </p>
                 <Button onClick={() => setIsSubmitted(false)} variant="secondary">
                   Submit another application

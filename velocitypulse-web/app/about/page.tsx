@@ -72,7 +72,7 @@ export default function AboutPage() {
                 Real features, real support, real simplicity - without the enterprise price tag.
               </p>
               <p>
-                Our goal is simple: make network monitoring accessible to everyone. Whether you're
+                Our goal is simple: make network monitoring accessible to everyone. Whether you&apos;re
                 running a home lab, managing a small business, or overseeing multiple school sites,
                 you deserve tools that work without breaking the bank.
               </p>
@@ -139,7 +139,7 @@ export default function AboutPage() {
               <div>
                 <h3 className="font-semibold text-primary mb-2">Contact</h3>
                 <p className="text-secondary">
-                  Have questions? We'd love to hear from you.
+                  Have questions? We&apos;d love to hear from you.
                 </p>
                 <Button href="/contact" variant="ghost" className="mt-2 -ml-2">
                   Get in touch

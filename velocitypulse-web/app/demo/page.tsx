@@ -97,7 +97,7 @@ export default function DemoPage() {
                     <Check className="w-8 h-8 text-emerald-500" />
                   </div>
                   <h2 className="font-display text-title text-primary mb-2">
-                    You're all set
+                    You&apos;re all set
                   </h2>
                   <p className="text-secondary mb-6">
                     Check your email for login instructions. Your 30-day trial starts now.
@@ -186,7 +186,7 @@ export default function DemoPage() {
           >
             <Card className="p-6">
               <h3 className="font-display text-title text-primary mb-6">
-                What's included
+                What&apos;s included
               </h3>
               <ul className="space-y-4">
                 {benefits.map((benefit) => (
@@ -201,8 +201,8 @@ export default function DemoPage() {
 
               <div className="mt-8 pt-6 border-t border-[var(--color-border-light)]">
                 <p className="text-sm text-tertiary mb-4">
-                  "VelocityPulse is the simplest monitoring tool we've ever used.
-                  Set up took less than 10 minutes."
+                  &quot;VelocityPulse is the simplest monitoring tool we&apos;ve ever used.
+                  Set up took less than 10 minutes.&quot;
                 </p>
                 <p className="text-sm font-medium text-primary">
                   IT Manager, UK School

@@ -63,7 +63,7 @@ export default function ContactPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          Have a question or need help? We're here to assist you.
+          Have a question or need help? We&apos;re here to assist you.
         </motion.p>
       </div>
 
@@ -118,7 +118,7 @@ export default function ContactPage() {
                   Message sent
                 </h2>
                 <p className="text-secondary mb-6">
-                  Thank you for reaching out. We'll get back to you within 24-48 hours.
+                  Thank you for reaching out. We&apos;ll get back to you within 24-48 hours.
                 </p>
                 <Button onClick={() => setIsSubmitted(false)} variant="secondary">
                   Send another message

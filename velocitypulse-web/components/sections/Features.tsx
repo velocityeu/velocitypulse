@@ -56,7 +56,7 @@ export default function Features() {
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
           >
-            Everything you need, nothing you don't
+            Everything you need, nothing you don&apos;t
           </motion.h2>
           <motion.p
             className="text-lg text-secondary max-w-2xl mx-auto"

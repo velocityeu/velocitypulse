@@ -80,7 +80,7 @@ export default function TermsPage() {
                 <li>Attempt to gain unauthorized access to our systems</li>
                 <li>Interfere with or disrupt the service</li>
                 <li>Resell access without participating in our Partner Program</li>
-                <li>Use the service to monitor networks you don't own or have permission to monitor</li>
+                <li>Use the service to monitor networks you don&apos;t own or have permission to monitor</li>
               </ul>
 
               <h2 className="font-display text-title text-primary mt-8">7. Intellectual Property</h2>

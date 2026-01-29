@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(gh repo create:*)",
+      "WebSearch",
+      "Bash(git push:*)",
+      "Bash(gh repo edit:*)",
+      "Bash(gh repo view:*)",
+      "WebFetch(domain:instantdomainsearch.com)",
+      "Bash(nslookup:*)",
+      "Bash(gh repo rename:*)",
+      "Bash(git remote:*)",
+      "Bash(cmd.exe /c \"cd C:\\\\Projects\\\\velocity-projects && ren it-dashboard-marketing velocity-pulse\")",
+      "Bash(cmd.exe /c \"cd C:\\\\Projects\\\\velocity-projects && ren velocity-pulse velocitypulse\")",
+      "Bash(cmd.exe /c \"dir C:\\\\Projects\\\\velocity-projects\\\\velocitypulse\")",
+      "Bash(cmd.exe /c \"dir C:\\\\Projects\\\\velocity-projects\")",
+      "Bash(git fetch:*)"
+    ]
+  }
+}

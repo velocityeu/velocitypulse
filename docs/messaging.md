@@ -10,6 +10,14 @@ Guidelines for consistent communication across all VelocityPulse marketing mater
 - Correct: VelocityPulse, velocitypulse
 - Incorrect: Velocity Pulse, velocity pulse, VELOCITYPULSE
 
+### Domain
+**velocitypulse.io**
+
+- Website: [velocitypulse.io](https://velocitypulse.io)
+- App: app.velocitypulse.io
+- Docs: docs.velocitypulse.io
+- Status: status.velocitypulse.io
+
 ### Tagline
 > "Your network's heartbeat, at a glance"
 

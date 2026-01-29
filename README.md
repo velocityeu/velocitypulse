@@ -2,6 +2,8 @@
 
 > Your network's heartbeat, at a glance
 
+**Website:** [velocitypulse.io](https://velocitypulse.io)
+
 Marketing and product planning for VelocityPulse - a SaaS network monitoring
 product by Velocity EU. Transform IT Dashboard into a commercial multi-tenant
 platform.
@@ -16,6 +18,7 @@ Auto-discovery, real-time dashboards, zero complexity. The anti-Nagios.
 | Decision | Choice |
 |----------|--------|
 | Product Name | VelocityPulse |
+| Domain | velocitypulse.io |
 | Tagline | "Your network's heartbeat, at a glance" |
 | Launch | Global from day one |
 | Free Tier | 50 devices forever |
@@ -110,7 +113,6 @@ We believe:
 
 1. **Education discount?** - Special pricing for schools?
 2. **MSP program** - White-label option from day one?
-3. **Domain** - velocitypulse.io or velocitypulse.com?
 
 ---
 

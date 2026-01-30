@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: ~80-85% Feature Complete for MVP**
+**Current Status: ~90% Feature Complete for MVP**
 
 ---
 
@@ -35,10 +35,10 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 | **Agent Features** |
 | Agent heartbeat | Yes | Yes | COMPLETE |
 | Agent version tracking | Yes | Yes | COMPLETE |
-| Auto-upgrade mechanism | Yes | Partial | 70% - upgrade logic exists, installer scripts need work |
+| Auto-upgrade mechanism | Yes | Yes | COMPLETE - upgrade logic + installer scripts |
 | Command queue (scan/restart/upgrade) | Yes | Yes | COMPLETE |
-| Agent local UI | Yes | No | NOT STARTED |
-| Realtime command delivery | Yes | Partial | 50% - schema exists, not fully wired |
+| Agent local UI | Yes | Yes | COMPLETE - Express + Socket.IO on port 3001 |
+| Realtime command delivery | Yes | Yes | COMPLETE - Supabase Realtime subscription |
 | **Dashboard UI** |
 | Device grid view | Yes | Yes | COMPLETE |
 | Device list view | Yes | Yes | COMPLETE |
@@ -91,7 +91,7 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 | Legal pages | COMPLETE | Privacy/Terms/GDPR |
 | **Onboarding** |
 | First-time setup | COMPLETE | Org creation flow |
-| Agent download | PARTIAL | Links exist, installer needs polish |
+| Agent download | COMPLETE | Polished installers with uninstall/upgrade |
 
 ---
 
@@ -106,9 +106,10 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ### Important Gaps (Post-MVP)
 
-1. **Agent Local UI** - No web interface at localhost:3001
-2. **Realtime Command Delivery** - Commands only via heartbeat polling, not instant WebSocket
+1. ~~**Agent Local UI**~~ - COMPLETE (Express + Socket.IO on port 3001)
+2. ~~**Realtime Command Delivery**~~ - COMPLETE (Supabase Realtime subscription)
 3. **Device Details Modal** - Basic, missing SNMP/UPnP info display
+4. **Dashboard Connection Status** - Show agent online/offline indicator in dashboard header
 
 ### Nice-to-Have Gaps
 
@@ -166,26 +167,28 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ## Part 4: Remaining Development Roadmap
 
-### Phase 3: Agent Improvements (Priority: MEDIUM)
+### Phase 3: Agent Improvements (Priority: MEDIUM) - COMPLETE
 
-#### 3.1 Agent Local UI
-- [ ] Create Express + Socket.IO server
-- [ ] Build web UI (connection status, segments, devices, logs)
-- [ ] Add manual scan button
-- [ ] Add ping dashboard button
+#### 3.1 Agent Local UI - COMPLETE
+- [x] Create Express + Socket.IO server (`src/ui/server.ts`)
+- [x] Build web UI (connection status, segments, devices, logs) (`src/ui/public/index.html`)
+- [x] Add manual scan button
+- [x] Add ping dashboard button
+- [x] Real-time state updates via WebSocket
 
-#### 3.2 Realtime Command Delivery
-- [ ] Add Supabase Realtime subscription to agent
-- [ ] Subscribe to `agent_commands` table
-- [ ] Execute commands immediately on receipt
-- [ ] Fall back to heartbeat polling
+#### 3.2 Realtime Command Delivery - COMPLETE
+- [x] Add Supabase Realtime subscription to agent (`src/api/realtime.ts`)
+- [x] Subscribe to `agent_commands` table (INSERT/UPDATE events)
+- [x] Execute commands immediately on receipt
+- [x] Fall back to heartbeat polling
+- [x] Auto-reconnect on connection loss
 
-#### 3.3 Installer Scripts
-- [ ] Polish Windows installer (install.ps1)
-- [ ] Polish Linux/macOS installer (install.sh)
-- [ ] Create service installation (NSSM/systemd/launchd)
-- [ ] Create uninstaller scripts
-- [ ] Test offline installation bundle
+#### 3.3 Installer Scripts - COMPLETE
+- [x] Polish Windows installer (install.ps1) - added -Uninstall, -Upgrade, -UIPort
+- [x] Polish Linux/macOS installer (install.sh) - added --uninstall, --upgrade, --unattended
+- [x] Create service installation (NSSM/systemd/launchd)
+- [x] Create uninstaller scripts (integrated into main installers)
+- [x] Added ENABLE_REALTIME and AGENT_UI_PORT to default config
 
 ### Phase 4: Enhanced Features (Priority: MEDIUM)
 
@@ -241,8 +244,13 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - `velocitypulse-dashboard/src/components/layout/Sidebar.tsx` (MODIFIED)
 
 **Agent:**
-- `velocitypulse-agent/src/index.ts` (MODIFIED - added command handling)
+- `velocitypulse-agent/src/index.ts` (MODIFIED - command handling, UI integration, realtime setup)
 - `velocitypulse-agent/src/api/client.ts` (MODIFIED - updated acknowledgeCommand, added sendPong)
+- `velocitypulse-agent/src/api/realtime.ts` (CREATED - Supabase Realtime client)
+- `velocitypulse-agent/src/ui/server.ts` (CREATED - Express + Socket.IO UI server)
+- `velocitypulse-agent/src/ui/public/index.html` (MODIFIED - full dashboard UI)
+- `velocitypulse-agent/scripts/install.ps1` (MODIFIED - uninstall, upgrade, UI port)
+- `velocitypulse-agent/scripts/install.sh` (MODIFIED - uninstall, upgrade, unattended mode)
 
 ---
 
@@ -280,4 +288,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: January 2026*
+*Last Updated: January 30, 2026 - Phase 3 Complete*

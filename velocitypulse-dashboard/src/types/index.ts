@@ -1,0 +1,380 @@
+// ==============================================
+// VelocityPulse Multi-Tenant Types
+// ==============================================
+
+// Status types
+export type DeviceStatus = 'online' | 'offline' | 'degraded' | 'unknown'
+export type CheckType = 'ping' | 'http' | 'tcp'
+export type DeviceType = 'server' | 'workstation' | 'network' | 'printer' | 'iot' | 'unknown'
+export type DiscoveryMethod = 'manual' | 'agent_scan' | 'agent_arp' | 'agent_mdns' | 'agent_ssdp' | 'agent_snmp'
+export type ViewMode = 'grid' | 'list' | 'compact'
+export type SortField = 'name' | 'ip_address' | 'status' | 'last_check' | 'response_time_ms'
+export type SortDirection = 'asc' | 'desc'
+
+// ==============================================
+// Multi-Tenant: Organization Types
+// ==============================================
+
+export type OrganizationPlan = 'trial' | 'starter' | 'unlimited'
+export type OrganizationStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'cancelled'
+export type MemberRole = 'owner' | 'admin' | 'editor' | 'viewer'
+
+export interface Organization {
+  id: string
+  name: string
+  slug: string
+  customer_number: string // VEU-XXXXX format
+  stripe_customer_id?: string
+  stripe_subscription_id?: string
+  plan: OrganizationPlan
+  status: OrganizationStatus
+  device_limit: number
+  agent_limit: number
+  user_limit: number
+  trial_ends_at?: string
+  suspended_at?: string
+  cancelled_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface OrganizationMember {
+  id: string
+  organization_id: string
+  user_id: string // Clerk user ID
+  role: MemberRole
+  permissions: MemberPermissions
+  created_at: string
+  updated_at: string
+  // Joined
+  organization?: Organization
+}
+
+export interface MemberPermissions {
+  can_manage_billing: boolean
+  can_manage_agents: boolean
+  can_manage_devices: boolean
+  can_manage_members: boolean
+  can_view_audit_logs: boolean
+}
+
+// ==============================================
+// Agent Types (Multi-Tenant)
+// ==============================================
+
+export interface Agent {
+  id: string
+  organization_id: string // FK to organization
+  name: string
+  description?: string
+  api_key_prefix: string
+  is_enabled: boolean
+  last_seen_at?: string
+  last_ip_address?: string
+  version?: string
+  created_at: string
+  updated_at: string
+  is_online?: boolean // Server-computed
+  // Joined
+  organization?: Organization
+}
+
+export interface AgentWithKey extends Agent {
+  api_key?: string // Only returned when creating
+}
+
+export interface AgentWithSegments extends Agent {
+  network_segments: NetworkSegment[]
+}
+
+// ==============================================
+// Network Segment Types (Multi-Tenant)
+// ==============================================
+
+export interface NetworkSegment {
+  id: string
+  organization_id: string // FK to organization
+  agent_id: string
+  name: string
+  description?: string
+  cidr: string
+  scan_interval_seconds: number
+  is_enabled: boolean
+  last_scan_at?: string
+  last_scan_device_count: number
+  created_at: string
+  updated_at: string
+  is_auto_registered?: boolean
+  interface_name?: string
+  // Joined
+  agent?: Agent
+}
+
+// ==============================================
+// Device Types (Multi-Tenant)
+// ==============================================
+
+export interface Category {
+  id: string
+  organization_id: string // FK to organization
+  name: string
+  slug: string
+  description?: string
+  icon: string
+  color: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Device {
+  id: string
+  organization_id: string // FK to organization
+  category_id: string | null
+  name: string
+  description?: string
+  ip_address?: string
+  url?: string
+  port?: number | null
+  check_type: CheckType
+  icon?: string
+  thumbnail_url?: string
+  status: DeviceStatus
+  last_check?: string
+  last_online?: string
+  response_time_ms?: number | null
+  is_enabled: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+  // Agent fields
+  agent_id?: string | null
+  discovered_by: DiscoveryMethod
+  mac_address?: string
+  hostname?: string
+  network_segment_id?: string | null
+  first_seen_at?: string
+  last_seen_at?: string
+  is_monitored: boolean
+  // Enhanced discovery
+  manufacturer?: string
+  os_hints?: string[]
+  device_type?: DeviceType
+  open_ports?: number[]
+  services?: string[]
+  netbios_name?: string
+  snmp_info?: {
+    sysName?: string
+    sysDescr?: string
+    sysContact?: string
+    sysLocation?: string
+  }
+  upnp_info?: {
+    friendlyName?: string
+    deviceType?: string
+    manufacturer?: string
+  }
+  last_full_scan_at?: string
+  // Joined
+  category?: Category
+  agent?: Agent
+  network_segment?: NetworkSegment
+}
+
+// ==============================================
+// Subscription Types
+// ==============================================
+
+export interface Subscription {
+  id: string
+  organization_id: string
+  stripe_subscription_id: string
+  plan: OrganizationPlan
+  status: 'active' | 'past_due' | 'cancelled' | 'incomplete'
+  current_period_start: string
+  current_period_end: string
+  amount_cents: number
+  created_at: string
+  updated_at: string
+}
+
+// ==============================================
+// Audit Log Types
+// ==============================================
+
+export type AuditAction =
+  | 'organization.created'
+  | 'organization.updated'
+  | 'organization.suspended'
+  | 'organization.reactivated'
+  | 'member.invited'
+  | 'member.removed'
+  | 'member.role_changed'
+  | 'agent.created'
+  | 'agent.deleted'
+  | 'agent.api_key_rotated'
+  | 'device.created'
+  | 'device.deleted'
+  | 'subscription.created'
+  | 'subscription.cancelled'
+  | 'subscription.payment_failed'
+
+export interface AuditLog {
+  id: string
+  organization_id: string
+  actor_type: 'user' | 'system' | 'webhook'
+  actor_id?: string // Clerk user ID or system identifier
+  action: AuditAction
+  resource_type: string
+  resource_id?: string
+  metadata?: Record<string, unknown>
+  ip_address?: string
+  user_agent?: string
+  created_at: string
+}
+
+// ==============================================
+// Agent Command Types
+// ==============================================
+
+export type AgentCommandType = 'scan_now' | 'scan_segment' | 'update_config' | 'restart' | 'upgrade' | 'ping'
+export type AgentCommandStatus = 'pending' | 'completed' | 'failed'
+
+export interface AgentCommand {
+  id: string
+  agent_id: string
+  command_type: AgentCommandType
+  payload?: Record<string, unknown>
+  status: AgentCommandStatus
+  created_at: string
+  executed_at?: string
+  error?: string
+}
+
+// ==============================================
+// Status Summary Types
+// ==============================================
+
+export interface StatusSummary {
+  total: number
+  online: number
+  offline: number
+  degraded: number
+  unknown: number
+}
+
+// ==============================================
+// Device Segment Group (for display)
+// ==============================================
+
+export interface DeviceSegmentGroup {
+  segment: NetworkSegment | null
+  devices: Device[]
+}
+
+// ==============================================
+// Agent API Request/Response Types
+// ==============================================
+
+export interface AgentHeartbeatRequest {
+  version: string
+  hostname: string
+  uptime_seconds?: number
+}
+
+export interface AgentHeartbeatResponse {
+  success: boolean
+  agent_id: string
+  agent_name: string
+  organization_id: string
+  server_time: string
+  segments: NetworkSegment[]
+  supabase_url?: string
+  supabase_anon_key?: string
+  latest_agent_version?: string
+  agent_download_url?: string
+  upgrade_available?: boolean
+  pending_commands?: AgentCommand[]
+}
+
+export interface AgentDiscoveryRequest {
+  segment_id: string
+  scan_timestamp: string
+  devices: DiscoveredDevice[]
+}
+
+export interface DiscoveredDevice {
+  ip_address: string
+  mac_address?: string
+  hostname?: string
+  manufacturer?: string
+  os_hints?: string[]
+  device_type?: DeviceType
+  open_ports?: number[]
+  services?: string[]
+  netbios_name?: string
+  snmp_info?: {
+    sysName?: string
+    sysDescr?: string
+    sysContact?: string
+    sysLocation?: string
+  }
+  upnp_info?: {
+    friendlyName?: string
+    deviceType?: string
+    manufacturer?: string
+  }
+  discovery_method: 'arp' | 'mdns' | 'ssdp' | 'snmp'
+}
+
+export interface AgentDiscoveryResponse {
+  success: boolean
+  created: number
+  updated: number
+  unchanged: number
+}
+
+export interface DeviceStatusReport {
+  device_id?: string
+  ip_address: string
+  status: DeviceStatus
+  response_time_ms: number | null
+  check_type: CheckType
+  checked_at: string
+  error?: string
+}
+
+export interface AgentStatusRequest {
+  reports: DeviceStatusReport[]
+}
+
+export interface AgentStatusResponse {
+  success: boolean
+  processed: number
+  errors: string[]
+}
+
+// ==============================================
+// Agent Context (for authenticated requests)
+// ==============================================
+
+export interface AgentContext {
+  agentId: string
+  agentName: string
+  organizationId: string
+}
+
+// ==============================================
+// Plan Limits
+// ==============================================
+
+export const PLAN_LIMITS: Record<OrganizationPlan, {
+  devices: number
+  agents: number
+  users: number
+  price_yearly_cents: number
+}> = {
+  trial: { devices: 100, agents: 10, users: 5, price_yearly_cents: 0 },
+  starter: { devices: 100, agents: 10, users: 10, price_yearly_cents: 5000 }, // $50/year
+  unlimited: { devices: 5000, agents: 100, users: 50, price_yearly_cents: 95000 }, // $950/year
+}

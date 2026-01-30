@@ -4,55 +4,643 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VelocityPulse Agent</title>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0f0f1a;
+            --bg-secondary: #1a1a2e;
+            --bg-card: #16213e;
+            --text-primary: #eee;
+            --text-secondary: #888;
+            --accent: #00d4ff;
+            --success: #00ff88;
+            --warning: #ffaa00;
+            --danger: #ff4444;
+            --border: #2a2a4a;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 1.25rem;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .header .logo {
+            width: 32px;
+            height: 32px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
+            font-weight: bold;
+            color: var(--bg-primary);
         }
-        .container { max-width: 600px; text-align: center; }
-        h1 { font-size: 2rem; margin-bottom: 1rem; color: #00d4ff; }
-        .status {
-            background: #16213e;
-            padding: 2rem;
-            border-radius: 12px;
-            margin: 1rem 0;
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
         }
-        .status-indicator {
-            width: 12px;
-            height: 12px;
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            display: inline-block;
-            margin-right: 8px;
             animation: pulse 2s infinite;
         }
-        .online { background: #00ff88; }
+
+        .status-dot.connected { background: var(--success); }
+        .status-dot.disconnected { background: var(--danger); }
+
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
-        .info { color: #888; font-size: 0.9rem; margin-top: 1rem; }
-        a { color: #00d4ff; }
+
+        .main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .grid-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-header h2 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 1.25rem;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .stat-value.online { color: var(--success); }
+        .stat-value.offline { color: var(--danger); }
+        .stat-value.degraded { color: var(--warning); }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 0.25rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover { background: var(--bg-card); }
+
+        .segment-list, .device-list, .log-list {
+            list-style: none;
+        }
+
+        .segment-item, .device-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .segment-item:last-child, .device-item:last-child {
+            border-bottom: none;
+        }
+
+        .segment-info, .device-info {
+            flex: 1;
+        }
+
+        .segment-name, .device-name {
+            font-weight: 500;
+        }
+
+        .segment-cidr, .device-ip {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+
+        .segment-stats, .device-stats {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.875rem;
+        }
+
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-success { background: rgba(0, 255, 136, 0.2); color: var(--success); }
+        .badge-warning { background: rgba(255, 170, 0, 0.2); color: var(--warning); }
+        .badge-danger { background: rgba(255, 68, 68, 0.2); color: var(--danger); }
+        .badge-secondary { background: var(--bg-secondary); color: var(--text-secondary); }
+
+        .log-item {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8125rem;
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .log-item:last-child { border-bottom: none; }
+
+        .log-time {
+            color: var(--text-secondary);
+            font-family: monospace;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .log-level {
+            font-weight: 500;
+            text-transform: uppercase;
+            font-size: 0.625rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: 3px;
+        }
+
+        .log-level.info { background: rgba(0, 212, 255, 0.2); color: var(--accent); }
+        .log-level.warn { background: rgba(255, 170, 0, 0.2); color: var(--warning); }
+        .log-level.error { background: rgba(255, 68, 68, 0.2); color: var(--danger); }
+        .log-level.debug { background: var(--bg-secondary); color: var(--text-secondary); }
+
+        .log-message {
+            flex: 1;
+            word-break: break-word;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        .scrollable {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.875rem;
+        }
+
+        .info-row:last-child { border-bottom: none; }
+
+        .info-label { color: var(--text-secondary); }
+        .info-value { font-family: monospace; }
+
+        @media (max-width: 768px) {
+            .stat-grid { grid-template-columns: repeat(2, 1fr); }
+            .header { padding: 1rem; }
+            .main { padding: 1rem; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>VelocityPulse Agent</h1>
-        <div class="status">
-            <p><span class="status-indicator online"></span>Agent Running</p>
-            <p class="info" id="version">Version: 1.0.0</p>
+    <header class="header">
+        <h1>
+            <span class="logo">V</span>
+            VelocityPulse Agent
+        </h1>
+        <div class="connection-status">
+            <span class="status-dot" id="connection-dot"></span>
+            <span id="connection-text">Connecting...</span>
         </div>
-        <p class="info">
-            This agent monitors your network and reports to the
-            <a href="https://app.velocitypulse.io" target="_blank">VelocityPulse Dashboard</a>.
-        </p>
-    </div>
+    </header>
+
+    <main class="main">
+        <!-- Stats Overview -->
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-segments">0</div>
+                <div class="stat-label">Segments</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-devices">0</div>
+                <div class="stat-label">Devices</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value online" id="stat-online">0</div>
+                <div class="stat-label">Online</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value offline" id="stat-offline">0</div>
+                <div class="stat-label">Offline</div>
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <!-- Agent Info -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Agent Information</h2>
+                </div>
+                <div class="card-body">
+                    <div class="info-row">
+                        <span class="info-label">Agent ID</span>
+                        <span class="info-value" id="agent-id">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Organization</span>
+                        <span class="info-value" id="org-id">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Version</span>
+                        <span class="info-value" id="version">1.0.0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Last Heartbeat</span>
+                        <span class="info-value" id="last-heartbeat">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Dashboard</span>
+                        <span class="info-value"><a href="#" id="dashboard-link" target="_blank" style="color: var(--accent)">-</a></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Actions</h2>
+                </div>
+                <div class="card-body">
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" id="btn-scan" onclick="triggerScan()">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                            Scan Now
+                        </button>
+                        <button class="btn btn-secondary" onclick="pingDashboard()">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+                            </svg>
+                            Ping Dashboard
+                        </button>
+                    </div>
+                    <p style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-secondary);">
+                        Trigger a manual network scan or test connectivity to the dashboard.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-2" style="margin-top: 1.5rem;">
+            <!-- Network Segments -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Network Segments</h2>
+                    <span class="badge badge-secondary" id="segment-count">0</span>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <ul class="segment-list scrollable" id="segment-list">
+                        <li class="empty-state">No segments assigned</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Recent Logs -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Activity Log</h2>
+                    <button class="btn btn-secondary" onclick="clearLogs()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Clear</button>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <ul class="log-list scrollable" id="log-list">
+                        <li class="empty-state">No recent activity</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Devices -->
+        <div class="card" style="margin-top: 1.5rem;">
+            <div class="card-header">
+                <h2>Discovered Devices</h2>
+                <span class="badge badge-secondary" id="device-count">0</span>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <ul class="device-list scrollable" id="device-list" style="max-height: 400px;">
+                    <li class="empty-state">No devices discovered yet</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const socket = io();
+        let state = {
+            connected: false,
+            segments: [],
+            devices: [],
+            logs: []
+        };
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            console.log('Socket connected');
+        });
+
+        socket.on('state', (newState) => {
+            state = { ...state, ...newState };
+            updateUI();
+        });
+
+        socket.on('connection', (data) => {
+            state.connected = data.connected;
+            state.agentId = data.agentId;
+            state.organizationId = data.organizationId;
+            state.lastHeartbeat = data.lastHeartbeat;
+            updateConnectionStatus();
+            updateAgentInfo();
+        });
+
+        socket.on('segments', (segments) => {
+            state.segments = segments;
+            updateSegments();
+            updateStats();
+        });
+
+        socket.on('devices', (devices) => {
+            state.devices = devices;
+            updateDevices();
+            updateStats();
+        });
+
+        socket.on('device_status', (data) => {
+            const device = state.devices.find(d => d.id === data.id);
+            if (device) {
+                device.status = data.status;
+                device.responseTime = data.responseTime;
+                updateDevices();
+                updateStats();
+            }
+        });
+
+        socket.on('log', (entry) => {
+            state.logs.unshift(entry);
+            if (state.logs.length > 100) state.logs = state.logs.slice(0, 100);
+            updateLogs();
+        });
+
+        socket.on('scanning', (scanning) => {
+            const btn = document.getElementById('btn-scan');
+            btn.disabled = scanning;
+            btn.innerHTML = scanning
+                ? '<svg width="16" height="16" class="animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0116 0"/></svg> Scanning...'
+                : '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg> Scan Now';
+        });
+
+        // Update functions
+        function updateUI() {
+            updateConnectionStatus();
+            updateAgentInfo();
+            updateStats();
+            updateSegments();
+            updateDevices();
+            updateLogs();
+        }
+
+        function updateConnectionStatus() {
+            const dot = document.getElementById('connection-dot');
+            const text = document.getElementById('connection-text');
+
+            if (state.connected) {
+                dot.className = 'status-dot connected';
+                text.textContent = 'Connected to Dashboard';
+            } else {
+                dot.className = 'status-dot disconnected';
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        function updateAgentInfo() {
+            document.getElementById('agent-id').textContent = state.agentId || '-';
+            document.getElementById('org-id').textContent = state.organizationId || '-';
+            document.getElementById('version').textContent = state.version || '1.0.0';
+            document.getElementById('last-heartbeat').textContent = state.lastHeartbeat
+                ? new Date(state.lastHeartbeat).toLocaleTimeString()
+                : '-';
+
+            const link = document.getElementById('dashboard-link');
+            if (state.dashboardUrl) {
+                link.href = state.dashboardUrl;
+                link.textContent = state.dashboardUrl.replace(/^https?:\/\//, '');
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('stat-segments').textContent = state.segments.length;
+            document.getElementById('stat-devices').textContent = state.devices.length;
+
+            const online = state.devices.filter(d => d.status === 'online').length;
+            const offline = state.devices.filter(d => d.status === 'offline').length;
+
+            document.getElementById('stat-online').textContent = online;
+            document.getElementById('stat-offline').textContent = offline;
+        }
+
+        function updateSegments() {
+            const list = document.getElementById('segment-list');
+            document.getElementById('segment-count').textContent = state.segments.length;
+
+            if (state.segments.length === 0) {
+                list.innerHTML = '<li class="empty-state">No segments assigned</li>';
+                return;
+            }
+
+            list.innerHTML = state.segments.map(seg => `
+                <li class="segment-item">
+                    <div class="segment-info">
+                        <div class="segment-name">${escapeHtml(seg.name)}</div>
+                        <div class="segment-cidr">${escapeHtml(seg.cidr)}</div>
+                    </div>
+                    <div class="segment-stats">
+                        <span class="badge ${seg.scanning ? 'badge-warning' : 'badge-secondary'}">
+                            ${seg.scanning ? 'Scanning...' : (seg.deviceCount || 0) + ' devices'}
+                        </span>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function updateDevices() {
+            const list = document.getElementById('device-list');
+            document.getElementById('device-count').textContent = state.devices.length;
+
+            if (state.devices.length === 0) {
+                list.innerHTML = '<li class="empty-state">No devices discovered yet</li>';
+                return;
+            }
+
+            const sorted = [...state.devices].sort((a, b) => {
+                const statusOrder = { online: 0, degraded: 1, unknown: 2, offline: 3 };
+                return (statusOrder[a.status] || 2) - (statusOrder[b.status] || 2);
+            });
+
+            list.innerHTML = sorted.map(dev => `
+                <li class="device-item">
+                    <div class="device-info">
+                        <div class="device-name">${escapeHtml(dev.name)}</div>
+                        <div class="device-ip">${escapeHtml(dev.ip)}${dev.mac ? ' • ' + escapeHtml(dev.mac) : ''}</div>
+                    </div>
+                    <div class="device-stats">
+                        ${dev.responseTime ? `<span style="font-size: 0.75rem; color: var(--text-secondary)">${dev.responseTime}ms</span>` : ''}
+                        <span class="badge badge-${getStatusBadge(dev.status)}">${dev.status}</span>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function updateLogs() {
+            const list = document.getElementById('log-list');
+
+            if (state.logs.length === 0) {
+                list.innerHTML = '<li class="empty-state">No recent activity</li>';
+                return;
+            }
+
+            list.innerHTML = state.logs.slice(0, 50).map(log => `
+                <li class="log-item">
+                    <span class="log-time">${new Date(log.timestamp).toLocaleTimeString()}</span>
+                    <span class="log-level ${log.level}">${log.level}</span>
+                    <span class="log-message">${escapeHtml(log.message)}</span>
+                </li>
+            `).join('');
+        }
+
+        // Actions
+        function triggerScan() {
+            socket.emit('command', { type: 'scan_now' });
+        }
+
+        function pingDashboard() {
+            socket.emit('command', { type: 'ping' });
+        }
+
+        function clearLogs() {
+            state.logs = [];
+            updateLogs();
+        }
+
+        // Helpers
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function getStatusBadge(status) {
+            switch (status) {
+                case 'online': return 'success';
+                case 'offline': return 'danger';
+                case 'degraded': return 'warning';
+                default: return 'secondary';
+            }
+        }
+
+        // Initial UI update
+        updateUI();
+    </script>
 </body>
 </html>

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Monitor,
+  Activity,
   FolderOpen,
   Server,
   Users,
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils'
 
 const navItems = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Monitor', href: '/monitor', icon: Activity },
   { label: 'Devices', href: '/devices', icon: Monitor },
   { label: 'Categories', href: '/categories', icon: FolderOpen },
   { label: 'Agents', href: '/agents', icon: Server },

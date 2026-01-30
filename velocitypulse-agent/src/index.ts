@@ -2,12 +2,17 @@ import os from 'os'
 import { loadConfig } from './config.js'
 import { createLogger } from './utils/logger.js'
 import { VERSION, PRODUCT_NAME } from './utils/version.js'
-import { DashboardClient, type NetworkSegment, type DeviceToMonitor, type StatusReport } from './api/client.js'
+import { DashboardClient, type NetworkSegment, type DeviceToMonitor, type StatusReport, type AgentCommand } from './api/client.js'
 import { discoverDevices } from './scanner/discover.js'
 import { pingHost } from './scanner/ping.js'
 import { checkTcpPort } from './scanner/tcp.js'
 import { checkHttp } from './scanner/http.js'
 import { getPrimaryLocalNetwork, generateAutoSegmentName } from './utils/network-detect.js'
+import { AgentUIServer, type SegmentInfo, type DeviceInfo } from './ui/server.js'
+import { RealtimeClient, type AgentCommand as RealtimeAgentCommand } from './api/realtime.js'
+
+// UI Server port (can be configured via env)
+const UI_PORT = parseInt(process.env.AGENT_UI_PORT || '3001', 10)
 
 interface SegmentState {
   segment: NetworkSegment
@@ -57,18 +62,90 @@ async function main() {
   // Create dashboard client
   const client = new DashboardClient(config.dashboardUrl, config.apiKey, logger)
 
+  // Create UI server
+  const uiServer = new AgentUIServer(UI_PORT, logger, {
+    agentName: config.agentName,
+    dashboardUrl: config.dashboardUrl,
+    version: VERSION,
+  })
+
   // Track segment scan states
   const segmentStates = new Map<string, SegmentState>()
+
+  // Track discovered devices for UI
+  const discoveredDevices = new Map<string, DeviceInfo>()
 
   // Agent state
   let agentId: string | null = null
   let organizationId: string | null = null
   let isRunning = true
 
+  // Realtime client for instant command delivery
+  let realtimeClient: RealtimeClient | null = null
+
+  /**
+   * Setup or update realtime client when we have credentials
+   */
+  async function setupRealtimeClient(supabaseUrl: string, supabaseAnonKey: string, currentAgentId: string) {
+    if (!config.enableRealtime) {
+      logger.debug('Realtime disabled in config')
+      return
+    }
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      logger.debug('Missing Supabase credentials for realtime')
+      return
+    }
+
+    // Create new client if needed
+    if (!realtimeClient) {
+      realtimeClient = new RealtimeClient(
+        {
+          supabaseUrl,
+          supabaseAnonKey,
+          agentId: currentAgentId,
+          onCommand: (command) => {
+            logger.info(`Realtime command: ${command.command_type}`)
+            uiServer.addLog('info', `Realtime command: ${command.command_type}`)
+
+            // Convert to AgentCommand format and process
+            const agentCommand: AgentCommand = {
+              id: command.id,
+              command_type: command.command_type,
+              payload: command.payload,
+              status: command.status,
+              created_at: command.created_at,
+            }
+            processCommands([agentCommand]).catch(err => {
+              logger.error(`Realtime command error: ${err instanceof Error ? err.message : 'Unknown'}`)
+            })
+          },
+          onConnectionChange: (connected) => {
+            if (connected) {
+              uiServer.addLog('info', 'Realtime connected')
+            } else {
+              uiServer.addLog('warn', 'Realtime disconnected')
+            }
+          },
+        },
+        logger
+      )
+
+      await realtimeClient.connect()
+    } else {
+      // Update credentials if changed
+      await realtimeClient.updateCredentials(supabaseUrl, supabaseAnonKey)
+    }
+  }
+
   // Graceful shutdown
-  const shutdown = () => {
+  const shutdown = async () => {
     logger.info('Shutting down...')
     isRunning = false
+    if (realtimeClient) {
+      await realtimeClient.disconnect()
+    }
+    await uiServer.stop()
     process.exit(0)
   }
 
@@ -116,9 +193,37 @@ async function main() {
           }
         }
 
+        // Update UI with connection status and segments
+        uiServer.updateConnection(true, agentId, organizationId)
+        uiServer.updateSegments(
+          Array.from(segmentStates.values()).map(s => ({
+            id: s.segment.id,
+            name: s.segment.name,
+            cidr: s.segment.cidr,
+            lastScan: s.lastScan ? new Date(s.lastScan).toISOString() : null,
+            deviceCount: Array.from(discoveredDevices.values()).filter(d => d.id.startsWith(s.segment.id)).length,
+            scanning: s.scanning,
+          }))
+        )
+        uiServer.addLog('info', `Heartbeat OK - ${response.segments.length} segment(s)`)
+
         // Check for upgrade
         if (response.upgrade_available && response.latest_agent_version) {
           logger.info(`Upgrade available: ${VERSION} -> ${response.latest_agent_version}`)
+        }
+
+        // Process pending commands
+        if (response.pending_commands && response.pending_commands.length > 0) {
+          logger.info(`Received ${response.pending_commands.length} pending command(s)`)
+          // Process commands asynchronously to not block heartbeat
+          processCommands(response.pending_commands).catch(err => {
+            logger.error(`Command processing error: ${err instanceof Error ? err.message : 'Unknown error'}`)
+          })
+        }
+
+        // Setup/update realtime client with credentials from heartbeat
+        if (response.supabase_url && response.supabase_anon_key && agentId) {
+          setupRealtimeClient(response.supabase_url, response.supabase_anon_key, agentId)
         }
 
         // Reset retry delay on success
@@ -127,6 +232,10 @@ async function main() {
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error'
         logger.warn(`Heartbeat failed: ${errorMsg}`)
+
+        // Update UI with disconnected status
+        uiServer.updateConnection(false)
+        uiServer.addLog('warn', `Heartbeat failed: ${errorMsg}`)
 
         // Exponential backoff
         retryDelay = Math.min(retryDelay * 2, 60000)
@@ -158,20 +267,38 @@ async function main() {
         state.lastScan = now
 
         logger.info(`Scanning segment: ${segment.name} (${segment.cidr})`)
+        uiServer.updateSegmentScanning(segment.id, true)
+        uiServer.addLog('info', `Scanning ${segment.name} (${segment.cidr})`)
 
         try {
           const devices = await discoverDevices(segment.cidr, logger)
           logger.info(`Discovered ${devices.length} devices in ${segment.name}`)
 
+          // Update UI with discovered devices
+          for (const device of devices) {
+            const deviceInfo: DeviceInfo = {
+              id: `${segment.id}-${device.ip_address}`,
+              name: device.hostname || device.ip_address,
+              ip: device.ip_address,
+              mac: device.mac_address,
+              status: 'unknown',
+            }
+            discoveredDevices.set(deviceInfo.id, deviceInfo)
+          }
+          uiServer.updateDevices(Array.from(discoveredDevices.values()))
+
           if (devices.length > 0) {
             const response = await client.uploadDiscoveredDevices(segment.id, devices)
             logger.debug(`Upload result: ${response.created} created, ${response.updated} updated`)
+            uiServer.addLog('info', `Discovered ${devices.length} devices (${response.created} new, ${response.updated} updated)`)
           }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Unknown error'
           logger.error(`Scan failed for ${segment.name}: ${errorMsg}`)
+          uiServer.addLog('error', `Scan failed: ${errorMsg}`)
         } finally {
           state.scanning = false
+          uiServer.updateSegmentScanning(segment.id, false)
         }
       }
 
@@ -247,6 +374,25 @@ async function main() {
 
           lastKnownStatus.set(deviceKey, status)
 
+          // Update UI with device status
+          const existingDevice = discoveredDevices.get(deviceKey)
+          if (existingDevice) {
+            existingDevice.status = status
+            existingDevice.responseTime = responseTime ?? undefined
+            existingDevice.lastCheck = new Date().toISOString()
+          } else {
+            // Device from dashboard that we haven't discovered locally
+            discoveredDevices.set(deviceKey, {
+              id: deviceKey,
+              name: device.ip_address || device.id,
+              ip: device.ip_address || '',
+              status,
+              responseTime: responseTime ?? undefined,
+              lastCheck: new Date().toISOString(),
+            })
+          }
+          uiServer.updateDeviceStatus(deviceKey, status, responseTime ?? undefined)
+
           reports.push({
             device_id: device.id,
             ip_address: device.ip_address || '',
@@ -318,6 +464,217 @@ async function main() {
       }
     }
   }
+
+  /**
+   * Process commands received from the dashboard
+   */
+  async function processCommands(commands: AgentCommand[]) {
+    for (const command of commands) {
+      if (command.status !== 'pending') continue
+
+      logger.info(`Processing command: ${command.command_type} (${command.id})`)
+
+      try {
+        switch (command.command_type) {
+          case 'ping': {
+            // Respond with pong and latency
+            const result = await client.sendPong(command.id)
+            logger.info(`Ping response sent, latency: ${result.latency_ms}ms`)
+            // Pong acknowledgement is handled by the ping endpoint
+            break
+          }
+
+          case 'scan_now': {
+            // Trigger immediate scan of all segments
+            logger.info('Executing scan_now command')
+            let segmentsScanned = 0
+            let devicesFound = 0
+
+            for (const [, state] of segmentStates) {
+              if (state.scanning) continue
+
+              state.scanning = true
+              try {
+                const devices = await discoverDevices(state.segment.cidr, logger)
+                devicesFound += devices.length
+
+                if (devices.length > 0) {
+                  await client.uploadDiscoveredDevices(state.segment.id, devices)
+                }
+                segmentsScanned++
+              } finally {
+                state.scanning = false
+              }
+            }
+
+            await client.acknowledgeCommand(command.id, true, {
+              segments_scanned: segmentsScanned,
+              devices_found: devicesFound,
+            })
+            logger.info(`scan_now completed: ${segmentsScanned} segments, ${devicesFound} devices`)
+            break
+          }
+
+          case 'scan_segment': {
+            // Scan a specific segment
+            const segmentId = command.payload?.segment_id as string
+            if (!segmentId) {
+              await client.acknowledgeCommand(command.id, false, undefined, 'segment_id required')
+              break
+            }
+
+            const state = segmentStates.get(segmentId)
+            if (!state) {
+              await client.acknowledgeCommand(command.id, false, undefined, 'Segment not found')
+              break
+            }
+
+            if (state.scanning) {
+              await client.acknowledgeCommand(command.id, false, undefined, 'Segment already scanning')
+              break
+            }
+
+            state.scanning = true
+            try {
+              const devices = await discoverDevices(state.segment.cidr, logger)
+              if (devices.length > 0) {
+                await client.uploadDiscoveredDevices(segmentId, devices)
+              }
+
+              await client.acknowledgeCommand(command.id, true, {
+                segment_id: segmentId,
+                devices_found: devices.length,
+              })
+              logger.info(`scan_segment completed: ${devices.length} devices found`)
+            } finally {
+              state.scanning = false
+            }
+            break
+          }
+
+          case 'restart': {
+            // Acknowledge first, then restart
+            logger.info('Executing restart command')
+            await client.acknowledgeCommand(command.id, true, { restarting: true })
+
+            // Give time for acknowledgment to be sent
+            await new Promise(resolve => setTimeout(resolve, 1000))
+
+            logger.info('Restarting agent...')
+            process.exit(0) // Rely on process manager (systemd/pm2) to restart
+            break
+          }
+
+          case 'upgrade': {
+            // Upgrade command - acknowledge and log
+            // Full upgrade logic would download new version and restart
+            const targetVersion = command.payload?.target_version as string
+            const downloadUrl = command.payload?.download_url as string
+
+            logger.info(`Upgrade requested: ${VERSION} -> ${targetVersion}`)
+            logger.info(`Download URL: ${downloadUrl}`)
+
+            // For now, just acknowledge - full upgrade requires installer work
+            await client.acknowledgeCommand(command.id, true, {
+              current_version: VERSION,
+              target_version: targetVersion,
+              message: 'Upgrade acknowledged - manual upgrade required',
+            })
+            break
+          }
+
+          case 'update_config': {
+            // Update configuration - not yet implemented
+            await client.acknowledgeCommand(command.id, false, undefined, 'update_config not implemented')
+            break
+          }
+
+          default:
+            logger.warn(`Unknown command type: ${command.command_type}`)
+            await client.acknowledgeCommand(command.id, false, undefined, `Unknown command: ${command.command_type}`)
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+        logger.error(`Command ${command.command_type} failed: ${errorMsg}`)
+
+        try {
+          await client.acknowledgeCommand(command.id, false, undefined, errorMsg)
+        } catch {
+          logger.error(`Failed to acknowledge command failure: ${command.id}`)
+        }
+      }
+    }
+  }
+
+  // Start the UI server
+  await uiServer.start()
+
+  // Listen for commands from the UI
+  uiServer.getIO().on('connection', (socket) => {
+    socket.on('command', async (cmd: { type: string; payload?: unknown }) => {
+      logger.info(`UI command received: ${cmd.type}`)
+      uiServer.addLog('info', `UI command: ${cmd.type}`)
+
+      try {
+        switch (cmd.type) {
+          case 'scan_now': {
+            // Trigger immediate scan of all segments
+            let segmentsScanned = 0
+            let devicesFound = 0
+
+            for (const [, state] of segmentStates) {
+              if (state.scanning) continue
+
+              state.scanning = true
+              uiServer.updateSegmentScanning(state.segment.id, true)
+
+              try {
+                const devices = await discoverDevices(state.segment.cidr, logger)
+                devicesFound += devices.length
+
+                // Update UI with discovered devices
+                for (const device of devices) {
+                  const deviceInfo: DeviceInfo = {
+                    id: `${state.segment.id}-${device.ip_address}`,
+                    name: device.hostname || device.ip_address,
+                    ip: device.ip_address,
+                    mac: device.mac_address,
+                    status: 'unknown',
+                  }
+                  discoveredDevices.set(deviceInfo.id, deviceInfo)
+                }
+                uiServer.updateDevices(Array.from(discoveredDevices.values()))
+
+                if (devices.length > 0) {
+                  await client.uploadDiscoveredDevices(state.segment.id, devices)
+                }
+                segmentsScanned++
+              } finally {
+                state.scanning = false
+                uiServer.updateSegmentScanning(state.segment.id, false)
+              }
+            }
+
+            uiServer.addLog('info', `Scan complete: ${segmentsScanned} segments, ${devicesFound} devices`)
+            break
+          }
+
+          case 'ping': {
+            // Ping dashboard
+            const result = await client.sendPong()
+            uiServer.addLog('info', `Ping response: ${result.latency_ms}ms`)
+            break
+          }
+
+          default:
+            uiServer.addLog('warn', `Unknown UI command: ${cmd.type}`)
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+        uiServer.addLog('error', `Command failed: ${errorMsg}`)
+      }
+    })
+  })
 
   // Start all loops
   logger.info('Starting agent loops...')

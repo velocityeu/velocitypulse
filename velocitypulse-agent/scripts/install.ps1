@@ -21,12 +21,16 @@ param(
     [string]$DashboardUrl,
     [string]$ApiKey,
     [string]$AgentName,
+    [int]$UIPort = 3001,
     [switch]$Unattended,
-    [switch]$Offline
+    [switch]$Offline,
+    [switch]$Uninstall,
+    [switch]$Upgrade
 )
 
 $script:OfflineMode = $Offline
 $script:InstallMode = $null
+$script:UIPort = $UIPort
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -249,9 +253,11 @@ function Install-Agent {
 VELOCITYPULSE_URL=$DashboardUrl
 VP_API_KEY=$ApiKey
 AGENT_NAME=$AgentName
+AGENT_UI_PORT=$UIPort
 HEARTBEAT_INTERVAL=60
 STATUS_CHECK_INTERVAL=30
 LOG_LEVEL=info
+ENABLE_REALTIME=true
 "@
     Set-Content -Path "$InstallPath\.env" -Value $envContent
     Write-Success "Configuration saved"
@@ -300,24 +306,160 @@ LOG_LEVEL=info
     }
 }
 
+function Uninstall-Agent {
+    Write-ColorText "`nUninstalling VelocityPulse Agent..." "Yellow"
+
+    # Stop and remove service
+    $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($existingService) {
+        Write-ColorText "Stopping service..." "Gray"
+        if ($existingService.Status -eq 'Running') {
+            if (Test-Path $NssmPath) {
+                & $NssmPath stop $ServiceName 2>&1 | Out-Null
+            } else {
+                Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+            }
+            Start-Sleep -Seconds 2
+        }
+
+        Write-ColorText "Removing service..." "Gray"
+        if (Test-Path $NssmPath) {
+            & $NssmPath remove $ServiceName confirm 2>&1 | Out-Null
+        } else {
+            sc.exe delete $ServiceName 2>&1 | Out-Null
+        }
+        Write-Success "Service removed"
+    } else {
+        Write-ColorText "Service not found" "Gray"
+    }
+
+    # Remove installation directory
+    if (Test-Path $InstallPath) {
+        Write-ColorText "Removing installation directory..." "Gray"
+        Remove-Item -Path $InstallPath -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Success "Installation directory removed"
+    }
+
+    Write-ColorText "`n" "White"
+    Write-ColorText "========================================" "Green"
+    Write-ColorText "  Uninstallation Complete!" "Green"
+    Write-ColorText "========================================" "Green"
+}
+
+function Upgrade-Agent {
+    Write-ColorText "`nUpgrading VelocityPulse Agent..." "Yellow"
+
+    # Check if agent is installed
+    if (-not (Test-Path $InstallPath)) {
+        throw "Agent not found at $InstallPath. Run install first."
+    }
+
+    # Backup current .env
+    $envPath = "$InstallPath\.env"
+    $envBackup = "$env:TEMP\velocitypulse-env-backup"
+    if (Test-Path $envPath) {
+        Copy-Item $envPath $envBackup -Force
+        Write-Success "Configuration backed up"
+    }
+
+    # Stop service
+    $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($existingService -and $existingService.Status -eq 'Running') {
+        Write-ColorText "Stopping service..." "Gray"
+        if (Test-Path $NssmPath) {
+            & $NssmPath stop $ServiceName 2>&1 | Out-Null
+        } else {
+            Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    # Download new version
+    Write-ColorText "Downloading latest version..." "Gray"
+    $zipPath = "$env:TEMP\velocitypulse-agent.zip"
+    Invoke-WebRequest -Uri $ZipUrl -OutFile $zipPath -UseBasicParsing
+
+    $extractPath = "$env:TEMP\velocitypulse-extract"
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+    # Find the extracted folder (GitHub adds branch name)
+    $sourceFolder = Get-ChildItem -Path $extractPath -Directory | Select-Object -First 1
+
+    # Remove old files but keep logs and .env
+    Get-ChildItem -Path $InstallPath -Exclude "logs", ".env", "nssm.exe" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+    # Copy new files
+    Copy-Item -Path "$($sourceFolder.FullName)\*" -Destination $InstallPath -Recurse -Force
+
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Success "New version downloaded"
+
+    # Restore .env if it was removed
+    if (-not (Test-Path $envPath) -and (Test-Path $envBackup)) {
+        Copy-Item $envBackup $envPath -Force
+        Remove-Item $envBackup -Force -ErrorAction SilentlyContinue
+    }
+
+    # Rebuild
+    Write-ColorText "Installing dependencies..." "Gray"
+    Push-Location $InstallPath
+    try {
+        & npm install --production 2>&1 | Out-Null
+        & npm run build 2>&1 | Out-Null
+    } finally {
+        Pop-Location
+    }
+    Write-Success "Dependencies installed"
+
+    # Restart service
+    Write-ColorText "Starting service..." "Gray"
+    if (Test-Path $NssmPath) {
+        & $NssmPath start $ServiceName 2>&1 | Out-Null
+    } else {
+        Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 2
+
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -eq 'Running') {
+        Write-Success "Service restarted"
+    }
+
+    Write-ColorText "`n" "White"
+    Write-ColorText "========================================" "Green"
+    Write-ColorText "  Upgrade Complete!" "Green"
+    Write-ColorText "========================================" "Green"
+}
+
 # Main execution
 try {
     Write-Banner
     Request-Elevation
-    Get-Configuration
-    Install-Agent
 
-    Write-ColorText "`n" "White"
-    Write-ColorText "========================================" "Green"
-    Write-ColorText "  Installation Complete!" "Green"
-    Write-ColorText "========================================" "Green"
-    Write-ColorText "`nAgent installed to: $InstallPath" "White"
-    Write-ColorText "Service name: $ServiceName" "White"
-    Write-ColorText "`nUseful commands:" "White"
-    Write-ColorText "  Check status:  Get-Service $ServiceName" "Gray"
-    Write-ColorText "  View logs:     Get-Content $InstallPath\logs\*.log -Tail 50" "Gray"
-    Write-ColorText "  Restart:       Restart-Service $ServiceName" "Gray"
-    Write-ColorText "`n"
+    if ($Uninstall) {
+        Uninstall-Agent
+    } elseif ($Upgrade) {
+        Upgrade-Agent
+    } else {
+        Get-Configuration
+        Install-Agent
+
+        Write-ColorText "`n" "White"
+        Write-ColorText "========================================" "Green"
+        Write-ColorText "  Installation Complete!" "Green"
+        Write-ColorText "========================================" "Green"
+        Write-ColorText "`nAgent installed to: $InstallPath" "White"
+        Write-ColorText "Service name: $ServiceName" "White"
+        Write-ColorText "Agent UI: http://localhost:$UIPort" "White"
+        Write-ColorText "`nUseful commands:" "White"
+        Write-ColorText "  Check status:  Get-Service $ServiceName" "Gray"
+        Write-ColorText "  View logs:     Get-Content $InstallPath\logs\*.log -Tail 50" "Gray"
+        Write-ColorText "  Restart:       Restart-Service $ServiceName" "Gray"
+        Write-ColorText "  Uninstall:     .\install.ps1 -Uninstall" "Gray"
+        Write-ColorText "  Upgrade:       .\install.ps1 -Upgrade" "Gray"
+        Write-ColorText "`n"
+    }
 
 } catch {
     Write-Error2 "Installation failed: $_"

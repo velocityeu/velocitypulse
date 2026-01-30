@@ -184,24 +184,32 @@ export class DashboardClient {
    */
   async acknowledgeCommand(
     commandId: string,
-    status: 'completed' | 'failed',
+    success: boolean,
+    result?: Record<string, unknown>,
     error?: string
   ): Promise<void> {
-    this.logger.debug(`Acknowledging command ${commandId}: ${status}`)
+    this.logger.debug(`Acknowledging command ${commandId}: ${success ? 'completed' : 'failed'}`)
     await this.client.post(`/api/agent/commands/${commandId}/ack`, {
-      status,
-      executed_at: new Date().toISOString(),
+      success,
+      result,
       error,
     })
   }
 
   /**
-   * Send a ping from agent to dashboard
+   * Send a pong response to the dashboard
+   * Used to respond to ping commands for connectivity testing
    */
-  async pingDashboard(): Promise<void> {
-    this.logger.debug('Sending ping to dashboard')
-    await this.client.post('/api/agent/ping', {
-      timestamp: new Date().toISOString(),
+  async sendPong(commandId?: string): Promise<{ latency_ms?: number }> {
+    this.logger.debug('Sending pong to dashboard')
+    const response = await this.client.post<{
+      success: boolean
+      pong: boolean
+      latency_ms?: number
+    }>('/api/agent/ping', {
+      agent_timestamp: new Date().toISOString(),
+      command_id: commandId,
     })
+    return { latency_ms: response.data.latency_ms }
   }
 }

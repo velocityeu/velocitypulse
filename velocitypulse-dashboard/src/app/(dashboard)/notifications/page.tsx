@@ -113,7 +113,7 @@ export default function NotificationsPage() {
       setChannelForm({
         name: channel.name,
         channel_type: channel.channel_type,
-        config: channel.config as Record<string, unknown>,
+        config: channel.config as unknown as Record<string, unknown>,
       })
     } else {
       setEditingChannel(null)

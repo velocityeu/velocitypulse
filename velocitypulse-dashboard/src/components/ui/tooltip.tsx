@@ -54,7 +54,7 @@ export function Tooltip({ children }: TooltipProps) {
 
 export function TooltipTrigger({ children, asChild }: TooltipTriggerProps) {
   const { setOpen, delayDuration } = React.useContext(TooltipContext)
-  const timeoutRef = React.useRef<NodeJS.Timeout>()
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null)
 
   const handleMouseEnter = () => {
     timeoutRef.current = setTimeout(() => setOpen(true), delayDuration)

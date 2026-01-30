@@ -15,7 +15,6 @@ function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY is not configured')
     }
     stripe = new Stripe(apiKey, {
-      // @ts-expect-error - Using stable API version for compatibility
       apiVersion: '2024-06-20',
       maxNetworkRetries: 3,
       timeout: 30000,

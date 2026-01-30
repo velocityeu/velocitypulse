@@ -274,16 +274,20 @@ async function main() {
           const devices = await discoverDevices(segment.cidr, logger)
           logger.info(`Discovered ${devices.length} devices in ${segment.name}`)
 
-          // Update UI with discovered devices
+          // Update UI with discovered devices (key by IP for consistent lookups)
           for (const device of devices) {
+            const deviceKey = device.ip_address
+            const existing = discoveredDevices.get(deviceKey)
             const deviceInfo: DeviceInfo = {
-              id: `${segment.id}-${device.ip_address}`,
+              id: deviceKey,
               name: device.hostname || device.ip_address,
               ip: device.ip_address,
               mac: device.mac_address,
-              status: 'unknown',
+              status: existing?.status || 'unknown',
+              responseTime: existing?.responseTime,
+              lastCheck: existing?.lastCheck,
             }
-            discoveredDevices.set(deviceInfo.id, deviceInfo)
+            discoveredDevices.set(deviceKey, deviceInfo)
           }
           uiServer.updateDevices(Array.from(discoveredDevices.values()))
 
@@ -328,7 +332,8 @@ async function main() {
         const activeKeys = new Set<string>()
 
         for (const device of monitoredDevices) {
-          const deviceKey = `${device.id}-${device.ip_address}`
+          // Use IP address as key for consistent UI lookups
+          const deviceKey = device.ip_address || device.id
           activeKeys.add(deviceKey)
 
           let status: 'online' | 'offline' | 'degraded' | 'unknown' = 'unknown'
@@ -632,16 +637,20 @@ async function main() {
                 const devices = await discoverDevices(state.segment.cidr, logger)
                 devicesFound += devices.length
 
-                // Update UI with discovered devices
+                // Update UI with discovered devices (key by IP for consistent lookups)
                 for (const device of devices) {
+                  const deviceKey = device.ip_address
+                  const existing = discoveredDevices.get(deviceKey)
                   const deviceInfo: DeviceInfo = {
-                    id: `${state.segment.id}-${device.ip_address}`,
+                    id: deviceKey,
                     name: device.hostname || device.ip_address,
                     ip: device.ip_address,
                     mac: device.mac_address,
-                    status: 'unknown',
+                    status: existing?.status || 'unknown',
+                    responseTime: existing?.responseTime,
+                    lastCheck: existing?.lastCheck,
                   }
-                  discoveredDevices.set(deviceInfo.id, deviceInfo)
+                  discoveredDevices.set(deviceKey, deviceInfo)
                 }
                 uiServer.updateDevices(Array.from(discoveredDevices.values()))
 

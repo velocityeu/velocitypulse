@@ -36,7 +36,10 @@ The Microsoft OAuth credentials are configured in Clerk Dashboard:
 1. Go to [Clerk Dashboard](https://dashboard.clerk.com)
 2. Select **VelocityPulse** app
 3. Navigate to **Configure** → **SSO Connections** → **Microsoft**
-4. Use **Custom credentials** with the App ID above
+4. Use **Custom credentials** with:
+   - **Client ID:** `02a4b199-487f-4ff1-95f8-1f251152c56a`
+   - **Client Secret:** (stored in Clerk)
+   - **Discovery Endpoint:** `https://login.microsoftonline.com/common/v2.0`
 
 ## Secret Management
 

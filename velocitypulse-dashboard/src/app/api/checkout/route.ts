@@ -49,7 +49,8 @@ export async function POST(request: Request) {
       .single()
 
     if (orgError || !org) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+      console.error('Organization lookup failed:', orgError)
+      return NextResponse.json({ error: `Organization not found: ${orgError?.message || 'no org'}` }, { status: 404 })
     }
 
     // Verify user is a member of this organization
@@ -61,7 +62,8 @@ export async function POST(request: Request) {
       .single()
 
     if (!membership) {
-      return NextResponse.json({ error: 'Not a member of this organization' }, { status: 403 })
+      console.error('Membership lookup failed for user:', userId, 'org:', organizationId)
+      return NextResponse.json({ error: `Not a member of this organization (user: ${userId})` }, { status: 403 })
     }
 
     // Check if user can manage billing
@@ -129,8 +131,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ url: session.url })
   } catch (error) {
     console.error('Checkout error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Failed to create checkout session' },
+      { error: `Failed to create checkout session: ${errorMessage}` },
       { status: 500 }
     )
   }

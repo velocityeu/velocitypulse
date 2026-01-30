@@ -211,13 +211,18 @@ export type AuditAction =
   | 'member.removed'
   | 'member.role_changed'
   | 'agent.created'
+  | 'agent.updated'
   | 'agent.deleted'
   | 'agent.api_key_rotated'
+  | 'segment.created'
+  | 'segment.updated'
+  | 'segment.deleted'
   | 'device.created'
   | 'device.deleted'
   | 'subscription.created'
   | 'subscription.cancelled'
   | 'subscription.payment_failed'
+  | 'checkout.started'
 
 export interface AuditLog {
   id: string

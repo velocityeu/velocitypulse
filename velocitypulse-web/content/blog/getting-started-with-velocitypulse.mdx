@@ -1,0 +1,68 @@
+---
+title: Getting Started with VelocityPulse
+description: A step-by-step guide to setting up network monitoring with VelocityPulse. Learn how to deploy agents, configure segments, and start monitoring your infrastructure.
+date: 2026-01-15
+author: VelocityPulse Team
+authorRole: Product
+tags: [Getting Started, Tutorial]
+---
+
+Network monitoring doesn't have to be complicated. VelocityPulse is designed to get you from zero to full visibility in minutes, not hours. In this guide, we'll walk through the complete setup process.
+
+## Step 1: Create Your Account
+
+Head to [app.velocitypulse.io](https://app.velocitypulse.io) and sign up for a free trial. No credit card required. You'll have 14 days to explore all features before deciding on a plan.
+
+Once signed up, you'll be taken through a quick onboarding flow to create your organisation. This is where all your agents, segments, and devices will live.
+
+## Step 2: Install Your First Agent
+
+Agents are lightweight monitoring processes that run on your network. They discover devices, monitor status, and report back to the dashboard.
+
+Download the agent for your platform:
+
+- **Windows**: Download the MSI installer
+- **Linux**: Use our APT/YUM repositories
+- **Docker**: Pull from `velocitypulse/agent:latest`
+
+After installation, configure the agent with your API key (found in the dashboard under Settings > Agents > Add Agent).
+
+```bash
+velocitypulse-agent --api-key vp_yourkey_here
+```
+
+The agent will automatically detect your local network and start discovering devices.
+
+## Step 3: Configure Network Segments
+
+Network segments define which IP ranges your agents should monitor. By default, agents auto-detect the local subnet, but you can add more segments manually.
+
+Each segment has:
+
+- **CIDR range**: e.g., `192.168.1.0/24`
+- **Scan interval**: How often to discover new devices
+- **Name**: A friendly label for the segment
+
+Pro tip: Use separate segments for different VLANs or network zones to keep your dashboard organised.
+
+## Step 4: Review Discovered Devices
+
+Within minutes, devices will start appearing in your dashboard. Each device shows:
+
+- IP address and hostname
+- Current status (online/offline/degraded)
+- Response time
+- Last check timestamp
+
+Click any device to see more details, assign it to a category, or configure custom monitoring settings.
+
+## Next Steps
+
+Now that you're up and running:
+
+- **Set up alerts**: Get notified when devices go offline
+- **Create categories**: Organise devices by type or location
+- **Add team members**: Invite colleagues to collaborate
+- **Explore the API**: Build custom integrations
+
+Need help? Check out our [documentation](https://docs.velocitypulse.io) or [contact support](/contact).

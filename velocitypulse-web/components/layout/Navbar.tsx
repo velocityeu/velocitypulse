@@ -11,10 +11,14 @@ import { useTheme } from '../ThemeProvider'
 const navigation = [
   { name: 'Features', href: '/features' },
   { name: 'Pricing', href: '/pricing' },
+  { name: 'Blog', href: '/blog' },
   { name: 'Partners', href: '/partners' },
   { name: 'About', href: '/about' },
   { name: 'Contact', href: '/contact' },
 ]
+
+// Dashboard URL - where authenticated users are redirected
+const DASHBOARD_URL = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.velocitypulse.io'
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -116,6 +120,12 @@ export default function Navbar() {
             {/* Right side */}
             <div className="flex items-center gap-3">
               <ThemeToggle />
+              <Link
+                href={`${DASHBOARD_URL}/sign-in`}
+                className="hidden md:inline-flex px-3 py-2 text-sm text-secondary hover:text-primary transition-colors"
+              >
+                Sign In
+              </Link>
               <Button href="/demo" className="hidden md:inline-flex">
                 Start Free Trial
               </Button>
@@ -194,7 +204,17 @@ export default function Navbar() {
                 </Link>
               ))}
 
-              <div className="mt-6 px-4">
+              <div className="mt-6 space-y-3 px-4">
+                <Link
+                  href={`${DASHBOARD_URL}/sign-in`}
+                  className="block w-full px-4 py-3 text-center text-sm text-secondary hover:text-primary border border-[var(--color-border)] rounded-lg transition-colors"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    openButtonRef.current?.focus()
+                  }}
+                >
+                  Sign In
+                </Link>
                 <Button
                   href="/demo"
                   className="w-full justify-center"

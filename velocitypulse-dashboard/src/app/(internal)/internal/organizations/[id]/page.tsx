@@ -28,10 +28,37 @@ import {
 import { formatDate, formatDateTime, formatCurrency, getDaysUntilTrialExpires } from '@/lib/utils'
 import type { Organization, OrganizationStatus, OrganizationPlan, AuditLog } from '@/types'
 
+interface AgentWithCounts {
+  id: string
+  name: string
+  description?: string
+  api_key_prefix: string
+  is_enabled: boolean
+  last_seen_at?: string
+  last_ip_address?: string
+  version?: string
+  device_count: number
+  segment_count: number
+  is_online: boolean
+}
+
+interface SegmentWithCounts {
+  id: string
+  agent_id: string
+  name: string
+  cidr: string
+  scan_interval_seconds: number
+  is_enabled: boolean
+  last_scan_at?: string
+  device_count: number
+}
+
 interface OrganizationDetails extends Organization {
   member_count: number
   device_count: number
   agent_count: number
+  agents: AgentWithCounts[]
+  segments: SegmentWithCounts[]
   recent_audit_logs: AuditLog[]
 }
 
@@ -109,6 +136,55 @@ export default function OrganizationDetailPage() {
     agent_count: 8,
     created_at: '2024-06-15T10:00:00Z',
     updated_at: '2025-01-20T14:30:00Z',
+    agents: [
+      {
+        id: 'agent_1',
+        name: 'Office Network Agent',
+        description: 'Main office monitoring',
+        api_key_prefix: 'vp_acme1234',
+        is_enabled: true,
+        last_seen_at: new Date(Date.now() - 60000).toISOString(),
+        last_ip_address: '192.168.1.100',
+        version: '1.0.0',
+        device_count: 156,
+        segment_count: 3,
+        is_online: true,
+      },
+      {
+        id: 'agent_2',
+        name: 'Data Center Agent',
+        description: 'Server room monitoring',
+        api_key_prefix: 'vp_acme5678',
+        is_enabled: true,
+        last_seen_at: new Date(Date.now() - 300000).toISOString(),
+        version: '1.0.0',
+        device_count: 89,
+        segment_count: 2,
+        is_online: true,
+      },
+    ],
+    segments: [
+      {
+        id: 'seg_1',
+        agent_id: 'agent_1',
+        name: 'Office LAN',
+        cidr: '192.168.1.0/24',
+        scan_interval_seconds: 300,
+        is_enabled: true,
+        last_scan_at: new Date(Date.now() - 120000).toISOString(),
+        device_count: 85,
+      },
+      {
+        id: 'seg_2',
+        agent_id: 'agent_1',
+        name: 'Guest Network',
+        cidr: '192.168.10.0/24',
+        scan_interval_seconds: 600,
+        is_enabled: true,
+        last_scan_at: new Date(Date.now() - 180000).toISOString(),
+        device_count: 45,
+      },
+    ],
     recent_audit_logs: [
       {
         id: '1',
@@ -257,6 +333,98 @@ export default function OrganizationDetailPage() {
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Agents */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Agents ({data.agents?.length || 0})</CardTitle>
+              <CardDescription>Network monitoring agents</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {data.agents && data.agents.length > 0 ? (
+                <div className="space-y-3">
+                  {data.agents.map((agent) => (
+                    <div key={agent.id} className="flex items-center justify-between p-3 rounded-lg border">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${agent.is_online ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        <div>
+                          <div className="font-medium">{agent.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {agent.device_count} devices, {agent.segment_count} segments
+                            {agent.version && ` • v${agent.version}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={agent.is_enabled ? 'default' : 'secondary'}>
+                          {agent.is_enabled ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            if (confirm(`Delete agent "${agent.name}"? This will also delete ${agent.device_count} devices and ${agent.segment_count} segments.`)) {
+                              performAction('delete_agent', { agent_id: agent.id })
+                            }
+                          }}
+                          disabled={actionLoading === 'delete_agent'}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-4">No agents configured</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Segments */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Network Segments ({data.segments?.length || 0})</CardTitle>
+              <CardDescription>Monitored network ranges</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {data.segments && data.segments.length > 0 ? (
+                <div className="space-y-3">
+                  {data.segments.map((segment) => (
+                    <div key={segment.id} className="flex items-center justify-between p-3 rounded-lg border">
+                      <div>
+                        <div className="font-medium">{segment.name}</div>
+                        <div className="text-sm text-muted-foreground font-mono">
+                          {segment.cidr} • {segment.device_count} devices
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={segment.is_enabled ? 'default' : 'secondary'}>
+                          {segment.is_enabled ? 'Active' : 'Disabled'}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            if (confirm(`Delete segment "${segment.name}"? This will also delete ${segment.device_count} devices.`)) {
+                              performAction('delete_segment', { segment_id: segment.id })
+                            }
+                          }}
+                          disabled={actionLoading === 'delete_segment'}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-4">No network segments</div>
+              )}
             </CardContent>
           </Card>
 

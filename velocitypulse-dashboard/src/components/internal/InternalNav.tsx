@@ -8,6 +8,7 @@ import {
   Clock,
   ShieldAlert,
   HeadphonesIcon,
+  CreditCard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -26,6 +27,11 @@ const navItems = [
     label: 'Trials',
     href: '/internal/trials',
     icon: Clock,
+  },
+  {
+    label: 'Subscriptions',
+    href: '/internal/subscriptions',
+    icon: CreditCard,
   },
   {
     label: 'Security',

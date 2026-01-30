@@ -14,6 +14,9 @@ export async function GET(request: NextRequest) {
     const orgId = searchParams.get('org_id')
     const actorType = searchParams.get('actor_type')
     const search = searchParams.get('search')
+    const startDate = searchParams.get('start_date')
+    const endDate = searchParams.get('end_date')
+    const format = searchParams.get('format') // 'json' or 'csv'
     const offset = (page - 1) * limit
 
     // Build query
@@ -39,13 +42,56 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Date range filtering
+    if (startDate) {
+      query = query.gte('created_at', startDate)
+    }
+    if (endDate) {
+      // Add one day to include the end date
+      const endDateObj = new Date(endDate)
+      endDateObj.setDate(endDateObj.getDate() + 1)
+      query = query.lt('created_at', endDateObj.toISOString())
+    }
+
     query = query
       .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+
+    // For CSV export, get all matching records (up to 10000)
+    if (format === 'csv') {
+      query = query.limit(10000)
+    } else {
+      query = query.range(offset, offset + limit - 1)
+    }
 
     const { data: logs, count, error: queryError } = await query
 
     if (queryError) throw queryError
+
+    // CSV export
+    if (format === 'csv') {
+      const headers = ['Date', 'Organization ID', 'Actor Type', 'Actor ID', 'Action', 'Resource Type', 'Resource ID', 'IP Address']
+      const rows = (logs || []).map(log => [
+        new Date(log.created_at).toISOString(),
+        log.organization_id,
+        log.actor_type,
+        log.actor_id || '',
+        log.action,
+        log.resource_type,
+        log.resource_id || '',
+        log.ip_address || '',
+      ])
+
+      const csv = [headers, ...rows]
+        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\n')
+
+      return new NextResponse(csv, {
+        headers: {
+          'Content-Type': 'text/csv',
+          'Content-Disposition': `attachment; filename="audit-logs-${new Date().toISOString().split('T')[0]}.csv"`,
+        },
+      })
+    }
 
     return NextResponse.json({
       logs: logs || [],

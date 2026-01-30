@@ -131,13 +131,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Authenticate user for this organization
-    const auth = await authenticateUser(agent.organization_id)
-    if (!auth.authorized) {
-      return auth.error
+    const authResult = await authenticateUser(agent.organization_id)
+    if (!authResult.authorized) {
+      return authResult.error
     }
 
     // Check permission
-    if (!canManageAgents(auth.context!)) {
+    if (!canManageAgents(authResult.context!)) {
       return NextResponse.json(
         { error: 'You do not have permission to manage network segments' },
         { status: 403 }
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
     await supabase.from('audit_logs').insert({
       organization_id: agent.organization_id,
       actor_type: 'user',
-      actor_id: auth.context!.userId,
+      actor_id: authResult.context!.userId,
       action: 'segment.created',
       resource_type: 'network_segment',
       resource_id: segment.id,

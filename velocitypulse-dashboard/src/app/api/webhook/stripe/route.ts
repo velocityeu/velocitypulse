@@ -4,6 +4,9 @@ import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/db/client'
 import { PLAN_LIMITS } from '@/lib/constants'
 
+// Force Node.js runtime (not Edge) - required for Stripe
+export const runtime = 'nodejs'
+
 // Lazy initialization to avoid build-time errors
 let stripe: Stripe | null = null
 function getStripe(): Stripe {
@@ -12,7 +15,12 @@ function getStripe(): Stripe {
     if (!apiKey) {
       throw new Error('STRIPE_SECRET_KEY is not configured')
     }
-    stripe = new Stripe(apiKey)
+    stripe = new Stripe(apiKey, {
+      // @ts-expect-error - Using stable API version for compatibility
+      apiVersion: '2024-06-20',
+      maxNetworkRetries: 3,
+      timeout: 30000,
+    })
   }
   return stripe
 }

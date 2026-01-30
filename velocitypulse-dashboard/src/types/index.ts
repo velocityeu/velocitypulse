@@ -370,5 +370,93 @@ export interface AgentContext {
 }
 
 // ==============================================
+// Notification Types
+// ==============================================
+
+export type NotificationChannelType = 'email' | 'slack' | 'teams' | 'webhook'
+export type NotificationEventType =
+  | 'device.offline'
+  | 'device.online'
+  | 'device.degraded'
+  | 'agent.offline'
+  | 'agent.online'
+  | 'scan.complete'
+
+export interface NotificationChannel {
+  id: string
+  organization_id: string
+  name: string
+  channel_type: NotificationChannelType
+  config: NotificationChannelConfig
+  is_enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type NotificationChannelConfig =
+  | EmailChannelConfig
+  | SlackChannelConfig
+  | TeamsChannelConfig
+  | WebhookChannelConfig
+
+export interface EmailChannelConfig {
+  type: 'email'
+  recipients: string[] // email addresses
+}
+
+export interface SlackChannelConfig {
+  type: 'slack'
+  webhook_url: string
+  channel_name?: string // for display purposes
+}
+
+export interface TeamsChannelConfig {
+  type: 'teams'
+  webhook_url: string
+  channel_name?: string
+}
+
+export interface WebhookChannelConfig {
+  type: 'webhook'
+  url: string
+  method: 'POST' | 'GET'
+  headers?: Record<string, string>
+}
+
+export interface NotificationRule {
+  id: string
+  organization_id: string
+  name: string
+  description?: string
+  event_type: NotificationEventType
+  channel_ids: string[] // which channels to notify
+  filters?: NotificationRuleFilters
+  is_enabled: boolean
+  cooldown_minutes: number // prevent spam, default 5
+  created_at: string
+  updated_at: string
+}
+
+export interface NotificationRuleFilters {
+  category_ids?: string[] // only for specific categories
+  device_ids?: string[] // only for specific devices
+  agent_ids?: string[] // only for specific agents
+  segment_ids?: string[] // only for specific segments
+}
+
+export interface NotificationHistory {
+  id: string
+  organization_id: string
+  rule_id: string
+  channel_id: string
+  event_type: NotificationEventType
+  event_data: Record<string, unknown>
+  status: 'pending' | 'sent' | 'failed'
+  error?: string
+  sent_at?: string
+  created_at: string
+}
+
+// ==============================================
 // Plan Limits - Use PLAN_LIMITS from @/lib/constants
 // ==============================================

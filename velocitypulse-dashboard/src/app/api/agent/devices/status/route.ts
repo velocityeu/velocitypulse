@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { authenticateAgent } from '@/lib/api/agent-auth'
 import { createServiceClient } from '@/lib/db/client'
-import type { AgentStatusRequest, AgentStatusResponse } from '@/types'
+import { triggerDeviceNotification } from '@/lib/notifications'
+import type { AgentStatusRequest, AgentStatusResponse, DeviceStatus } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,9 +43,10 @@ export async function POST(request: Request) {
     for (const report of body.reports) {
       try {
         // Find device by ID or IP address (scoped to organization)
+        // Include current status for change detection
         let deviceQuery = supabase
           .from('devices')
-          .select('id')
+          .select('id, name, status, ip_address, category_id, network_segment_id')
           .eq('organization_id', agentContext.organizationId)
 
         if (report.device_id) {
@@ -63,6 +65,9 @@ export async function POST(request: Request) {
           continue
         }
 
+        const previousStatus = device.status as DeviceStatus
+        const newStatus = report.status
+
         // Update device status
         const { error: updateError } = await supabase
           .from('devices')
@@ -79,6 +84,38 @@ export async function POST(request: Request) {
         if (updateError) {
           errors.push(`Failed to update device ${device.id}: ${updateError.message}`)
           continue
+        }
+
+        // Trigger notifications on status change
+        if (previousStatus !== newStatus) {
+          const eventType =
+            newStatus === 'offline'
+              ? 'device.offline'
+              : newStatus === 'online'
+                ? 'device.online'
+                : newStatus === 'degraded'
+                  ? 'device.degraded'
+                  : null
+
+          if (eventType) {
+            // Don't await - fire and forget to not slow down status updates
+            triggerDeviceNotification(
+              agentContext.organizationId,
+              device.id,
+              device.name || device.ip_address || device.id,
+              eventType,
+              {
+                ip_address: device.ip_address,
+                previous_status: previousStatus,
+                new_status: newStatus,
+                category_id: device.category_id,
+                segment_id: device.network_segment_id,
+                response_time_ms: report.response_time_ms,
+              }
+            ).catch((err) => {
+              console.error('[StatusUpdate] Notification error:', err)
+            })
+          }
         }
 
         processed++

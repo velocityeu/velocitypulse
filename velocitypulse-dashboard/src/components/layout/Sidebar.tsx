@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Server,
   Users,
+  Bell,
   Settings,
   ChevronLeft,
   Menu,
@@ -24,6 +25,7 @@ const navItems = [
   { label: 'Categories', href: '/categories', icon: FolderOpen },
   { label: 'Agents', href: '/agents', icon: Server },
   { label: 'Users', href: '/users', icon: Users },
+  { label: 'Notifications', href: '/notifications', icon: Bell },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 

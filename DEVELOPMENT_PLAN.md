@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: ~95% Feature Complete for MVP**
+**Current Status: ~98% Feature Complete for MVP**
 
 ---
 
@@ -113,8 +113,8 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ### Nice-to-Have Gaps
 
-1. **Notifications** - Email/Slack/Teams alerts (schema planned)
-2. **Custom Webhooks** - External integrations
+1. ~~**Notifications**~~ - COMPLETE (Email/Slack/Teams/Webhooks with rules and cooldowns)
+2. ~~**Custom Webhooks**~~ - COMPLETE (generic webhook sender)
 3. **White-label** - Unlimited tier feature
 4. **Advanced Analytics** - Charts/reports
 5. **SSO (SAML)** - Enterprise feature
@@ -205,14 +205,18 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [x] Color-coded indicator (green/amber/red) with tooltip
 - [x] Per-agent status in tooltip with last seen time
 
-### Phase 5: Notifications (Priority: LOW)
+### Phase 5: Notifications (Priority: LOW) - COMPLETE
 
-#### 5.1 Notification System
-- [ ] Design notification preferences schema
-- [ ] Implement email notifications (device offline)
-- [ ] Implement Slack webhook integration
-- [ ] Implement Teams webhook integration
-- [ ] Add notification settings page
+#### 5.1 Notification System - COMPLETE
+- [x] Design notification preferences schema (channels, rules, history, cooldowns)
+- [x] Implement email notifications (Resend API)
+- [x] Implement Slack webhook integration (rich blocks format)
+- [x] Implement Teams webhook integration (Adaptive Cards)
+- [x] Implement generic webhook sender
+- [x] Create notification service with cooldown/rate-limiting
+- [x] Add notification settings page (channels + rules management)
+- [x] Add notification trigger on device status change
+- [x] Add Notifications link to sidebar
 
 ### Phase 6: Enterprise Features (Priority: LOW)
 
@@ -239,15 +243,30 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 **Dashboard UI:**
 - `velocitypulse-dashboard/src/app/(dashboard)/monitor/page.tsx` (CREATED)
+- `velocitypulse-dashboard/src/app/(dashboard)/notifications/page.tsx` (CREATED - notification settings)
 - `velocitypulse-dashboard/src/components/dashboard/SortControls.tsx` (CREATED)
 - `velocitypulse-dashboard/src/components/ui/switch.tsx` (CREATED)
 - `velocitypulse-dashboard/src/components/ui/label.tsx` (CREATED)
 - `velocitypulse-dashboard/src/components/ui/dropdown-menu.tsx` (CREATED)
-- `velocitypulse-dashboard/src/components/layout/Sidebar.tsx` (MODIFIED)
+- `velocitypulse-dashboard/src/components/layout/Sidebar.tsx` (MODIFIED - added Notifications link)
 - `velocitypulse-dashboard/src/components/layout/DashboardShell.tsx` (MODIFIED - added AgentStatusIndicator)
 - `velocitypulse-dashboard/src/components/dashboard/DeviceDetailModal.tsx` (MODIFIED - SNMP/UPnP info)
 - `velocitypulse-dashboard/src/components/dashboard/AgentStatusIndicator.tsx` (CREATED)
 - `velocitypulse-dashboard/src/components/ui/tooltip.tsx` (CREATED)
+
+**Notifications:**
+- `velocitypulse-dashboard/src/types/index.ts` (MODIFIED - notification types)
+- `velocitypulse-dashboard/supabase/migrations/004_notifications.sql` (CREATED)
+- `velocitypulse-dashboard/src/lib/notifications/service.ts` (CREATED)
+- `velocitypulse-dashboard/src/lib/notifications/senders/email.ts` (CREATED)
+- `velocitypulse-dashboard/src/lib/notifications/senders/slack.ts` (CREATED)
+- `velocitypulse-dashboard/src/lib/notifications/senders/teams.ts` (CREATED)
+- `velocitypulse-dashboard/src/lib/notifications/senders/webhook.ts` (CREATED)
+- `velocitypulse-dashboard/src/app/api/notifications/channels/route.ts` (CREATED)
+- `velocitypulse-dashboard/src/app/api/notifications/channels/[channelId]/route.ts` (CREATED)
+- `velocitypulse-dashboard/src/app/api/notifications/rules/route.ts` (CREATED)
+- `velocitypulse-dashboard/src/app/api/notifications/rules/[ruleId]/route.ts` (CREATED)
+- `velocitypulse-dashboard/src/app/api/agent/devices/status/route.ts` (MODIFIED - trigger notifications)
 
 **Agent:**
 - `velocitypulse-agent/src/index.ts` (MODIFIED - command handling, UI integration, realtime setup)
@@ -294,4 +313,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: January 30, 2026 - Phase 3 & 4 Complete*
+*Last Updated: January 30, 2026 - Phase 3, 4, & 5 Complete*

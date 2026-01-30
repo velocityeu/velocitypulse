@@ -4,6 +4,7 @@ import { RefreshCw, Bell, Settings, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 
 // Dynamically import UserButton to prevent SSR issues
 const UserButton = dynamic(
@@ -47,9 +48,45 @@ interface HeaderProps {
   onRefresh?: () => void
   isRefreshing?: boolean
   organizationName?: string
+  planName?: string
+  trialDaysRemaining?: number | null
 }
 
-export function Header({ onRefresh, isRefreshing, organizationName }: HeaderProps) {
+export function Header({
+  onRefresh,
+  isRefreshing,
+  organizationName,
+  planName,
+  trialDaysRemaining,
+}: HeaderProps) {
+  // Determine badge color based on plan/trial status
+  const getBadgeClasses = () => {
+    if (!planName) return ''
+
+    // Warning colors for low trial days or payment issues
+    if (planName.includes('Expired') || planName.includes('Payment Due') || planName.includes('Suspended')) {
+      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+    }
+
+    // Warning colors for trial with <= 7 days
+    if (planName.includes('Trial') && trialDaysRemaining != null && trialDaysRemaining <= 7) {
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+    }
+
+    // Trial colors
+    if (planName.includes('Trial')) {
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+    }
+
+    // Unlimited plan
+    if (planName === 'Unlimited') {
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+    }
+
+    // Starter plan
+    return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+  }
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
@@ -66,6 +103,18 @@ export function Header({ onRefresh, isRefreshing, organizationName }: HeaderProp
               <span className="text-muted-foreground">/</span>
               <span className="text-muted-foreground">{organizationName}</span>
             </>
+          )}
+          {planName && (
+            <Link href="/billing" className="ml-2">
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-opacity hover:opacity-80',
+                  getBadgeClasses()
+                )}
+              >
+                {planName}
+              </span>
+            </Link>
           )}
         </div>
 
@@ -92,9 +141,11 @@ export function Header({ onRefresh, isRefreshing, organizationName }: HeaderProp
             <span className="sr-only">Notifications</span>
           </Button>
 
-          <Button variant="ghost" size="icon" className="h-9 w-9">
-            <Settings className="h-4 w-4" />
-            <span className="sr-only">Settings</span>
+          <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
+            <Link href="/settings">
+              <Settings className="h-4 w-4" />
+              <span className="sr-only">Settings</span>
+            </Link>
           </Button>
 
           <ClerkUserSection />

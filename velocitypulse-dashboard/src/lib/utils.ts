@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import type { OrganizationPlan, Organization } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -135,4 +136,81 @@ export function getDaysUntilTrialExpires(trialEndsAt: string | null | undefined)
 export function truncate(str: string, length: number): string {
   if (str.length <= length) return str
   return str.slice(0, length - 3) + '...'
+}
+
+// ==============================================
+// Plan/Tier Helper Functions
+// ==============================================
+
+/**
+ * Get display name for a plan
+ */
+export function getPlanDisplayName(plan: OrganizationPlan): string {
+  switch (plan) {
+    case 'trial':
+      return 'Trial'
+    case 'starter':
+      return 'Starter'
+    case 'unlimited':
+      return 'Unlimited'
+    default:
+      return 'Unknown'
+  }
+}
+
+/**
+ * Get trial days remaining (null if not on trial or expired)
+ */
+export function getTrialDaysRemaining(trialEndsAt: string | null | undefined): number | null {
+  if (!trialEndsAt) return null
+  const now = new Date()
+  const expiry = new Date(trialEndsAt)
+  if (expiry < now) return 0
+  return Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+/**
+ * Format trial/plan status for display
+ */
+export function formatTrialStatus(org: Pick<Organization, 'plan' | 'trial_ends_at' | 'status'>): string {
+  if (org.plan === 'trial') {
+    const daysLeft = getTrialDaysRemaining(org.trial_ends_at)
+    if (daysLeft === null) return 'Trial'
+    if (daysLeft === 0) return 'Trial Expired'
+    return `Trial (${daysLeft} day${daysLeft === 1 ? '' : 's'} left)`
+  }
+
+  if (org.status === 'past_due') {
+    return `${getPlanDisplayName(org.plan)} (Payment Due)`
+  }
+
+  if (org.status === 'suspended') {
+    return `${getPlanDisplayName(org.plan)} (Suspended)`
+  }
+
+  return getPlanDisplayName(org.plan)
+}
+
+/**
+ * Get badge color class based on plan/status
+ */
+export function getPlanBadgeColor(org: Pick<Organization, 'plan' | 'trial_ends_at' | 'status'>): string {
+  if (org.status === 'suspended' || org.status === 'past_due') {
+    return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+  }
+
+  if (org.plan === 'trial') {
+    const daysLeft = getTrialDaysRemaining(org.trial_ends_at)
+    if (daysLeft !== null && daysLeft <= 7) {
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+    }
+    return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+  }
+
+  if (org.plan === 'unlimited') {
+    return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+  }
+
+  // starter
+  return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
 }

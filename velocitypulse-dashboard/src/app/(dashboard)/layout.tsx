@@ -1,5 +1,7 @@
-import { Header } from '@/components/layout/Header'
-import { Footer } from '@/components/layout/Footer'
+'use client'
+
+import { OrganizationProvider } from '@/lib/contexts/OrganizationContext'
+import { DashboardShell } from '@/components/layout/DashboardShell'
 
 export default function DashboardLayout({
   children,
@@ -7,12 +9,8 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Header />
-      <main className="flex-1 container px-4 py-6">
-        {children}
-      </main>
-      <Footer />
-    </div>
+    <OrganizationProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </OrganizationProvider>
   )
 }

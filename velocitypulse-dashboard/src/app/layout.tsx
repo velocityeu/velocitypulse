@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { ClerkProvider } from '@clerk/nextjs'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import './globals.css'
 
 const geistSans = Geist({
@@ -30,12 +31,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const content = (
+    <ThemeProvider>
+      {children}
+    </ThemeProvider>
+  )
+
   const body = (
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
-        {children}
+        {content}
       </body>
     </html>
   )

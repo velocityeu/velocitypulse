@@ -2,7 +2,8 @@
 
 import { RefreshCw, Bell, Settings, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 
@@ -52,6 +53,32 @@ interface HeaderProps {
   trialDaysRemaining?: number | null
 }
 
+// Determine badge variant based on plan/trial status
+function getBadgeVariant(planName: string, trialDaysRemaining?: number | null): 'trial' | 'trial-warning' | 'trial-expired' | 'premium' | 'starter' {
+  // Expired or payment issues
+  if (planName.includes('Expired') || planName.includes('Payment Due') || planName.includes('Suspended')) {
+    return 'trial-expired'
+  }
+
+  // Trial with <= 7 days warning
+  if (planName.includes('Trial') && trialDaysRemaining != null && trialDaysRemaining <= 7) {
+    return 'trial-warning'
+  }
+
+  // Active trial
+  if (planName.includes('Trial')) {
+    return 'trial'
+  }
+
+  // Unlimited/Premium plan
+  if (planName === 'Unlimited') {
+    return 'premium'
+  }
+
+  // Starter plan
+  return 'starter'
+}
+
 export function Header({
   onRefresh,
   isRefreshing,
@@ -59,34 +86,6 @@ export function Header({
   planName,
   trialDaysRemaining,
 }: HeaderProps) {
-  // Determine badge color based on plan/trial status
-  const getBadgeClasses = () => {
-    if (!planName) return ''
-
-    // Warning colors for low trial days or payment issues
-    if (planName.includes('Expired') || planName.includes('Payment Due') || planName.includes('Suspended')) {
-      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-    }
-
-    // Warning colors for trial with <= 7 days
-    if (planName.includes('Trial') && trialDaysRemaining != null && trialDaysRemaining <= 7) {
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-    }
-
-    // Trial colors
-    if (planName.includes('Trial')) {
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-    }
-
-    // Unlimited plan
-    if (planName === 'Unlimited') {
-      return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
-    }
-
-    // Starter plan
-    return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-  }
-
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
@@ -106,14 +105,12 @@ export function Header({
           )}
           {planName && (
             <Link href="/billing" className="ml-2">
-              <span
-                className={cn(
-                  'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-opacity hover:opacity-80',
-                  getBadgeClasses()
-                )}
+              <Badge
+                variant={getBadgeVariant(planName, trialDaysRemaining)}
+                className="transition-opacity hover:opacity-80 cursor-pointer"
               >
                 {planName}
-              </span>
+              </Badge>
             </Link>
           )}
         </div>
@@ -131,10 +128,12 @@ export function Header({
               disabled={isRefreshing}
               className="h-9 w-9"
             >
-              <RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="sr-only">Refresh</span>
             </Button>
           )}
+
+          <ThemeToggle />
 
           <Button variant="ghost" size="icon" className="h-9 w-9">
             <Bell className="h-4 w-4" />

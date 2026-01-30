@@ -26,8 +26,7 @@ export function SearchFilter({
         className={cn(
           'h-10 w-full rounded-lg border bg-background pl-9 pr-10 text-sm',
           'placeholder:text-muted-foreground',
-          'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
-          'dark:focus:ring-offset-slate-900'
+          'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background'
         )}
       />
       {value && (

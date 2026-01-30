@@ -139,7 +139,7 @@ export default function BillingPage() {
   if (!isLoaded || fetchingOrg) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
@@ -155,13 +155,13 @@ export default function BillingPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="text-center mb-12">
         <h1 className="text-3xl font-bold mb-4">Choose Your Plan</h1>
-        <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+        <p className="text-muted-foreground max-w-2xl mx-auto">
           Start with a free trial, then upgrade when you&apos;re ready. All plans include core monitoring features.
         </p>
       </div>
 
       {error && (
-        <div className="max-w-md mx-auto mb-8 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400">
+        <div className="max-w-md mx-auto mb-8 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
           {error}
         </div>
       )}
@@ -170,10 +170,10 @@ export default function BillingPage() {
         {plansWithCurrent.map((plan) => (
           <Card
             key={plan.name}
-            className={`relative ${plan.popular ? 'border-blue-500 border-2' : ''}`}
+            className={`relative ${plan.popular ? 'border-primary border-2' : ''}`}
           >
             {plan.popular && (
-              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500">
+              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">
                 Most Popular
               </Badge>
             )}
@@ -183,7 +183,7 @@ export default function BillingPage() {
               <CardDescription>{plan.description}</CardDescription>
               <div className="mt-4">
                 <span className="text-4xl font-bold">{plan.price}</span>
-                <span className="text-gray-500 dark:text-gray-400">{plan.period}</span>
+                <span className="text-muted-foreground">{plan.period}</span>
               </div>
             </CardHeader>
 
@@ -191,7 +191,7 @@ export default function BillingPage() {
               <ul className="space-y-3">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-2">
-                    <Check className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+                    <Check className="h-5 w-5 text-status-online shrink-0 mt-0.5" />
                     <span className="text-sm">{feature}</span>
                   </li>
                 ))}
@@ -225,11 +225,11 @@ export default function BillingPage() {
         ))}
       </div>
 
-      <div className="text-center mt-12 text-sm text-gray-500 dark:text-gray-400">
+      <div className="text-center mt-12 text-sm text-muted-foreground">
         <p>All prices exclude VAT. Cancel anytime.</p>
         <p className="mt-2">
           Questions? Contact us at{' '}
-          <a href="mailto:support@velocitypulse.io" className="text-blue-500 hover:underline">
+          <a href="mailto:support@velocitypulse.io" className="text-primary hover:underline">
             support@velocitypulse.io
           </a>
         </p>

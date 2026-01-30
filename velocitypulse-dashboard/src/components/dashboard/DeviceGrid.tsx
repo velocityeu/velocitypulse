@@ -1,7 +1,12 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { DeviceCard } from './DeviceCard'
+import { DeviceCardCompact } from './DeviceCardCompact'
+import { DeviceListRow } from './DeviceListRow'
+import { DeviceDetailModal } from './DeviceDetailModal'
+import { Button } from '@/components/ui/button'
 import type { Device, Category, NetworkSegment, ViewMode, DeviceSegmentGroup } from '@/types'
 
 interface DeviceGridProps {
@@ -23,6 +28,9 @@ export function DeviceGrid({
   groupBySegment = false,
   onDeviceClick,
 }: DeviceGridProps) {
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
+  const [collapsedSegments, setCollapsedSegments] = useState<Set<string>>(new Set())
+
   // Create category lookup map
   const categoryMap = useMemo(() => {
     const map = new Map<string, Category>()
@@ -58,12 +66,30 @@ export function DeviceGrid({
       }))
   }, [devices, segments, groupBySegment])
 
+  const handleDeviceClick = (device: Device) => {
+    setSelectedDevice(device)
+    onDeviceClick?.(device)
+  }
+
+  const toggleSegmentCollapse = (segmentId: string | null) => {
+    const key = segmentId || 'ungrouped'
+    setCollapsedSegments(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(key)) {
+        newSet.delete(key)
+      } else {
+        newSet.add(key)
+      }
+      return newSet
+    })
+  }
+
   // Loading skeleton
   if (isLoading) {
     return (
       <div className={viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'space-y-2'}>
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="h-48 rounded-lg bg-muted animate-pulse" />
+          <div key={i} className={viewMode === 'grid' ? 'h-48 rounded-lg bg-muted animate-pulse' : 'h-16 rounded-lg bg-muted animate-pulse'} />
         ))}
       </div>
     )
@@ -97,45 +123,113 @@ export function DeviceGrid({
   }
 
   // Grid class based on view mode
-  const gridClass =
-    viewMode === 'grid'
-      ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-      : viewMode === 'compact'
-        ? 'grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-        : 'space-y-2'
+  const getGridClass = () => {
+    switch (viewMode) {
+      case 'grid':
+        return 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+      case 'compact':
+        return 'grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+      case 'list':
+        return 'space-y-2'
+      default:
+        return 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+    }
+  }
+
+  // Render device based on view mode
+  const renderDevice = (device: Device) => {
+    const category = device.category_id ? categoryMap.get(device.category_id) : undefined
+
+    switch (viewMode) {
+      case 'compact':
+        return (
+          <DeviceCardCompact
+            key={device.id}
+            device={device}
+            category={category}
+            onClick={() => handleDeviceClick(device)}
+          />
+        )
+      case 'list':
+        return (
+          <DeviceListRow
+            key={device.id}
+            device={device}
+            category={category}
+            onClick={() => handleDeviceClick(device)}
+          />
+        )
+      case 'grid':
+      default:
+        return (
+          <DeviceCard
+            key={device.id}
+            device={device}
+            category={category}
+            onClick={() => handleDeviceClick(device)}
+          />
+        )
+    }
+  }
 
   // Render device groups
   return (
-    <div className="space-y-8">
-      {deviceGroups.map((group, groupIndex) => (
-        <div key={group.segment?.id || `ungrouped-${groupIndex}`}>
-          {/* Segment header */}
-          {groupBySegment && (
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold text-foreground">
-                {group.segment?.name || 'Ungrouped Devices'}
-              </h2>
-              {group.segment?.cidr && (
-                <p className="text-sm text-muted-foreground font-mono">
-                  {group.segment.cidr}
-                </p>
+    <>
+      <div className="space-y-8">
+        {deviceGroups.map((group, groupIndex) => {
+          const segmentKey = group.segment?.id || 'ungrouped'
+          const isCollapsed = collapsedSegments.has(segmentKey)
+
+          return (
+            <div key={group.segment?.id || `ungrouped-${groupIndex}`}>
+              {/* Segment header */}
+              {groupBySegment && (
+                <div className="mb-4">
+                  <Button
+                    variant="ghost"
+                    className="gap-2 p-0 h-auto hover:bg-transparent"
+                    onClick={() => toggleSegmentCollapse(group.segment?.id || null)}
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <h2 className="text-lg font-semibold text-foreground">
+                      {group.segment?.name || 'Ungrouped Devices'}
+                    </h2>
+                    <span className="text-sm text-muted-foreground">
+                      ({group.devices.length})
+                    </span>
+                  </Button>
+                  {group.segment?.cidr && !isCollapsed && (
+                    <p className="text-sm text-muted-foreground font-mono ml-7">
+                      {group.segment.cidr}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Device grid */}
+              {!isCollapsed && (
+                <div className={getGridClass()}>
+                  {group.devices.map(device => renderDevice(device))}
+                </div>
               )}
             </div>
-          )}
+          )
+        })}
+      </div>
 
-          {/* Device grid */}
-          <div className={gridClass}>
-            {group.devices.map(device => (
-              <DeviceCard
-                key={device.id}
-                device={device}
-                category={device.category_id ? categoryMap.get(device.category_id) : undefined}
-                onClick={() => onDeviceClick?.(device)}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
+      {/* Device Detail Modal */}
+      {selectedDevice && (
+        <DeviceDetailModal
+          device={selectedDevice}
+          category={selectedDevice.category_id ? categoryMap.get(selectedDevice.category_id) : undefined}
+          isOpen={!!selectedDevice}
+          onClose={() => setSelectedDevice(null)}
+        />
+      )}
+    </>
   )
 }

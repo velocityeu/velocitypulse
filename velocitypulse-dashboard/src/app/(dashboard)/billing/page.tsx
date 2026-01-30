@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
-import { Check } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -10,8 +11,13 @@ import { Badge } from '@/components/ui/badge'
 const STARTER_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID || 'price_1Sv1fgClbxBbMUCj2cyRStNN'
 const UNLIMITED_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_UNLIMITED_PRICE_ID || 'price_1Sv1hNClbxBbMUCj68XSyZ5D'
 
-// For demo purposes - in production, get this from the user's organization
-const DEMO_ORG_ID = 'demo-org-id'
+interface Organization {
+  id: string
+  name: string
+  plan: string
+  status: string
+  trial_ends_at: string | null
+}
 
 const plans = [
   {
@@ -27,7 +33,6 @@ const plans = [
       'Email support',
     ],
     priceId: null,
-    current: true,
   },
   {
     name: 'Starter',
@@ -65,15 +70,42 @@ const plans = [
 ]
 
 export default function BillingPage() {
+  const router = useRouter()
   const { user, isLoaded } = useUser()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [organization, setOrganization] = useState<Organization | null>(null)
+  const [fetchingOrg, setFetchingOrg] = useState(true)
 
-  // Get organization ID from URL or user metadata
-  // For now, we'll need to create an organization first
-  const organizationId = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search).get('org') || DEMO_ORG_ID
-    : DEMO_ORG_ID
+  // Fetch user's organization
+  useEffect(() => {
+    async function fetchOrganization() {
+      try {
+        const response = await fetch('/api/onboarding')
+        const data = await response.json()
+
+        if (!data.hasOrganization) {
+          // Redirect to onboarding if no organization
+          router.push('/onboarding')
+          return
+        }
+
+        setOrganization(data.organization)
+      } catch (err) {
+        console.error('Failed to fetch organization:', err)
+        setError('Failed to load organization')
+      } finally {
+        setFetchingOrg(false)
+      }
+    }
+
+    if (isLoaded && user) {
+      fetchOrganization()
+    }
+  }, [isLoaded, user, router])
+
+  const organizationId = organization?.id || ''
+  const currentPlan = organization?.plan || 'trial'
 
   const handleSubscribe = async (priceId: string) => {
     if (!priceId) return
@@ -104,13 +136,20 @@ export default function BillingPage() {
     }
   }
 
-  if (!isLoaded) {
+  if (!isLoaded || fetchingOrg) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     )
   }
+
+  // Update plans to show current plan
+  const plansWithCurrent = plans.map(plan => ({
+    ...plan,
+    current: (plan.name.toLowerCase() === currentPlan) ||
+             (plan.name === 'Trial' && currentPlan === 'trial'),
+  }))
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -128,7 +167,7 @@ export default function BillingPage() {
       )}
 
       <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-        {plans.map((plan) => (
+        {plansWithCurrent.map((plan) => (
           <Card
             key={plan.name}
             className={`relative ${plan.popular ? 'border-blue-500 border-2' : ''}`}

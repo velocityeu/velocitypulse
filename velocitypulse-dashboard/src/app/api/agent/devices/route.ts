@@ -90,6 +90,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform devices for agent consumption
+    // Note: is_monitored is included because the agent filters on this field
     const agentDevices = (devices || []).map((device: Partial<Device>) => ({
       id: device.id,
       name: device.name,
@@ -101,6 +102,7 @@ export async function GET(request: NextRequest) {
       network_segment_id: device.network_segment_id,
       mac_address: device.mac_address,
       hostname: device.hostname,
+      is_monitored: device.is_monitored ?? true, // API already filters for monitored devices
     }))
 
     return NextResponse.json({

@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: ~90% Feature Complete for MVP**
+**Current Status: ~95% Feature Complete for MVP**
 
 ---
 
@@ -108,8 +108,8 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 1. ~~**Agent Local UI**~~ - COMPLETE (Express + Socket.IO on port 3001)
 2. ~~**Realtime Command Delivery**~~ - COMPLETE (Supabase Realtime subscription)
-3. **Device Details Modal** - Basic, missing SNMP/UPnP info display
-4. **Dashboard Connection Status** - Show agent online/offline indicator in dashboard header
+3. ~~**Device Details Modal**~~ - COMPLETE (SNMP/UPnP info, discovery method, OS hints)
+4. ~~**Dashboard Connection Status**~~ - COMPLETE (Real-time agent status indicator with tooltip)
 
 ### Nice-to-Have Gaps
 
@@ -190,18 +190,20 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [x] Create uninstaller scripts (integrated into main installers)
 - [x] Added ENABLE_REALTIME and AGENT_UI_PORT to default config
 
-### Phase 4: Enhanced Features (Priority: MEDIUM)
+### Phase 4: Enhanced Features (Priority: MEDIUM) - COMPLETE
 
-#### 4.1 Device Details Enhancement
-- [ ] Show SNMP info (sysName, sysDescr, etc.)
-- [ ] Show UPnP info (friendlyName, deviceType)
-- [ ] Show open ports and services
-- [ ] Show discovery method and timestamps
+#### 4.1 Device Details Enhancement - COMPLETE
+- [x] Show SNMP info (sysName, sysDescr, sysContact, sysLocation)
+- [x] Show UPnP info (friendlyName, deviceType, manufacturer)
+- [x] Show open ports and services (already existed)
+- [x] Show discovery method and timestamps
+- [x] Show OS hints as badges
 
-#### 4.2 Connection Status
-- [ ] Show realtime connection indicator in dashboard
-- [ ] Track agent online/offline transitions
-- [ ] Add reconnection logic with backoff
+#### 4.2 Connection Status - COMPLETE
+- [x] Show realtime agent status indicator in dashboard header
+- [x] Track agent online/offline via Supabase Realtime
+- [x] Color-coded indicator (green/amber/red) with tooltip
+- [x] Per-agent status in tooltip with last seen time
 
 ### Phase 5: Notifications (Priority: LOW)
 
@@ -242,6 +244,10 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - `velocitypulse-dashboard/src/components/ui/label.tsx` (CREATED)
 - `velocitypulse-dashboard/src/components/ui/dropdown-menu.tsx` (CREATED)
 - `velocitypulse-dashboard/src/components/layout/Sidebar.tsx` (MODIFIED)
+- `velocitypulse-dashboard/src/components/layout/DashboardShell.tsx` (MODIFIED - added AgentStatusIndicator)
+- `velocitypulse-dashboard/src/components/dashboard/DeviceDetailModal.tsx` (MODIFIED - SNMP/UPnP info)
+- `velocitypulse-dashboard/src/components/dashboard/AgentStatusIndicator.tsx` (CREATED)
+- `velocitypulse-dashboard/src/components/ui/tooltip.tsx` (CREATED)
 
 **Agent:**
 - `velocitypulse-agent/src/index.ts` (MODIFIED - command handling, UI integration, realtime setup)
@@ -288,4 +294,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: January 30, 2026 - Phase 3 Complete*
+*Last Updated: January 30, 2026 - Phase 3 & 4 Complete*

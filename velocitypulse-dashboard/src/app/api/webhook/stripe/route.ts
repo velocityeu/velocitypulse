@@ -16,7 +16,7 @@ function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY is not configured')
     }
     stripe = new Stripe(apiKey, {
-      apiVersion: '2025-02-24.acacia',
+      apiVersion: '2026-01-28.clover',
       maxNetworkRetries: 3,
       timeout: 30000,
     })
@@ -74,7 +74,8 @@ export async function POST(request: Request) {
           const subscriptionId = typeof session.subscription === 'string'
             ? session.subscription
             : session.subscription.id
-          const subscription = await stripeClient.subscriptions.retrieve(subscriptionId)
+          const subscriptionResponse = await stripeClient.subscriptions.retrieve(subscriptionId)
+          const subscription = subscriptionResponse as unknown as Stripe.Subscription
           const customerId = getCustomerId(session.customer)
           if (!customerId) break
 
@@ -118,8 +119,8 @@ export async function POST(request: Request) {
               stripe_subscription_id: subscription.id,
               plan,
               status: 'active',
-              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              current_period_start: new Date((subscription.items.data[0]?.current_period_start ?? 0) * 1000).toISOString(),
+              current_period_end: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toISOString(),
               amount_cents: subscription.items.data[0]?.price.unit_amount || 0,
             })
 
@@ -160,8 +161,8 @@ export async function POST(request: Request) {
             .from('subscriptions')
             .update({
               status,
-              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              current_period_start: new Date((subscription.items.data[0]?.current_period_start ?? 0) * 1000).toISOString(),
+              current_period_end: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toISOString(),
             })
             .eq('stripe_subscription_id', subscription.id)
 

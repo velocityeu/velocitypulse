@@ -12,7 +12,7 @@ export const getStripeServer = (): Stripe => {
   if (isDevelopment() && !process.env.STRIPE_SECRET_KEY) {
     console.warn('STRIPE_SECRET_KEY not set - Stripe features will not work')
     stripeInstance = new Stripe('sk_test_placeholder', {
-      apiVersion: '2024-06-20',
+      apiVersion: '2026-01-28.clover',
       maxNetworkRetries: 3,
       timeout: 30000,
     })
@@ -21,7 +21,7 @@ export const getStripeServer = (): Stripe => {
 
   const env = getServerEnv()
   stripeInstance = new Stripe(env.STRIPE_SECRET_KEY, {
-    apiVersion: '2024-06-20',
+    apiVersion: '2026-01-28.clover',
     maxNetworkRetries: 3,
     timeout: 30000,
   })

@@ -15,7 +15,7 @@ function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY is not configured')
     }
     stripe = new Stripe(apiKey, {
-      apiVersion: '2025-02-24.acacia',
+      apiVersion: '2026-01-28.clover',
       maxNetworkRetries: 3,
       timeout: 30000,
     })

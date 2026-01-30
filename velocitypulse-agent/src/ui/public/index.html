@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VelocityPulse Agent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .container { max-width: 600px; text-align: center; }
+        h1 { font-size: 2rem; margin-bottom: 1rem; color: #00d4ff; }
+        .status {
+            background: #16213e;
+            padding: 2rem;
+            border-radius: 12px;
+            margin: 1rem 0;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        .online { background: #00ff88; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .info { color: #888; font-size: 0.9rem; margin-top: 1rem; }
+        a { color: #00d4ff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VelocityPulse Agent</h1>
+        <div class="status">
+            <p><span class="status-indicator online"></span>Agent Running</p>
+            <p class="info" id="version">Version: 1.0.0</p>
+        </div>
+        <p class="info">
+            This agent monitors your network and reports to the
+            <a href="https://app.velocitypulse.io" target="_blank">VelocityPulse Dashboard</a>.
+        </p>
+    </div>
+</body>
+</html>

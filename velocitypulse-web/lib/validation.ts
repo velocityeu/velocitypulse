@@ -44,7 +44,7 @@ export const contactFormSchema = z.object({
     .transform(sanitizeString)
     .optional(),
   subject: z.enum(['sales', 'support', 'billing', 'partnership', 'other'], {
-    errorMap: () => ({ message: 'Please select a subject' }),
+    message: 'Please select a subject',
   }),
   message: z
     .string()
@@ -72,23 +72,23 @@ export const partnerFormSchema = z.object({
   phone: phoneSchema,
   country: z.enum(
     ['US', 'GB', 'CA', 'AU', 'DE', 'FR', 'NL', 'IE', 'other'],
-    { errorMap: () => ({ message: 'Please select a country' }) }
+    { message: 'Please select a country' }
   ),
   clientCount: z.enum(
     ['1-5', '6-20', '21-50', '51-100', '100+'],
-    { errorMap: () => ({ message: 'Please select client count' }) }
+    { message: 'Please select client count' }
   ),
   avgDevices: z.enum(
     ['1-25', '26-50', '51-100', '101-500', '500+'],
-    { errorMap: () => ({ message: 'Please select device count' }) }
+    { message: 'Please select device count' }
   ),
   tierPreference: z.enum(
     ['starter', 'unlimited', 'both'],
-    { errorMap: () => ({ message: 'Please select a tier' }) }
+    { message: 'Please select a tier' }
   ),
   whiteLabel: z.enum(
     ['yes', 'no', 'maybe'],
-    { errorMap: () => ({ message: 'Please select white-label preference' }) }
+    { message: 'Please select white-label preference' }
   ),
   taxId: z
     .string()
@@ -101,10 +101,10 @@ export const partnerFormSchema = z.object({
     .transform(sanitizeString)
     .optional(),
   termsAccepted: z.literal('on', {
-    errorMap: () => ({ message: 'You must accept the terms of service' }),
+    message: 'You must accept the terms of service',
   }),
   gdprConsent: z.literal('on', {
-    errorMap: () => ({ message: 'You must provide GDPR consent' }),
+    message: 'You must provide GDPR consent',
   }),
 })
 
@@ -130,11 +130,11 @@ export const demoFormSchema = z.object({
     .transform(sanitizeString),
   companySize: z.enum(
     ['1-10', '11-50', '51-200', '201-500', '500+'],
-    { errorMap: () => ({ message: 'Please select company size' }) }
+    { message: 'Please select company size' }
   ),
   deviceCount: z.enum(
     ['1-25', '26-50', '51-100', '101-500', '500+'],
-    { errorMap: () => ({ message: 'Please select device count' }) }
+    { message: 'Please select device count' }
   ),
 })
 
@@ -152,7 +152,7 @@ const isAllowedRedirectUrl = (url: string): boolean => {
 // Stripe checkout schema
 export const checkoutSchema = z.object({
   plan: z.enum(['starter', 'unlimited'], {
-    errorMap: () => ({ message: 'Invalid plan selected' }),
+    message: 'Invalid plan selected',
   }),
   email: emailSchema.optional(),
   successUrl: z

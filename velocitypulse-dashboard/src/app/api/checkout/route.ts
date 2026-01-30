@@ -1,0 +1,137 @@
+import { NextResponse } from 'next/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
+import Stripe from 'stripe'
+import { createServiceClient } from '@/lib/db/client'
+
+// Lazy initialization
+let stripe: Stripe | null = null
+function getStripe(): Stripe {
+  if (!stripe) {
+    const apiKey = process.env.STRIPE_SECRET_KEY
+    if (!apiKey) {
+      throw new Error('STRIPE_SECRET_KEY is not configured')
+    }
+    stripe = new Stripe(apiKey, {
+      apiVersion: '2025-01-27.acacia',
+    })
+  }
+  return stripe
+}
+
+export async function POST(request: Request) {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await currentUser()
+    const email = user?.emailAddresses[0]?.emailAddress
+
+    const body = await request.json()
+    const { priceId, organizationId } = body
+
+    if (!priceId || !organizationId) {
+      return NextResponse.json(
+        { error: 'Missing priceId or organizationId' },
+        { status: 400 }
+      )
+    }
+
+    const supabase = createServiceClient()
+    const stripeClient = getStripe()
+
+    // Get or create organization
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('id, stripe_customer_id, name')
+      .eq('id', organizationId)
+      .single()
+
+    if (orgError || !org) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    }
+
+    // Verify user is a member of this organization
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('role, permissions')
+      .eq('organization_id', organizationId)
+      .eq('user_id', userId)
+      .single()
+
+    if (!membership) {
+      return NextResponse.json({ error: 'Not a member of this organization' }, { status: 403 })
+    }
+
+    // Check if user can manage billing
+    const canManageBilling =
+      membership.role === 'owner' ||
+      membership.role === 'admin' ||
+      membership.permissions?.can_manage_billing === true
+
+    if (!canManageBilling) {
+      return NextResponse.json({ error: 'You do not have billing permissions' }, { status: 403 })
+    }
+
+    // Get or create Stripe customer
+    let customerId = org.stripe_customer_id
+
+    if (!customerId) {
+      const customer = await stripeClient.customers.create({
+        email: email || undefined,
+        name: org.name,
+        metadata: {
+          organization_id: organizationId,
+          clerk_user_id: userId,
+        },
+      })
+      customerId = customer.id
+
+      // Update organization with Stripe customer ID
+      await supabase
+        .from('organizations')
+        .update({ stripe_customer_id: customerId })
+        .eq('id', organizationId)
+    }
+
+    // Create checkout session
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+    const session = await stripeClient.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      mode: 'subscription',
+      success_url: `${appUrl}/dashboard?checkout=success`,
+      cancel_url: `${appUrl}/billing?checkout=cancelled`,
+      metadata: {
+        organization_id: organizationId,
+      },
+    })
+
+    // Audit log
+    await supabase.from('audit_logs').insert({
+      organization_id: organizationId,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'checkout.started',
+      resource_type: 'checkout_session',
+      resource_id: session.id,
+      metadata: { price_id: priceId },
+    })
+
+    return NextResponse.json({ url: session.url })
+  } catch (error) {
+    console.error('Checkout error:', error)
+    return NextResponse.json(
+      { error: 'Failed to create checkout session' },
+      { status: 500 }
+    )
+  }
+}

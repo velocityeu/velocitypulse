@@ -90,7 +90,7 @@ export default function AgentsPage() {
     if (!agentToDelete) return
     setDeletingAgent(true)
     try {
-      const res = await fetch(`/api/agents/${agentToDelete.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/dashboard/agents/${agentToDelete.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to delete agent')

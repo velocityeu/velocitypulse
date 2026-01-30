@@ -87,6 +87,21 @@ export function Sidebar({ collapsed = false, onCollapse }: SidebarProps) {
           })}
         </ul>
       </nav>
+
+      {/* Footer - Exit to main dashboard */}
+      <div className="border-t p-2">
+        <Link
+          href="/"
+          className={cn(
+            'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors',
+            collapsed && 'justify-center px-2'
+          )}
+          title={collapsed ? 'Dashboard' : undefined}
+        >
+          <ChevronLeft className="h-4 w-4 shrink-0" />
+          {!collapsed && <span>Dashboard</span>}
+        </Link>
+      </div>
     </aside>
   )
 }
@@ -106,7 +121,7 @@ export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenCha
       />
 
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-card border-r shadow-lg md:hidden">
+      <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-card border-r shadow-lg md:hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between h-14 px-4 border-b">
           <div className="flex items-center gap-2">
@@ -126,7 +141,7 @@ export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenCha
         </div>
 
         {/* Navigation */}
-        <nav className="py-4">
+        <nav className="flex-1 py-4">
           <ul className="space-y-1 px-2">
             {navItems.map((item) => {
               const Icon = item.icon
@@ -153,6 +168,18 @@ export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenCha
             })}
           </ul>
         </nav>
+
+        {/* Footer - Exit to main dashboard */}
+        <div className="border-t p-2">
+          <Link
+            href="/"
+            onClick={() => onOpenChange(false)}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4 shrink-0" />
+            <span>Dashboard</span>
+          </Link>
+        </div>
       </aside>
     </>
   )

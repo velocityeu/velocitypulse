@@ -4,6 +4,7 @@ import { RefreshCw, Bell, Settings, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { AgentStatusIndicator } from '@/components/dashboard/AgentStatusIndicator'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 
@@ -48,6 +49,7 @@ const ClerkUserSection = dynamic(
 interface HeaderProps {
   onRefresh?: () => void
   isRefreshing?: boolean
+  organizationId?: string
   organizationName?: string
   planName?: string
   trialDaysRemaining?: number | null
@@ -82,6 +84,7 @@ function getBadgeVariant(planName: string, trialDaysRemaining?: number | null): 
 export function Header({
   onRefresh,
   isRefreshing,
+  organizationId,
   organizationName,
   planName,
   trialDaysRemaining,
@@ -117,6 +120,11 @@ export function Header({
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Agent Status */}
+        {organizationId && (
+          <AgentStatusIndicator organizationId={organizationId} />
+        )}
 
         {/* Actions */}
         <div className="flex items-center gap-2">

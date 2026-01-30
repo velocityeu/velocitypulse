@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { RefreshCw, Bell } from 'lucide-react'
+import { Bell, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Sidebar, MobileSidebar, MobileMenuButton } from '@/components/layout/Sidebar'
+import { AgentStatusIndicator } from '@/components/dashboard/AgentStatusIndicator'
 import { useOrganization } from '@/lib/contexts/OrganizationContext'
 import { formatTrialStatus, getTrialDaysRemaining } from '@/lib/utils'
-import { Loader2 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 
@@ -90,6 +90,11 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Agent Status */}
+        {organization && (
+          <AgentStatusIndicator organizationId={organization.id} />
+        )}
 
         {/* Actions */}
         <div className="flex items-center gap-2">

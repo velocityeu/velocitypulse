@@ -202,10 +202,74 @@ export function DeviceDetailModal({ device, category, isOpen, onClose }: DeviceD
             </div>
           )}
 
-          {/* Timestamps */}
+          {/* SNMP Info */}
+          {device.snmp_info && (device.snmp_info.sysName || device.snmp_info.sysDescr || device.snmp_info.sysContact || device.snmp_info.sysLocation) && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-foreground">SNMP Information</h3>
+              <div className="grid grid-cols-1 gap-2 text-sm bg-muted/30 p-3 rounded-lg">
+                {device.snmp_info.sysName && (
+                  <div>
+                    <span className="text-muted-foreground">System Name: </span>
+                    <span className="text-foreground">{device.snmp_info.sysName}</span>
+                  </div>
+                )}
+                {device.snmp_info.sysDescr && (
+                  <div>
+                    <span className="text-muted-foreground">Description: </span>
+                    <span className="text-foreground">{device.snmp_info.sysDescr}</span>
+                  </div>
+                )}
+                {device.snmp_info.sysContact && (
+                  <div>
+                    <span className="text-muted-foreground">Contact: </span>
+                    <span className="text-foreground">{device.snmp_info.sysContact}</span>
+                  </div>
+                )}
+                {device.snmp_info.sysLocation && (
+                  <div>
+                    <span className="text-muted-foreground">Location: </span>
+                    <span className="text-foreground">{device.snmp_info.sysLocation}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* UPnP Info */}
+          {device.upnp_info && (device.upnp_info.friendlyName || device.upnp_info.deviceType || device.upnp_info.manufacturer) && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-foreground">UPnP Information</h3>
+              <div className="grid grid-cols-1 gap-2 text-sm bg-muted/30 p-3 rounded-lg">
+                {device.upnp_info.friendlyName && (
+                  <div>
+                    <span className="text-muted-foreground">Friendly Name: </span>
+                    <span className="text-foreground">{device.upnp_info.friendlyName}</span>
+                  </div>
+                )}
+                {device.upnp_info.deviceType && (
+                  <div>
+                    <span className="text-muted-foreground">Device Type: </span>
+                    <span className="text-foreground">{device.upnp_info.deviceType}</span>
+                  </div>
+                )}
+                {device.upnp_info.manufacturer && (
+                  <div>
+                    <span className="text-muted-foreground">Manufacturer: </span>
+                    <span className="text-foreground">{device.upnp_info.manufacturer}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Discovery & Timestamps */}
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-foreground">Activity</h3>
+            <h3 className="text-sm font-medium text-foreground">Discovery & Activity</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-muted-foreground block">Discovery Method</span>
+                <span className="text-foreground capitalize">{device.discovered_by?.replace(/_/g, ' ') || 'Unknown'}</span>
+              </div>
               <div>
                 <span className="text-muted-foreground block">Last Check</span>
                 <span className="text-foreground">{formatLastCheck(device.last_check)}</span>
@@ -216,8 +280,28 @@ export function DeviceDetailModal({ device, category, isOpen, onClose }: DeviceD
                   <span className="text-foreground">{formatLastCheck(device.first_seen_at)}</span>
                 </div>
               )}
+              {device.last_full_scan_at && (
+                <div>
+                  <span className="text-muted-foreground block">Last Full Scan</span>
+                  <span className="text-foreground">{formatLastCheck(device.last_full_scan_at)}</span>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* OS Hints */}
+          {device.os_hints && device.os_hints.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-foreground">OS Detection</h3>
+              <div className="flex flex-wrap gap-2">
+                {device.os_hints.map((hint, index) => (
+                  <Badge key={index} variant="outline" className="text-xs">
+                    {hint}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

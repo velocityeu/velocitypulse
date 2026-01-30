@@ -312,54 +312,105 @@ async function main() {
   }
 
   /**
+   * Multi-protocol probe - tries ping, then common ports if ping fails
+   * Returns online if ANY method succeeds
+   */
+  async function multiProbe(ip: string): Promise<{ status: 'online' | 'offline'; responseTime: number | null; method: string }> {
+    // Common ports to try if ping fails
+    const PROBE_PORTS = [
+      { port: 80, name: 'HTTP' },
+      { port: 443, name: 'HTTPS' },
+      { port: 22, name: 'SSH' },
+      { port: 3389, name: 'RDP' },
+      { port: 445, name: 'SMB' },
+      { port: 53, name: 'DNS' },
+    ]
+
+    // Try ping first
+    const pingResult = await pingHost(ip, logger)
+    if (pingResult.status === 'online') {
+      return { status: 'online', responseTime: pingResult.response_time_ms, method: 'ping' }
+    }
+
+    // Ping failed - try TCP ports in parallel
+    logger.debug(`Ping failed for ${ip}, trying TCP ports...`)
+
+    const portChecks = PROBE_PORTS.map(async ({ port, name }) => {
+      try {
+        const result = await checkTcpPort(ip, port, logger)
+        if (result.status === 'online') {
+          return { status: 'online' as const, responseTime: result.response_time_ms, method: name }
+        }
+      } catch {
+        // Port check failed, continue
+      }
+      return null
+    })
+
+    const results = await Promise.all(portChecks)
+    const successResult = results.find(r => r !== null)
+
+    if (successResult) {
+      logger.debug(`${ip} responded on ${successResult.method}`)
+      return successResult
+    }
+
+    return { status: 'offline', responseTime: null, method: 'none' }
+  }
+
+  /**
    * Status check loop - monitors device health
+   * Checks ALL discovered devices, not just dashboard-monitored ones
    */
   async function statusCheckLoop() {
     while (isRunning) {
       try {
-        const devices = await client.getDevicesToMonitor()
-        const monitoredDevices = devices.filter(d => d.is_monitored)
+        // Get devices from dashboard for reporting
+        const dashboardDevices = await client.getDevicesToMonitor()
+        const dashboardDeviceMap = new Map(
+          dashboardDevices.filter(d => d.ip_address).map(d => [d.ip_address!, d])
+        )
 
-        if (monitoredDevices.length === 0) {
+        // Get all locally discovered devices
+        const allDevices = Array.from(discoveredDevices.values())
+
+        if (allDevices.length === 0) {
           logger.debug('No devices to monitor')
           await new Promise(resolve => setTimeout(resolve, config.statusCheckInterval))
           continue
         }
 
-        logger.debug(`Checking status of ${monitoredDevices.length} devices`)
+        logger.debug(`Checking status of ${allDevices.length} discovered devices`)
 
         const reports: StatusReport[] = []
         const activeKeys = new Set<string>()
 
-        for (const device of monitoredDevices) {
-          // Use IP address as key for consistent UI lookups
-          const deviceKey = device.ip_address || device.id
+        for (const device of allDevices) {
+          const deviceKey = device.ip
+          if (!deviceKey || deviceKey === '---') continue
+
+          // Skip broadcast addresses
+          if (deviceKey.endsWith('.255') || deviceKey.endsWith('.0')) {
+            device.status = 'offline'
+            uiServer.updateDeviceStatus(deviceKey, 'offline', undefined)
+            continue
+          }
+
           activeKeys.add(deviceKey)
 
           let status: 'online' | 'offline' | 'degraded' | 'unknown' = 'unknown'
           let responseTime: number | null = null
-          let error: string | undefined
+          let checkMethod = 'ping'
 
           try {
-            if (device.check_type === 'ping' && device.ip_address) {
-              const result = await pingHost(device.ip_address, logger)
-              status = result.status
-              responseTime = result.response_time_ms
-              error = result.error
-            } else if (device.check_type === 'tcp' && device.ip_address && device.port) {
-              const result = await checkTcpPort(device.ip_address, device.port, logger)
-              status = result.status
-              responseTime = result.response_time_ms
-              error = result.error
-            } else if (device.check_type === 'http' && device.url) {
-              const result = await checkHttp(device.url, logger)
-              status = result.status
-              responseTime = result.response_time_ms
-              error = result.error
-            }
+            // Use multi-protocol probing for all devices
+            const probeResult = await multiProbe(deviceKey)
+            status = probeResult.status
+            responseTime = probeResult.responseTime
+            checkMethod = probeResult.method
           } catch (err) {
-            status = 'unknown'
-            error = err instanceof Error ? err.message : 'Check failed'
+            status = 'offline'
+            logger.debug(`Probe error for ${deviceKey}: ${err instanceof Error ? err.message : 'Unknown'}`)
           }
 
           // Apply hysteresis for status changes
@@ -367,52 +418,43 @@ async function main() {
           const failureCount = deviceFailureCounts.get(deviceKey) || 0
 
           if (status === 'offline' && previousStatus === 'online') {
-            // Don't immediately report offline, wait for threshold
             if (failureCount < config.statusFailureThreshold) {
               deviceFailureCounts.set(deviceKey, failureCount + 1)
-              status = 'online' // Keep reporting as online until threshold reached
+              status = 'online' // Keep as online until threshold reached
             }
           } else if (status === 'online') {
-            // Reset failure count on success
             deviceFailureCounts.set(deviceKey, 0)
           }
 
           lastKnownStatus.set(deviceKey, status)
 
-          // Update UI with device status
-          const existingDevice = discoveredDevices.get(deviceKey)
-          if (existingDevice) {
-            existingDevice.status = status
-            existingDevice.responseTime = responseTime ?? undefined
-            existingDevice.lastCheck = new Date().toISOString()
-          } else {
-            // Device from dashboard that we haven't discovered locally
-            discoveredDevices.set(deviceKey, {
-              id: deviceKey,
-              name: device.ip_address || device.id,
-              ip: device.ip_address || '',
-              status,
-              responseTime: responseTime ?? undefined,
-              lastCheck: new Date().toISOString(),
-            })
-          }
+          // Update UI
+          device.status = status
+          device.responseTime = responseTime ?? undefined
+          device.lastCheck = new Date().toISOString()
           uiServer.updateDeviceStatus(deviceKey, status, responseTime ?? undefined)
 
-          reports.push({
-            device_id: device.id,
-            ip_address: device.ip_address || '',
-            status,
-            response_time_ms: responseTime,
-            check_type: device.check_type,
-            checked_at: new Date().toISOString(),
-            error,
-          })
+          // If device is in dashboard, report status back
+          const dashboardDevice = dashboardDeviceMap.get(deviceKey)
+          if (dashboardDevice) {
+            reports.push({
+              device_id: dashboardDevice.id,
+              ip_address: deviceKey,
+              status,
+              response_time_ms: responseTime,
+              check_type: dashboardDevice.check_type || 'ping',
+              checked_at: new Date().toISOString(),
+            })
+          }
         }
+
+        // Update UI with all devices
+        uiServer.updateDevices(Array.from(discoveredDevices.values()))
 
         // Prune old device tracking entries
         pruneDeviceTracking(activeKeys, logger)
 
-        // Upload status reports
+        // Upload status reports for dashboard-tracked devices
         if (reports.length > 0) {
           const response = await client.uploadStatusReports(reports)
           logger.debug(`Status upload: ${response.processed} processed`)

@@ -61,15 +61,14 @@
         .header .logo {
             width: 36px;
             height: 36px;
-            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
-            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            color: white;
-            font-size: 1.125rem;
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+
+        .header .logo svg {
+            width: 36px;
+            height: 36px;
         }
 
         .connection-status {
@@ -331,7 +330,21 @@
 <body>
     <header class="header">
         <h1>
-            <span class="logo">VP</span>
+            <span class="logo">
+                <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="40" height="40" rx="8" fill="url(#logo-gradient)"/>
+                    <path d="M10 12H22V16H10V12Z" fill="white"/>
+                    <path d="M26 16H22V8" stroke="white" stroke-width="4" stroke-linecap="square"/>
+                    <circle cx="20" cy="26" r="6" stroke="white" stroke-width="3" fill="none"/>
+                    <circle cx="20" cy="26" r="2" fill="white"/>
+                    <defs>
+                        <linearGradient id="logo-gradient" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#3b82f6"/>
+                            <stop offset="1" stop-color="#60a5fa"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </span>
             <span><span class="brand-text">VelocityPulse</span> <span class="agent-text">Agent</span></span>
         </h1>
         <div class="connection-status">

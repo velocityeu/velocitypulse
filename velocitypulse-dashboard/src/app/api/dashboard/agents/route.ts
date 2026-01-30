@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { AGENT_ONLINE_THRESHOLD_MS, PLAN_LIMITS } from '@/lib/constants'
-import { randomBytes } from 'crypto'
-
-function generateApiKey(): string {
-  return `vp_${randomBytes(32).toString('hex')}`
-}
+import { generateApiKey } from '@/lib/api/agent-auth'
 
 export async function GET() {
   try {
@@ -96,10 +92,10 @@ export async function POST(request: NextRequest) {
 
     const organizationId = membership.organization_id
 
-    // Get organization to check limits
+    // Get organization to check limits and get slug for API key generation
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('plan, agent_limit')
+      .select('plan, agent_limit, slug')
       .eq('id', organizationId)
       .single()
 
@@ -133,18 +129,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Agent name is required' }, { status: 400 })
     }
 
-    // Generate API key
-    const apiKey = generateApiKey()
-    const apiKeyPrefix = apiKey.substring(0, 10)
+    // Generate API key with hash for secure storage
+    const { apiKey, apiKeyHash, apiKeyPrefix } = generateApiKey(org.slug)
 
-    // Create agent
+    // Create agent with hashed API key
     const { data: agent, error: createError } = await supabase
       .from('agents')
       .insert({
         organization_id: organizationId,
         name: body.name.trim(),
         description: body.description || null,
-        api_key: apiKey,
+        api_key_hash: apiKeyHash,
         api_key_prefix: apiKeyPrefix,
         is_enabled: true,
       })

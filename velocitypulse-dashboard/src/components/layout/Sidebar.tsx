@@ -4,7 +4,6 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard,
   Monitor,
   Activity,
   FolderOpen,
@@ -17,10 +16,10 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import Image from 'next/image'
 
 const navItems = [
-  { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Monitor', href: '/monitor', icon: Activity },
+  { label: 'Dashboard', href: '/dashboard', icon: Activity },
   { label: 'Devices', href: '/devices', icon: Monitor },
   { label: 'Categories', href: '/categories', icon: FolderOpen },
   { label: 'Agents', href: '/agents', icon: Server },
@@ -92,19 +91,21 @@ export function Sidebar({ collapsed = false, onCollapse }: SidebarProps) {
         </ul>
       </nav>
 
-      {/* Footer - Exit to main dashboard */}
+      {/* Footer - Link to marketing site */}
       <div className="border-t p-2">
-        <Link
-          href="/"
+        <a
+          href="https://velocitypulse.io"
+          target="_blank"
+          rel="noopener noreferrer"
           className={cn(
             'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors',
             collapsed && 'justify-center px-2'
           )}
-          title={collapsed ? 'Dashboard' : undefined}
+          title={collapsed ? 'VelocityPulse.io' : undefined}
         >
           <ChevronLeft className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>Dashboard</span>}
-        </Link>
+          {!collapsed && <span>VelocityPulse.io</span>}
+        </a>
       </div>
     </aside>
   )
@@ -129,9 +130,13 @@ export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenCha
         {/* Header */}
         <div className="flex items-center justify-between h-14 px-4 border-b">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <span className="text-lg font-bold text-primary-foreground">V</span>
-            </div>
+            <Image
+              src="/velocity-symbol.png"
+              alt="VelocityPulse"
+              width={32}
+              height={32}
+              className="rounded-lg"
+            />
             <span className="font-semibold">VelocityPulse</span>
           </div>
           <Button
@@ -173,16 +178,18 @@ export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenCha
           </ul>
         </nav>
 
-        {/* Footer - Exit to main dashboard */}
+        {/* Footer - Link to marketing site */}
         <div className="border-t p-2">
-          <Link
-            href="/"
+          <a
+            href="https://velocitypulse.io"
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={() => onOpenChange(false)}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           >
             <ChevronLeft className="h-4 w-4 shrink-0" />
-            <span>Dashboard</span>
-          </Link>
+            <span>VelocityPulse.io</span>
+          </a>
         </div>
       </aside>
     </>

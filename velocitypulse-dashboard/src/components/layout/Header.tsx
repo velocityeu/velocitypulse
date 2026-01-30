@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { AgentStatusIndicator } from '@/components/dashboard/AgentStatusIndicator'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import Image from 'next/image'
 
 // Dynamically import UserButton to prevent SSR issues
 const UserButton = dynamic(
@@ -94,9 +95,13 @@ export function Header({
       <div className="container flex h-14 items-center">
         {/* Logo */}
         <div className="flex items-center gap-2 mr-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-lg font-bold text-primary-foreground">V</span>
-          </div>
+          <Image
+            src="/velocity-symbol.png"
+            alt="VelocityPulse"
+            width={32}
+            height={32}
+            className="rounded-lg"
+          />
           <span className="hidden font-semibold sm:inline-block">
             VelocityPulse
           </span>

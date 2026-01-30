@@ -16,10 +16,16 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'VelocityPulse Dashboard',
-  description: 'Real-time IT infrastructure monitoring for small businesses',
+  description: 'Network monitoring SaaS platform by Velocity EU',
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
+  manifest: '/manifest.json',
 }
 
 // Check if Clerk is configured with a valid key

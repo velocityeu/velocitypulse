@@ -6,20 +6,31 @@ let adminClient: SupabaseClient | null = null
 /**
  * Get Supabase admin client for server-side operations
  * Uses service role key to bypass RLS - for admin/internal APIs only
+ *
+ * In production: throws if credentials are missing
+ * In development: returns placeholder client with warning (will fail on actual DB calls)
  */
 export function getAdminClient(): SupabaseClient {
   if (adminClient) return adminClient
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const isProduction = process.env.NODE_ENV === 'production'
 
-  // In development without credentials, return a mock-like client that won't throw
   if (!supabaseUrl || !serviceRoleKey) {
-    console.warn('Supabase admin client not configured - using placeholder')
-    // Return a placeholder that will be caught by error handling
+    if (isProduction) {
+      throw new Error(
+        'Supabase credentials not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.'
+      )
+    }
+
+    // Development only: return a placeholder that will fail gracefully
+    console.warn(
+      '[Supabase] Admin client not configured - using placeholder. DB operations will fail.'
+    )
     return createClient(
-      supabaseUrl || 'https://placeholder.supabase.co',
-      serviceRoleKey || 'placeholder-key'
+      'https://placeholder.supabase.co',
+      'placeholder-key'
     )
   }
 

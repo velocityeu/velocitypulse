@@ -16,7 +16,7 @@ function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY is not configured')
     }
     stripe = new Stripe(apiKey, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2025-02-24.acacia',
       maxNetworkRetries: 3,
       timeout: 30000,
     })
@@ -32,24 +32,13 @@ function getWebhookSecret(): string {
   return secret
 }
 
-// Helper type for subscription data we need
-interface SubscriptionData {
-  id: string
-  status: string
-  customer: string | { id: string }
-  current_period_start: number
-  current_period_end: number
-  items: {
-    data: Array<{
-      price: {
-        id: string
-        unit_amount: number | null
-      }
-    }>
-  }
-}
-
-function getCustomerId(customer: string | { id: string } | null | undefined): string | null {
+/**
+ * Safely extract customer ID from Stripe customer field
+ * Handles string, Customer, and DeletedCustomer types
+ */
+function getCustomerId(
+  customer: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined
+): string | null {
   if (!customer) return null
   return typeof customer === 'string' ? customer : customer.id
 }
@@ -82,10 +71,13 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session
 
         if (session.mode === 'subscription' && session.subscription) {
-          const subscriptionResponse = await stripeClient.subscriptions.retrieve(session.subscription as string)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const subscription = subscriptionResponse as any as SubscriptionData
-          const customerId = session.customer as string
+          const subscriptionId = typeof session.subscription === 'string'
+            ? session.subscription
+            : session.subscription.id
+          const subscription = await stripeClient.subscriptions.retrieve(subscriptionId)
+          const customerId = getCustomerId(session.customer)
+          if (!customerId) break
+
           const priceId = subscription.items.data[0]?.price.id
 
           // Determine plan from price ID
@@ -147,8 +139,7 @@ export async function POST(request: Request) {
       }
 
       case 'customer.subscription.updated': {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const subscription = event.data.object as any as SubscriptionData
+        const subscription = event.data.object as Stripe.Subscription
         const customerId = getCustomerId(subscription.customer)
         if (!customerId) break
 
@@ -186,8 +177,7 @@ export async function POST(request: Request) {
       }
 
       case 'customer.subscription.deleted': {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const subscription = event.data.object as any as SubscriptionData
+        const subscription = event.data.object as Stripe.Subscription
         const customerId = getCustomerId(subscription.customer)
         if (!customerId) break
 
@@ -227,8 +217,7 @@ export async function POST(request: Request) {
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const customerId = getCustomerId(invoice.customer as any)
+        const customerId = getCustomerId(invoice.customer)
         if (!customerId) break
 
         // Get organization
@@ -262,8 +251,7 @@ export async function POST(request: Request) {
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const customerId = getCustomerId(invoice.customer as any)
+        const customerId = getCustomerId(invoice.customer)
         if (!customerId) break
 
         // Get organization

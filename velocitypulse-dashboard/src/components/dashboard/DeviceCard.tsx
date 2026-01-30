@@ -1,8 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { ExternalLink, Server, Monitor, Router, Printer, Wifi, HelpCircle } from 'lucide-react'
-import * as LucideIcons from 'lucide-react'
+import { ExternalLink, Server, Monitor, Router, Printer, Wifi, HelpCircle, Box, Network, Database, Cloud, Globe, Cpu, HardDrive, Shield, type LucideIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,7 +15,7 @@ interface DeviceCardProps {
 }
 
 // Device type icons
-const deviceTypeIcons: Record<DeviceType, typeof Server> = {
+const deviceTypeIcons: Record<DeviceType, LucideIcon> = {
   server: Server,
   workstation: Monitor,
   network: Router,
@@ -26,19 +24,33 @@ const deviceTypeIcons: Record<DeviceType, typeof Server> = {
   unknown: HelpCircle,
 }
 
-// Helper to get Lucide icon by name
-function getIcon(iconName: string) {
-  const pascalCase = iconName
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join('')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const icons = LucideIcons as any
-  return icons[pascalCase] || LucideIcons.Box
+// Typed icon lookup map for category/device icons
+const iconMap: Record<string, LucideIcon> = {
+  server: Server,
+  monitor: Monitor,
+  router: Router,
+  printer: Printer,
+  wifi: Wifi,
+  'help-circle': HelpCircle,
+  box: Box,
+  network: Network,
+  database: Database,
+  cloud: Cloud,
+  globe: Globe,
+  cpu: Cpu,
+  'hard-drive': HardDrive,
+  shield: Shield,
+}
+
+// Separate component to render the icon with props - avoids ESLint static-components error
+function CategoryIcon({ iconName, color }: { iconName: string; color: string }) {
+  const Icon = iconMap[iconName.toLowerCase()] || Box
+  return <Icon className="h-5 w-5" style={{ color }} />
 }
 
 export function DeviceCard({ device, category, onClick }: DeviceCardProps) {
-  const IconComponent = getIcon(category?.icon || device.icon || 'box')
+  const iconName = category?.icon || device.icon || 'box'
+  const iconColor = category?.color || '#6B7280'
   const hasInterface = device.url && device.url.length > 0
   const DeviceTypeIcon = device.device_type ? deviceTypeIcons[device.device_type] : null
 
@@ -66,10 +78,7 @@ export function DeviceCard({ device, category, onClick }: DeviceCardProps) {
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg relative"
               style={{ backgroundColor: category?.color ? `${category.color}20` : '#6B728020' }}
             >
-              <IconComponent
-                className="h-5 w-5"
-                style={{ color: category?.color || '#6B7280' }}
-              />
+              <CategoryIcon iconName={iconName} color={iconColor} />
               {DeviceTypeIcon && (
                 <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
                   <DeviceTypeIcon className="h-3 w-3 text-muted-foreground" />

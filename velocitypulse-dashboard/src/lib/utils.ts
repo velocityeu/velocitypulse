@@ -62,6 +62,19 @@ export function generateSlug(name: string): string {
 }
 
 /**
+ * Generate a unique organization slug from name with random suffix
+ */
+export function generateUniqueSlug(name: string): string {
+  const baseSlug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50)
+  const randomSuffix = Math.random().toString(36).substring(2, 6)
+  return `${baseSlug}-${randomSuffix}`
+}
+
+/**
  * Format currency in GBP
  */
 export function formatCurrency(amountCents: number): string {

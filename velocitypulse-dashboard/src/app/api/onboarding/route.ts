@@ -1,22 +1,8 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
-import { PLAN_LIMITS, TRIAL_DURATION_DAYS, CUSTOMER_NUMBER_PREFIX } from '@/lib/constants'
-
-// Generate a unique customer number (VEU-XXXXX format)
-function generateCustomerNumber(): string {
-  const randomPart = Math.random().toString(36).substring(2, 7).toUpperCase()
-  return `${CUSTOMER_NUMBER_PREFIX}${randomPart}`
-}
-
-// Generate a URL-safe slug from organization name
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .substring(0, 50) + '-' + Math.random().toString(36).substring(2, 6)
-}
+import { PLAN_LIMITS, TRIAL_DURATION_DAYS } from '@/lib/constants'
+import { generateCustomerNumber, generateUniqueSlug } from '@/lib/utils'
 
 export async function POST(request: Request) {
   try {
@@ -62,7 +48,7 @@ export async function POST(request: Request) {
 
     // Create new organization
     const name = organizationName.trim()
-    const slug = generateSlug(name)
+    const slug = generateUniqueSlug(name)
     const customerNumber = generateCustomerNumber()
     const trialEndsAt = new Date()
     trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DURATION_DAYS)
@@ -126,7 +112,7 @@ export async function POST(request: Request) {
       { name: 'Other', slug: 'other', icon: 'box', color: '#6B7280' },
     ]
 
-    await supabase.from('categories').insert(
+    const { error: categoryError } = await supabase.from('categories').insert(
       defaultCategories.map((cat, index) => ({
         organization_id: newOrg.id,
         ...cat,
@@ -134,8 +120,13 @@ export async function POST(request: Request) {
       }))
     )
 
+    if (categoryError) {
+      console.error('Failed to create default categories:', categoryError)
+      // Non-fatal: organization is still usable without categories
+    }
+
     // Create audit log
-    await supabase.from('audit_logs').insert({
+    const { error: auditError } = await supabase.from('audit_logs').insert({
       organization_id: newOrg.id,
       actor_type: 'user',
       actor_id: userId,
@@ -147,6 +138,11 @@ export async function POST(request: Request) {
         email: user?.emailAddresses[0]?.emailAddress,
       },
     })
+
+    if (auditError) {
+      console.error('Failed to create audit log:', auditError)
+      // Non-fatal: organization is still usable without audit log
+    }
 
     return NextResponse.json({
       organization: newOrg,

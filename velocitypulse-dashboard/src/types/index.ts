@@ -365,16 +365,5 @@ export interface AgentContext {
 }
 
 // ==============================================
-// Plan Limits
+// Plan Limits - Use PLAN_LIMITS from @/lib/constants
 // ==============================================
-
-export const PLAN_LIMITS: Record<OrganizationPlan, {
-  devices: number
-  agents: number
-  users: number
-  price_yearly_cents: number
-}> = {
-  trial: { devices: 100, agents: 10, users: 5, price_yearly_cents: 0 },
-  starter: { devices: 100, agents: 10, users: 10, price_yearly_cents: 5000 }, // $50/year
-  unlimited: { devices: 5000, agents: 100, users: 50, price_yearly_cents: 95000 }, // $950/year
-}

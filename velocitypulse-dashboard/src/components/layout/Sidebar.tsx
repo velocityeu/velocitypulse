@@ -13,6 +13,7 @@ import {
   Settings,
   ChevronLeft,
   Menu,
+  ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -103,7 +104,7 @@ export function Sidebar({ collapsed = false, onCollapse }: SidebarProps) {
           )}
           title={collapsed ? 'VelocityPulse.io' : undefined}
         >
-          <ChevronLeft className="h-4 w-4 shrink-0" />
+          <ExternalLink className="h-4 w-4 shrink-0" />
           {!collapsed && <span>VelocityPulse.io</span>}
         </a>
       </div>
@@ -187,7 +188,7 @@ export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenCha
             onClick={() => onOpenChange(false)}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           >
-            <ChevronLeft className="h-4 w-4 shrink-0" />
+            <ExternalLink className="h-4 w-4 shrink-0" />
             <span>VelocityPulse.io</span>
           </a>
         </div>

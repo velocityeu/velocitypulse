@@ -25,7 +25,7 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 | Ping sweep | Yes | Yes | COMPLETE |
 | SNMP discovery | Yes | Yes | COMPLETE |
 | SSDP/UPnP discovery | Yes | Yes | COMPLETE |
-| mDNS discovery | Yes | Partial | 90% - needs testing |
+| mDNS discovery | Yes | Yes | COMPLETE - needs edge case testing |
 | Hostname resolution (DNS + NetBIOS) | Yes | Yes | COMPLETE |
 | MAC/manufacturer lookup | Yes | Yes | COMPLETE |
 | **Network Segments** |
@@ -46,7 +46,7 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 | Category filtering | Yes | Yes | COMPLETE |
 | Search/filter | Yes | Yes | COMPLETE |
 | Sorting controls | Yes | Yes | COMPLETE |
-| Device details modal | Yes | Partial | 70% - basic info shown |
+| Device details modal | Yes | Yes | COMPLETE |
 | Status summary cards | Yes | Yes | COMPLETE |
 | View mode toggle | Yes | Yes | COMPLETE |
 | Segment grouping (collapsible) | Yes | Yes | COMPLETE |
@@ -313,4 +313,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: January 30, 2026 - Phase 3, 4, & 5 Complete*
+*Last Updated: February 6, 2026 - Phase 3, 4, & 5 Complete. Stripe cancellation and payment failure emails implemented.*

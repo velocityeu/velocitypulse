@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
+import Stripe from 'stripe'
 import { verifyInternalAccess } from '@/lib/api/internal-auth'
 import { supabase } from '@/lib/db/client'
+
+// Lazy Stripe initialization (same pattern as webhook/checkout routes)
+let stripe: Stripe | null = null
+function getStripe(): Stripe {
+  if (!stripe) {
+    const apiKey = process.env.STRIPE_SECRET_KEY
+    if (!apiKey) {
+      throw new Error('STRIPE_SECRET_KEY is not configured')
+    }
+    stripe = new Stripe(apiKey, {
+      apiVersion: '2026-01-28.clover',
+      maxNetworkRetries: 3,
+      timeout: 30000,
+    })
+  }
+  return stripe
+}
 
 type ActionType =
   | 'extend_trial'
@@ -107,12 +125,22 @@ export async function POST(
             { status: 400 }
           )
         }
+        // Cancel Stripe subscription if one exists
+        if (org.stripe_subscription_id) {
+          try {
+            await getStripe().subscriptions.cancel(org.stripe_subscription_id)
+          } catch (stripeError) {
+            console.error('Failed to cancel Stripe subscription:', stripeError)
+            // Continue with org cancellation even if Stripe fails -
+            // the subscription.deleted webhook will handle cleanup
+          }
+        }
+
         updateData = {
           status: 'cancelled',
           cancelled_at: new Date().toISOString(),
         }
         auditAction = 'organization.cancelled'
-        // TODO: Cancel Stripe subscription if exists
         break
       }
 

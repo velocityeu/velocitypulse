@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import Stripe from 'stripe'
+import { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/db/client'
 import { PLAN_LIMITS } from '@/lib/constants'
 
@@ -245,7 +246,8 @@ export async function POST(request: Request) {
             metadata: { amount: invoice.amount_due },
           })
 
-          // TODO: Send payment failed email via Resend
+          // Send payment failure notification email
+          await sendPaymentFailedEmail(org.id, invoice, supabase)
         }
         break
       }
@@ -279,5 +281,86 @@ export async function POST(request: Request) {
       { error: 'Webhook handler failed' },
       { status: 500 }
     )
+  }
+}
+
+/**
+ * Send payment failed email to org owners/admins via Resend
+ */
+async function sendPaymentFailedEmail(
+  orgId: string,
+  invoice: Stripe.Invoice,
+  supabase: SupabaseClient
+) {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.warn('[PaymentFailedEmail] RESEND_API_KEY not configured, skipping email')
+    return
+  }
+
+  // Get org name and owner/admin emails
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('name')
+    .eq('id', orgId)
+    .single()
+
+  const { data: members } = await supabase
+    .from('organization_members')
+    .select('email, role')
+    .eq('organization_id', orgId)
+    .in('role', ['owner', 'admin'])
+
+  const recipients = members?.map((m) => m.email).filter(Boolean) ?? []
+  if (recipients.length === 0) {
+    console.warn('[PaymentFailedEmail] No owner/admin emails found for org:', orgId)
+    return
+  }
+
+  const orgName = org?.name ?? 'your organization'
+  const amountFormatted = invoice.amount_due
+    ? `${(invoice.amount_due / 100).toFixed(2)}`
+    : 'unknown'
+  const currency = (invoice.currency ?? 'gbp').toUpperCase()
+  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.velocitypulse.io'}/settings/billing`
+
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: process.env.RESEND_FROM_EMAIL || 'VelocityPulse <billing@velocitypulse.io>',
+        to: recipients,
+        subject: `[Action Required] Payment failed for ${orgName}`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <div style="background-color: #dc2626; padding: 20px; color: white;">
+      <h1 style="margin: 0; font-size: 20px;">Payment Failed</h1>
+    </div>
+    <div style="padding: 20px;">
+      <p>We were unable to process the payment of <strong>${currency} ${amountFormatted}</strong> for <strong>${orgName}</strong>.</p>
+      <p>Please update your payment method to avoid any interruption to your service.</p>
+      <p style="margin-top: 24px;">
+        <a href="${portalUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; display: inline-block;">Update Payment Method</a>
+      </p>
+      <p style="color: #666; font-size: 14px; margin-top: 24px;">If you believe this is an error, please contact us at <a href="mailto:support@velocitypulse.io" style="color: #2563eb;">support@velocitypulse.io</a>.</p>
+    </div>
+    <div style="padding: 15px 20px; background-color: #f9f9f9; border-top: 1px solid #eee; font-size: 12px; color: #666;">
+      Sent by <a href="https://velocitypulse.io" style="color: #2563eb; text-decoration: none;">VelocityPulse</a>
+    </div>
+  </div>
+</body>
+</html>`,
+      }),
+    })
+  } catch (error) {
+    console.error('[PaymentFailedEmail] Failed to send:', error)
   }
 }

@@ -126,9 +126,11 @@ export default function Navbar() {
               >
                 Sign In
               </Link>
-              <Button href={`${DASHBOARD_URL}/sign-up`} target="_self" className="hidden md:inline-flex">
-                Start Free Trial
-              </Button>
+              <div className="hidden md:block">
+                <Button href={`${DASHBOARD_URL}/sign-up`} target="_self">
+                  Start Free Trial
+                </Button>
+              </div>
 
               {/* Mobile menu button */}
               <button

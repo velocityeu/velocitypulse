@@ -122,7 +122,7 @@ export default function Navbar() {
               <ThemeToggle />
               <Link
                 href={`${DASHBOARD_URL}/sign-in`}
-                className="hidden md:inline-flex px-3 py-2 text-sm text-secondary hover:text-primary transition-colors"
+                className="inline-flex px-3 py-2 text-sm text-secondary hover:text-primary transition-colors"
               >
                 Sign In
               </Link>

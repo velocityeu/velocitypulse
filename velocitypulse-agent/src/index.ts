@@ -631,8 +631,36 @@ async function main() {
           }
 
           case 'update_config': {
-            // Update configuration - not yet implemented
-            await client.acknowledgeCommand(command.id, false, undefined, 'update_config not implemented')
+            const updates = command.payload ?? {}
+            const applied: Record<string, unknown> = {}
+
+            if (typeof updates.heartbeatInterval === 'number' && updates.heartbeatInterval >= 10) {
+              config.heartbeatInterval = updates.heartbeatInterval * 1000
+              applied.heartbeatInterval = updates.heartbeatInterval
+            }
+            if (typeof updates.statusCheckInterval === 'number' && updates.statusCheckInterval >= 5) {
+              config.statusCheckInterval = updates.statusCheckInterval * 1000
+              applied.statusCheckInterval = updates.statusCheckInterval
+            }
+            if (typeof updates.statusFailureThreshold === 'number' && updates.statusFailureThreshold >= 0) {
+              config.statusFailureThreshold = updates.statusFailureThreshold
+              applied.statusFailureThreshold = updates.statusFailureThreshold
+            }
+            if (typeof updates.logLevel === 'string' && ['debug', 'info', 'warn', 'error'].includes(updates.logLevel)) {
+              config.logLevel = updates.logLevel as typeof config.logLevel
+              applied.logLevel = updates.logLevel
+            }
+            if (typeof updates.enableAutoScan === 'boolean') {
+              config.enableAutoScan = updates.enableAutoScan
+              applied.enableAutoScan = updates.enableAutoScan
+            }
+            if (typeof updates.autoScanInterval === 'number' && updates.autoScanInterval >= 30) {
+              config.autoScanInterval = updates.autoScanInterval
+              applied.autoScanInterval = updates.autoScanInterval
+            }
+
+            logger.info(`Config updated: ${JSON.stringify(applied)}`)
+            await client.acknowledgeCommand(command.id, true, { applied })
             break
           }
 

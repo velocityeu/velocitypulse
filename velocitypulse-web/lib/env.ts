@@ -20,6 +20,15 @@ const serverEnvSchema = z.object({
     .min(1, 'STRIPE_PRICE_UNLIMITED is required')
     .startsWith('price_', 'STRIPE_PRICE_UNLIMITED must start with price_'),
 
+  // Resend (optional - for form submission emails)
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
+  RESEND_TEAM_EMAIL: z.string().optional(),
+
+  // Supabase (optional - for storing form submissions)
+  SUPABASE_URL: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
   // Zoho (optional - placeholder for future integration)
   ZOHO_ACCESS_TOKEN: z.string().optional(),
   ZOHO_ORG_ID: z.string().optional(),
@@ -54,6 +63,11 @@ export function getServerEnv(): ServerEnv {
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     STRIPE_PRICE_STARTER: process.env.STRIPE_PRICE_STARTER,
     STRIPE_PRICE_UNLIMITED: process.env.STRIPE_PRICE_UNLIMITED,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+    RESEND_TEAM_EMAIL: process.env.RESEND_TEAM_EMAIL,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     ZOHO_ACCESS_TOKEN: process.env.ZOHO_ACCESS_TOKEN,
     ZOHO_ORG_ID: process.env.ZOHO_ORG_ID,
   })
@@ -107,6 +121,20 @@ export function getClientEnv(): ClientEnv {
  */
 export function isZohoConfigured(): boolean {
   return !!(process.env.ZOHO_ACCESS_TOKEN && process.env.ZOHO_ORG_ID)
+}
+
+/**
+ * Check if Resend email is configured.
+ */
+export function isResendConfigured(): boolean {
+  return !!process.env.RESEND_API_KEY
+}
+
+/**
+ * Check if Supabase is configured for the marketing site.
+ */
+export function isSupabaseConfigured(): boolean {
+  return !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
 }
 
 /**

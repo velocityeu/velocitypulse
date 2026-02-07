@@ -146,7 +146,10 @@ export default clerkMiddleware(async (auth, request) => {
 
   // Internal routes require staff role
   if (isInternalRoute(request)) {
-    const metadata = sessionClaims?.metadata as { role?: string } | undefined
+    const { clerkClient: clerk } = await import('@clerk/nextjs/server')
+    const client = await clerk()
+    const user = await client.users.getUser(userId)
+    const metadata = user.publicMetadata as { role?: string } | undefined
     const userRole = metadata?.role
     if (userRole !== 'staff' && userRole !== 'admin') {
       return addSecurityHeaders(NextResponse.redirect(new URL('/dashboard', request.url)))

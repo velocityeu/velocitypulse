@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Bell, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,6 +10,7 @@ import { AgentStatusIndicator } from '@/components/dashboard/AgentStatusIndicato
 import { useOrganization } from '@/lib/contexts/OrganizationContext'
 import { useBranding } from '@/lib/hooks/useBranding'
 import { formatTrialStatus, getTrialDaysRemaining } from '@/lib/utils'
+import { useUser } from '@clerk/nextjs'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -46,48 +47,10 @@ function getBadgeVariant(planName: string, trialDaysRemaining?: number | null): 
   return 'starter'
 }
 
-/**
- * Hook to check staff status client-side.
- * Uses dynamic import to avoid SSR issues with Clerk.
- */
 function useIsStaff(): boolean {
-  const [isStaff, setIsStaff] = useState(false)
-
-  useEffect(() => {
-    // Dynamically import and check user metadata client-side only
-    import('@clerk/nextjs')
-      .then((clerk) => {
-        // Access window.__clerk_frontend_api to check if Clerk is loaded
-        // We use the Clerk singleton
-        const clerkInstance = (clerk as Record<string, unknown>).default
-        if (clerkInstance && typeof clerkInstance === 'object' && 'useUser' in clerkInstance) {
-          return
-        }
-      })
-      .catch(() => {
-        // Clerk not available
-      })
-
-    // Alternative: check via Clerk's window object
-    const checkClerk = () => {
-      try {
-        const w = window as unknown as { Clerk?: { user?: { publicMetadata?: { role?: string } } } }
-        const role = w.Clerk?.user?.publicMetadata?.role
-        if (role === 'staff' || role === 'admin') {
-          setIsStaff(true)
-        }
-      } catch {
-        // Not available yet
-      }
-    }
-
-    // Check immediately and after a delay (Clerk loads async)
-    checkClerk()
-    const timer = setTimeout(checkClerk, 2000)
-    return () => clearTimeout(timer)
-  }, [])
-
-  return isStaff
+  const { user } = useUser()
+  const role = (user?.publicMetadata as { role?: string })?.role
+  return role === 'staff' || role === 'admin'
 }
 
 export function DashboardShell({ children }: DashboardShellProps) {

@@ -152,7 +152,7 @@ export default function PricingPage() {
           {plans.map((plan, index) => (
             <motion.div
               key={plan.name}
-              className={`card p-8 ${plan.popular ? 'ring-2 ring-[var(--color-accent)]' : ''}`}
+              className={`card p-8 flex flex-col ${plan.popular ? 'ring-2 ring-[var(--color-accent)]' : ''}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
@@ -171,7 +171,7 @@ export default function PricingPage() {
               </div>
               <p className="text-secondary mb-6">{plan.description}</p>
 
-              <ul className="space-y-3 mb-8">
+              <ul className="space-y-3 mb-8 flex-1">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-3">
                     <Check className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />

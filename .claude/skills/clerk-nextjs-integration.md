@@ -148,6 +148,23 @@ Any solution resembling the above snippet or referencing "authMiddleware," `_app
 
 ---
 
+## **3.5. Production Deployment Notes**
+
+VelocityPulse uses a **production Clerk instance** with the following configuration:
+
+| Setting | Value |
+|---------|-------|
+| **Production Domain** | `clerk.velocitypulse.io` |
+| **Social Providers** | Google, Microsoft, Apple (all with custom OAuth credentials) |
+| **Redirect URI** | `https://clerk.velocitypulse.io/v1/oauth_callback` |
+| **Key Format** | Production keys use `pk_live_` / `sk_live_` prefixes (not `pk_test_` / `sk_test_`) |
+
+**CSP Requirements:** The `middleware.ts` CSP headers must include `clerk.velocitypulse.io` in `script-src`, `connect-src`, and `frame-src` directives. Also keep `*.clerk.accounts.dev` for development environments.
+
+**Social Provider Setup:** All three social providers (Google, Microsoft, Apple) use custom OAuth credentials configured in the Clerk Dashboard under **Configure → SSO Connections**. See `velocitypulse-dashboard/docs/social-oauth-setup.md` for full setup details.
+
+---
+
 ## **4. AI MODEL VERIFICATION STEPS**
 
 Before returning any Clerk-related solution, you **must** verify:

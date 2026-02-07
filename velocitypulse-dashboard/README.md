@@ -159,9 +159,11 @@ src/
 | CRON_SECRET | Vercel Cron | `Authorization: Bearer` header on `/api/cron/*` |
 | Staff role | Internal admins | `publicMetadata.role === 'staff'` in Clerk |
 
+**Production Clerk domain:** `clerk.velocitypulse.io` — Social login providers configured: Google, Microsoft, Apple.
+
 ## Security
 
-- **CSP** — Content Security Policy allowing Clerk, Supabase, Stripe, Sentry domains
+- **CSP** — Content Security Policy allowing `clerk.velocitypulse.io`, `*.clerk.accounts.dev`, Supabase, Stripe, Sentry domains
 - **HSTS** — Strict-Transport-Security with 1-year max-age
 - **Rate Limiting** — In-memory per-IP (agent endpoints: 30-120/min, user mutations: 5-10/min) + DB-backed monthly/hourly tracking
 - **Input Validation** — Zod schemas on 7 mutation routes with consistent error format

@@ -4,6 +4,16 @@ All notable changes to VelocityPulse Dashboard will be documented in this file.
 
 ## [Unreleased]
 
+### Production Launch (2026-02-07)
+
+- Migrated Clerk from development to production instance (`clerk.velocitypulse.io`)
+- Configured custom OAuth credentials for social login: Google, Microsoft, Apple
+- Added `clerk.velocitypulse.io` to CSP headers (script-src, connect-src, frame-src)
+- Enabled Apple Pay and Google Pay in Stripe Checkout
+- Show Sign In link on mobile navbar
+- Hide Start Free Trial button on mobile navbar
+- Aligned pricing card buttons to consistent bottom position
+
 ### Production Cleanup (2026-02-07)
 
 - Removed all demo/hardcoded data from 6 admin pages (`/internal/*`)

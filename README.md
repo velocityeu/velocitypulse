@@ -23,7 +23,7 @@ velocitypulse/
 |-------|-----------|---------|
 | Framework | Next.js | 16.1 |
 | UI | React | 19.2 |
-| Auth | Clerk | 6.37 |
+| Auth | Clerk (Google, Microsoft, Apple SSO) | 6.37 |
 | Payments | Stripe | 20.2 |
 | Database | Supabase | 2.93 |
 | Styling | Tailwind CSS | 4.1 |
@@ -73,6 +73,7 @@ npm test             # Run Vitest unit tests
 | Dashboard | Vercel (`velocitypulse-dashboard`) | [app.velocitypulse.io](https://app.velocitypulse.io) |
 | Marketing | Vercel (`velocitypulse`) | [velocitypulse.io](https://velocitypulse.io) |
 | Database | Supabase | — |
+| Auth | Clerk | clerk.velocitypulse.io |
 | DNS | GoDaddy | A record `app` → `76.76.21.21` |
 
 **Deploy dashboard:** Run `vercel --prod` from the repo root (Vercel project has root dir set to `velocitypulse-dashboard`). Do NOT run from inside the subdirectory.

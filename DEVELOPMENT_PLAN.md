@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: All Tiers Complete (1-5 + Operational Hardening + Production Cleanup)**
+**Current Status: All Tiers Complete (1-5 + Operational Hardening + Production Cleanup + Production Launch)**
 
 ---
 
@@ -409,6 +409,25 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [x] Fixed `useIsStaff` build failure: guard `useUser` against missing ClerkProvider
 - [x] Added `.env*.local` to subproject `.gitignore` files
 
+### Phase 12: Production Launch (Priority: HIGH) - COMPLETE
+
+#### 12.1 Clerk Production Migration - COMPLETE
+- [x] Switched Clerk from development to production instance (`clerk.velocitypulse.io`)
+- [x] Configured custom OAuth credentials for Google (Google Cloud Console, consent screen in production)
+- [x] Configured custom OAuth credentials for Microsoft (Azure AD, multitenant, custom app registration)
+- [x] Configured custom OAuth credentials for Apple (Apple Developer portal, Services ID + .p8 key)
+- [x] Updated CSP headers to allow `clerk.velocitypulse.io` (script-src, connect-src, frame-src)
+- [x] Updated redirect URIs from dev (`singular-seahorse-24.clerk.accounts.dev`) to production (`clerk.velocitypulse.io`)
+
+#### 12.2 Stripe Checkout Enhancements - COMPLETE
+- [x] Enabled Apple Pay in Stripe Checkout
+- [x] Enabled Google Pay in Stripe Checkout
+
+#### 12.3 Marketing Site Polish - COMPLETE
+- [x] Show Sign In link on mobile navbar
+- [x] Hide Start Free Trial button on mobile navbar
+- [x] Aligned pricing card buttons to consistent bottom position
+
 ---
 
 ## Part 5: File Reference
@@ -604,4 +623,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-5 + Operational Hardening + Production Cleanup).*
+*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-5 + Operational Hardening + Production Cleanup + Production Launch).*

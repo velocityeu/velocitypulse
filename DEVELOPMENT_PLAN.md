@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: Tier 3 Complete - Enterprise Features Shipped**
+**Current Status: Tier 4 Complete - Production SaaS Infrastructure Shipped**
 
 ---
 
@@ -77,12 +77,20 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 | Subscription management | COMPLETE | Trial/Starter/Unlimited |
 | Plan-based limits | COMPLETE | Device/agent/user limits |
 | Billing portal | COMPLETE | Stripe customer portal |
+| Subscription self-service | COMPLETE | View plan, manage via Stripe Portal |
+| **Lifecycle Automation** |
+| Route protection | COMPLETE | Middleware blocks suspended/cancelled/expired orgs |
+| Trial expiry automation | COMPLETE | Cron-based trial warning + expiry enforcement |
+| Grace period enforcement | COMPLETE | 7-day grace after payment failure |
+| Data retention cleanup | COMPLETE | 30-day purge after cancellation |
+| Lifecycle emails | COMPLETE | Welcome, trial warning, expired, activated, cancelled, suspended |
 | **Admin (Internal)** |
 | Organization admin | COMPLETE | View all customers |
 | Subscription admin | COMPLETE | Manage plans |
 | Trial tracking | COMPLETE | Trial analytics |
 | Audit logs | COMPLETE | Activity tracking |
 | Support search | COMPLETE | Customer lookup |
+| Admin link in dashboard | COMPLETE | Staff-only sidebar/header link to /internal |
 | **Marketing Site** |
 | Landing page | COMPLETE | velocitypulse.io |
 | Pricing page | COMPLETE | Plan comparison |
@@ -286,6 +294,45 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [x] Wired Zoho as third delivery channel in `form-delivery.ts` via `Promise.allSettled`
 - [x] Skips silently if Zoho not configured; failures don't affect other channels
 
+### Phase 8: Production SaaS Infrastructure (Priority: HIGH) - COMPLETE
+
+#### 8.1 Route Protection & Access Control - COMPLETE
+- [x] Enhanced `proxy.ts` with org status enforcement (suspended/cancelled → `/account-blocked`, expired trial → `/trial-expired`)
+- [x] Billing routes bypass org status checks (must remain accessible when blocked)
+- [x] Account blocked page with suspended/cancelled states, payment update button, contact support
+- [x] Trial expired page with pricing cards and subscribe CTAs
+- [x] Internal routes require staff role via Clerk publicMetadata
+
+#### 8.2 Customer Billing Self-Service - COMPLETE
+- [x] Stripe Customer Portal API (`POST /api/billing/portal`) with `can_manage_billing` permission check
+- [x] Subscription status API (`GET /api/billing/subscription`) returns plan, status, renewal date, amount
+- [x] Enhanced billing page with current subscription card, Stripe Portal button, past-due warning banner
+- [x] "Change Plan" anchor link to pricing cards section
+
+#### 8.3 Lifecycle Automation - COMPLETE
+- [x] Shared lifecycle email utility (`src/lib/emails/lifecycle.ts`) with HTML templates
+- [x] Email functions: welcome, trial warning (3 days), trial expired, subscription activated, subscription cancelled, account suspended, payment failed
+- [x] Lifecycle cron endpoint (`GET /api/cron/lifecycle`) protected by `CRON_SECRET`
+- [x] Job 1: Trial warning emails (3 days before expiry, deduped via audit logs)
+- [x] Job 2: Trial expiry enforcement (status → suspended, sends email, audit log)
+- [x] Job 3: Grace period enforcement (7 days after payment failure → suspended)
+- [x] Job 4: Data retention cleanup (30 days after cancellation → cascade delete + audit log)
+- [x] Vercel cron configured for 6-hourly execution
+- [x] Wired lifecycle emails into Stripe webhook handlers (activated, cancelled)
+- [x] Wired welcome email into onboarding POST flow
+- [x] Refactored inline payment-failed email to shared utility
+
+#### 8.4 Admin Panel Data Wiring - COMPLETE
+- [x] Subscriptions page uses real API data instead of hardcoded demo data
+- [x] Dashboard metrics page properly maps nested API response to flat interface
+- [x] Staff-only admin link in dashboard sidebar (Shield icon, divider separated)
+- [x] Staff-only admin badge in dashboard header
+- [x] `useIsStaff()` hook using dynamic Clerk detection (avoids SSR issues)
+
+#### 8.5 Cross-Site Linking - COMPLETE
+- [x] Dashboard link added to marketing site footer (Product section)
+- [x] Uses `NEXT_PUBLIC_DASHBOARD_URL` env var with fallback to `https://app.velocitypulse.io`
+
 ---
 
 ## Part 5: File Reference
@@ -379,6 +426,26 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - `velocitypulse-web/lib/zoho.ts` (MODIFIED - optional phone/website params)
 - `velocitypulse-web/lib/env.ts` (MODIFIED - ZOHO_DEPARTMENT_ID)
 
+**Tier 4 - Production SaaS Infrastructure:**
+- `velocitypulse-dashboard/src/lib/emails/lifecycle.ts` (CREATED - shared lifecycle email utility)
+- `velocitypulse-dashboard/src/app/(auth)/account-blocked/page.tsx` (CREATED - suspended/cancelled state page)
+- `velocitypulse-dashboard/src/app/(auth)/trial-expired/page.tsx` (CREATED - trial expired with subscribe CTA)
+- `velocitypulse-dashboard/src/app/api/billing/portal/route.ts` (CREATED - Stripe Customer Portal session)
+- `velocitypulse-dashboard/src/app/api/billing/subscription/route.ts` (CREATED - subscription status API)
+- `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts` (CREATED - lifecycle automation cron)
+- `velocitypulse-dashboard/src/proxy.ts` (MODIFIED - org status enforcement, billing route bypass)
+- `velocitypulse-dashboard/src/app/(dashboard)/billing/page.tsx` (MODIFIED - subscription card, Stripe Portal, past-due warning)
+- `velocitypulse-dashboard/src/app/api/onboarding/route.ts` (MODIFIED - welcome email, suspended_at/cancelled_at fields)
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts` (MODIFIED - lifecycle emails for activation/cancellation)
+- `velocitypulse-dashboard/src/app/(internal)/internal/subscriptions/page.tsx` (MODIFIED - real API data)
+- `velocitypulse-dashboard/src/app/(internal)/internal/dashboard/page.tsx` (MODIFIED - API response mapping)
+- `velocitypulse-dashboard/src/components/layout/Sidebar.tsx` (MODIFIED - staff admin link)
+- `velocitypulse-dashboard/src/components/layout/DashboardShell.tsx` (MODIFIED - useIsStaff hook)
+- `velocitypulse-dashboard/src/components/layout/Header.tsx` (MODIFIED - staff admin badge)
+- `velocitypulse-dashboard/src/types/index.ts` (MODIFIED - new audit action types)
+- `velocitypulse-dashboard/vercel.json` (MODIFIED - lifecycle cron config)
+- `velocitypulse-web/components/layout/Footer.tsx` (MODIFIED - dashboard link)
+
 **Migrations:**
 - `supabase/migrations/004_notifications.sql` (CREATED - notification system tables)
 - `supabase/migrations/005_form_submissions.sql` (CREATED - form submissions table)
@@ -399,6 +466,9 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [ ] New customer can sign up, install agent, see devices (needs E2E test)
 - [x] Billing works (Stripe checkout + webhooks)
 - [x] Trial expires correctly after 14 days
+- [x] Suspended/cancelled orgs are blocked from dashboard access
+- [x] Customer can manage subscription via Stripe Portal
+- [x] Lifecycle cron automates trial expiry and data cleanup
 
 ### Quality Gates
 
@@ -420,4 +490,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-3). Enterprise features shipped: white-label branding, SSO/SAML, advanced analytics, mDNS/SSDP discovery, Zoho integration. Remaining: E2E smoke test, Lighthouse check.*
+*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-4). Production SaaS infrastructure shipped: route protection, billing self-service, lifecycle automation (trial/grace/cleanup), lifecycle emails, admin panel data wiring, cross-site linking. Remaining: E2E smoke test, Lighthouse check.*

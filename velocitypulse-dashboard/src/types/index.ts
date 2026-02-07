@@ -34,6 +34,14 @@ export interface Organization {
   trial_ends_at?: string
   suspended_at?: string
   cancelled_at?: string
+  // White-label branding (unlimited tier)
+  branding_display_name?: string
+  branding_logo_url?: string
+  branding_primary_color?: string
+  // SSO/SAML (unlimited tier)
+  sso_enabled?: boolean
+  sso_domain?: string
+  sso_provider?: string
   created_at: string
   updated_at: string
 }
@@ -455,6 +463,36 @@ export interface NotificationHistory {
   error?: string
   sent_at?: string
   created_at: string
+}
+
+// ==============================================
+// Analytics Types
+// ==============================================
+
+export interface DeviceStatusHistoryRecord {
+  id: string
+  device_id: string
+  organization_id: string
+  status: DeviceStatus
+  response_time_ms: number | null
+  check_type: CheckType
+  checked_at: string
+}
+
+export type AnalyticsTimeRange = '24h' | '7d' | '30d'
+
+export interface DeviceUptimeStats {
+  device_id: string
+  device_name: string
+  uptime_percentage: number
+  avg_response_time_ms: number | null
+  total_checks: number
+}
+
+export interface AnalyticsResponse {
+  history: DeviceStatusHistoryRecord[]
+  uptime: DeviceUptimeStats[]
+  range: AnalyticsTimeRange
 }
 
 // ==============================================

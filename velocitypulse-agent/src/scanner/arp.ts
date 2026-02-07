@@ -12,7 +12,7 @@ const execAsync = promisify(exec)
 
 export interface DiscoveredDevice {
   ip_address: string
-  mac_address: string
+  mac_address?: string
   hostname?: string
   manufacturer?: string
   os_hints?: string[]
@@ -20,6 +20,17 @@ export interface DiscoveredDevice {
   open_ports?: number[]
   services?: string[]
   netbios_name?: string
+  snmp_info?: {
+    sysName?: string
+    sysDescr?: string
+    sysContact?: string
+    sysLocation?: string
+  }
+  upnp_info?: {
+    friendlyName?: string
+    deviceType?: string
+    manufacturer?: string
+  }
   discovery_method: 'arp' | 'mdns' | 'ssdp' | 'snmp'
 }
 

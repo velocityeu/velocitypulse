@@ -184,7 +184,13 @@ export async function GET() {
           agent_limit,
           user_limit,
           trial_ends_at,
-          stripe_customer_id
+          stripe_customer_id,
+          branding_display_name,
+          branding_logo_url,
+          branding_primary_color,
+          sso_enabled,
+          sso_domain,
+          sso_provider
         )
       `)
       .eq('user_id', userId)

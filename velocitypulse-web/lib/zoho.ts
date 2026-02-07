@@ -103,9 +103,9 @@ export async function createPartnerApplicationTicket({
   companyName: string
   contactName: string
   email: string
-  phone: string
+  phone?: string
   country: string
-  website: string
+  website?: string
   clientCount: string
   avgDevices: string
   tierPreference: string
@@ -120,14 +120,14 @@ Partner Application
 
 Company Details:
 - Company Name: ${companyName}
-- Website: ${website}
+- Website: ${website || 'Not provided'}
 - Country: ${country}
 - Tax ID/VAT: ${taxId || 'Not provided'}
 
 Contact Information:
 - Contact Name: ${contactName}
 - Email: ${email}
-- Phone: ${phone}
+- Phone: ${phone || 'Not provided'}
 
 Business Profile:
 - Number of Clients: ${clientCount}

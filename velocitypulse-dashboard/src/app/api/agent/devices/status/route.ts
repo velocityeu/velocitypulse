@@ -86,6 +86,23 @@ export async function POST(request: Request) {
           continue
         }
 
+        // Record status history for analytics (fire-and-forget)
+        supabase
+          .from('device_status_history')
+          .insert({
+            device_id: device.id,
+            organization_id: agentContext.organizationId,
+            status: report.status,
+            response_time_ms: report.response_time_ms,
+            check_type: report.check_type || 'ping',
+            checked_at: report.checked_at,
+          })
+          .then(({ error: historyError }) => {
+            if (historyError) {
+              console.error('[StatusUpdate] History insert error:', historyError.message)
+            }
+          })
+
         // Trigger notifications on status change
         if (previousStatus !== newStatus) {
           const eventType =

@@ -19,6 +19,7 @@
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "express": "^5.2.1",
+    "multicast-dns": "^7.2.5",
     "net-snmp": "^3.26.1",
     "node-ssdp": "^4.0.1",
     "oui": "^13.1.3",

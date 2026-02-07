@@ -29,9 +29,10 @@ const serverEnvSchema = z.object({
   SUPABASE_URL: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
-  // Zoho (optional - placeholder for future integration)
+  // Zoho (optional - for help desk ticket creation)
   ZOHO_ACCESS_TOKEN: z.string().optional(),
   ZOHO_ORG_ID: z.string().optional(),
+  ZOHO_DEPARTMENT_ID: z.string().optional(),
 })
 
 // Client-side environment variables schema
@@ -70,6 +71,7 @@ export function getServerEnv(): ServerEnv {
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     ZOHO_ACCESS_TOKEN: process.env.ZOHO_ACCESS_TOKEN,
     ZOHO_ORG_ID: process.env.ZOHO_ORG_ID,
+    ZOHO_DEPARTMENT_ID: process.env.ZOHO_DEPARTMENT_ID,
   })
 
   if (!result.success) {
@@ -117,7 +119,7 @@ export function getClientEnv(): ClientEnv {
 
 /**
  * Check if Zoho integration is configured.
- * Returns false if Zoho credentials are not set.
+ * Used by form-delivery to conditionally create Zoho tickets.
  */
 export function isZohoConfigured(): boolean {
   return !!(process.env.ZOHO_ACCESS_TOKEN && process.env.ZOHO_ORG_ID)

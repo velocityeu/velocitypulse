@@ -21,19 +21,31 @@ export const PLAN_LIMITS = {
     agents: 10,
     users: 5,
     apiCallsPerMonth: 10000,
+    whiteLabel: false,
+    sso: false,
   },
   starter: {
     devices: 100,
     agents: 10,
     users: 10,
     apiCallsPerMonth: 50000,
+    whiteLabel: false,
+    sso: false,
   },
   unlimited: {
     devices: 5000,
     agents: 100,
     users: 50,
     apiCallsPerMonth: -1, // unlimited
+    whiteLabel: true,
+    sso: true,
   },
+} as const
+
+// Default branding (used when no custom branding is set)
+export const DEFAULT_BRANDING = {
+  displayName: 'VelocityPulse',
+  logoUrl: '/velocity-symbol.png',
 } as const
 
 // Rate limits (per hour)

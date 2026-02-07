@@ -54,6 +54,8 @@ interface HeaderProps {
   organizationName?: string
   planName?: string
   trialDaysRemaining?: number | null
+  brandingDisplayName?: string
+  brandingLogoUrl?: string
 }
 
 // Determine badge variant based on plan/trial status
@@ -89,21 +91,25 @@ export function Header({
   organizationName,
   planName,
   trialDaysRemaining,
+  brandingDisplayName,
+  brandingLogoUrl,
 }: HeaderProps) {
+  const displayName = brandingDisplayName || 'VelocityPulse'
+  const logoUrl = brandingLogoUrl || '/velocity-symbol.png'
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
         {/* Logo */}
         <div className="flex items-center gap-2 mr-4">
           <Image
-            src="/velocity-symbol.png"
-            alt="VelocityPulse"
+            src={logoUrl}
+            alt={displayName}
             width={32}
             height={32}
             className="rounded-lg"
           />
           <span className="hidden font-semibold sm:inline-block">
-            VelocityPulse
+            {displayName}
           </span>
           {organizationName && (
             <>

@@ -64,6 +64,8 @@ const plans = [
       'Advanced audit logs',
       'Custom integrations',
       'SLA guarantee',
+      'White-label branding',
+      'SSO / SAML authentication',
     ],
     priceId: UNLIMITED_PRICE_ID,
   },

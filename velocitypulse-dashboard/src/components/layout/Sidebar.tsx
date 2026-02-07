@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Monitor,
   Activity,
+  BarChart3,
   FolderOpen,
   Server,
   Users,
@@ -17,10 +17,12 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useBranding } from '@/lib/hooks/useBranding'
 import Image from 'next/image'
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: Activity },
+  { label: 'Analytics', href: '/analytics', icon: BarChart3 },
   { label: 'Devices', href: '/devices', icon: Monitor },
   { label: 'Categories', href: '/categories', icon: FolderOpen },
   { label: 'Agents', href: '/agents', icon: Server },
@@ -115,6 +117,7 @@ export function Sidebar({ collapsed = false, onCollapse }: SidebarProps) {
 // Mobile sidebar with sheet/drawer behavior
 export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const pathname = usePathname()
+  const branding = useBranding()
 
   if (!open) return null
 
@@ -132,13 +135,13 @@ export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenCha
         <div className="flex items-center justify-between h-14 px-4 border-b">
           <div className="flex items-center gap-2">
             <Image
-              src="/velocity-symbol.png"
-              alt="VelocityPulse"
+              src={branding.logoUrl}
+              alt={branding.displayName}
               width={32}
               height={32}
               className="rounded-lg"
             />
-            <span className="font-semibold">VelocityPulse</span>
+            <span className="font-semibold">{branding.displayName}</span>
           </div>
           <Button
             variant="ghost"

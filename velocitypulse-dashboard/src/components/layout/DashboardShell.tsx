@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Sidebar, MobileSidebar, MobileMenuButton } from '@/components/layout/Sidebar'
 import { AgentStatusIndicator } from '@/components/dashboard/AgentStatusIndicator'
 import { useOrganization } from '@/lib/contexts/OrganizationContext'
+import { useBranding } from '@/lib/hooks/useBranding'
 import { formatTrialStatus, getTrialDaysRemaining } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
@@ -47,6 +48,7 @@ function getBadgeVariant(planName: string, trialDaysRemaining?: number | null): 
 
 export function DashboardShell({ children }: DashboardShellProps) {
   const { organization, isLoading, error } = useOrganization()
+  const branding = useBranding()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -66,14 +68,14 @@ export function DashboardShell({ children }: DashboardShellProps) {
         {/* Logo */}
         <div className="flex items-center gap-2">
           <Image
-            src="/velocity-symbol.png"
-            alt="VelocityPulse"
+            src={branding.logoUrl}
+            alt={branding.displayName}
             width={32}
             height={32}
             className="rounded-lg"
           />
           <span className="hidden font-semibold sm:inline-block">
-            VelocityPulse
+            {branding.displayName}
           </span>
           {organization && (
             <>

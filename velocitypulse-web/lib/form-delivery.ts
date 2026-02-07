@@ -1,4 +1,5 @@
-import { isResendConfigured, isSupabaseConfigured, isDevelopment } from './env'
+import { isResendConfigured, isSupabaseConfigured, isZohoConfigured, isDevelopment } from './env'
+import { createContactFormTicket, createPartnerApplicationTicket } from './zoho'
 
 interface ContactSubmission {
   name: string
@@ -30,6 +31,7 @@ export async function deliverContactForm(data: ContactSubmission): Promise<void>
   const results = await Promise.allSettled([
     emailContactForm(data),
     storeContactForm(data),
+    zohoContactTicket(data),
   ])
 
   for (const result of results) {
@@ -46,6 +48,7 @@ export async function deliverPartnerForm(data: PartnerSubmission): Promise<void>
   const results = await Promise.allSettled([
     emailPartnerForm(data),
     storePartnerForm(data),
+    zohoPartnerTicket(data),
   ])
 
   for (const result of results) {
@@ -195,6 +198,45 @@ async function storePartnerForm(data: PartnerSubmission): Promise<void> {
   if (error) {
     console.error('[FormDelivery] Supabase insert error:', error.message)
   }
+}
+
+// --- Zoho ticket creation ---
+
+async function zohoContactTicket(data: ContactSubmission): Promise<void> {
+  if (!isZohoConfigured()) {
+    if (isDevelopment()) console.log('[FormDelivery] Zoho not configured, skipping ticket')
+    return
+  }
+
+  await createContactFormTicket({
+    name: data.name,
+    email: data.email,
+    organization: data.organization,
+    subject: data.subject,
+    message: data.message,
+  })
+}
+
+async function zohoPartnerTicket(data: PartnerSubmission): Promise<void> {
+  if (!isZohoConfigured()) {
+    if (isDevelopment()) console.log('[FormDelivery] Zoho not configured, skipping ticket')
+    return
+  }
+
+  await createPartnerApplicationTicket({
+    companyName: data.companyName,
+    contactName: data.contactName,
+    email: data.email,
+    phone: data.phone,
+    country: data.country,
+    website: data.website,
+    clientCount: data.clientCount,
+    avgDevices: data.avgDevices,
+    tierPreference: data.tierPreference,
+    whiteLabel: data.whiteLabel,
+    taxId: data.taxId,
+    businessDescription: data.businessDescription,
+  })
 }
 
 function escapeHtml(str: string): string {

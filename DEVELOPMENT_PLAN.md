@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: Tier 5 Complete - Testing, Observability, Security, Performance, DX & Growth**
+**Current Status: All Tiers Complete (1-5 + Operational Hardening + Production Cleanup)**
 
 ---
 
@@ -371,6 +371,44 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [x] Referral tracking (migration 007: referral_code + referred_by columns on organizations)
 - [x] Onboarding POST accepts optional referralCode parameter
 
+### Phase 10: Operational Hardening (Priority: HIGH) - COMPLETE
+
+#### 10.1 DB-Backed Rate Limiting - COMPLETE
+- [x] `api_usage_monthly` and `api_usage_hourly` tables (migration 008)
+- [x] Atomic upsert functions: `increment_monthly_usage()`, `increment_hourly_usage()`
+- [x] Composite database indexes for efficient lookups
+
+#### 10.2 User-Facing Audit Log - COMPLETE
+- [x] `/audit-log` page with filterable, paginated audit log viewer
+- [x] Sidebar navigation link
+
+#### 10.3 Device Import/Export - COMPLETE
+- [x] CSV export via `/api/dashboard/reports/devices?format=csv`
+- [x] Device import endpoint with validation
+
+#### 10.4 API Key Rotation - COMPLETE
+- [x] Agent API key regeneration endpoint
+- [x] Seamless rotation without downtime
+
+#### 10.5 Usage Quota Warnings - COMPLETE
+- [x] Warning banners when approaching plan limits (devices, agents, API calls)
+- [x] Quota enforcement at plan boundaries
+
+#### 10.6 Data Retention & Pruning - COMPLETE
+- [x] Retention pruning functions for old audit logs, status history, and usage data
+- [x] Migration 008: rate limiting tables, indexes, pruning functions
+
+### Phase 11: Production Cleanup (Priority: HIGH) - COMPLETE
+
+#### 11.1 Remove Demo Data - COMPLETE
+- [x] Removed all hardcoded/demo data from 6 admin pages (`/internal/*`)
+- [x] All internal pages now use real Supabase data with proper empty and error states
+
+#### 11.2 Build & Middleware Fixes - COMPLETE
+- [x] Fixed admin pages not accessible due to middleware redirect
+- [x] Fixed `useIsStaff` build failure: guard `useUser` against missing ClerkProvider
+- [x] Added `.env*.local` to subproject `.gitignore` files
+
 ---
 
 ## Part 5: File Reference
@@ -566,4 +604,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-5). Tier 5 shipped: 75 unit tests across 3 projects (Vitest), Playwright E2E smoke, structured logging with Sentry, health checks, complete audit logging, security headers + CSP + rate limiting (middleware.ts), Zod input validation on 7 routes, Zod env validation, Cache-Control headers, error response helpers, API docs, usage dashboard, device reports (CSV/JSON export), referral tracking. No new production dependencies.*
+*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-5 + Operational Hardening + Production Cleanup).*

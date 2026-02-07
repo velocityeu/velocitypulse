@@ -1,36 +1,110 @@
-# VelocityPulse - Marketing & Planning
+# VelocityPulse
 
 > Your network's heartbeat, at a glance
 
-**Website:** [velocitypulse.io](https://velocitypulse.io)
+**Live:** [app.velocitypulse.io](https://app.velocitypulse.io) | **Website:** [velocitypulse.io](https://velocitypulse.io)
 
-Marketing and product planning for VelocityPulse - a SaaS network monitoring
-product by Velocity EU. Transform IT Dashboard into a commercial multi-tenant
-platform.
+Professional network monitoring from $50/year. Auto-discovery, real-time dashboards, multi-tenant SaaS. All development tiers complete.
 
-## Product Vision
+## Project Structure
 
-**VelocityPulse** is professional network monitoring that doesn't break the bank. Start at $50/year for up to 100 devices. Scale to unlimited for $950/year. No per-device pricing, no surprises. The anti-Nagios.
+```
+velocitypulse/
+├── velocitypulse-dashboard/   # SaaS dashboard (Next.js 16, Clerk, Stripe, Supabase)
+├── velocitypulse-agent/       # Network scanning agent (Node.js, Express, Socket.IO)
+├── velocitypulse-web/         # Marketing site (Next.js, Stripe, Framer Motion)
+├── supabase/migrations/       # Database migrations (001-008)
+└── docs/                      # Product planning & market analysis
+```
 
-## Key Decisions
+## Tech Stack
 
-| Decision | Choice |
-|----------|--------|
-| Product Name | VelocityPulse |
-| Domain | velocitypulse.io |
-| Tagline | "Your network's heartbeat, at a glance" |
-| Launch | Global from day one |
-| Trial | 30-day full access, no credit card |
-| Pricing Model | Two-tier annual: Starter $50/yr, Unlimited $950/yr |
-| Partner Program | 50% off retail, per-customer licensing |
-| Payment | Stripe + Apple Pay |
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| Framework | Next.js | 16.1 |
+| UI | React | 19.2 |
+| Auth | Clerk | 6.37 |
+| Payments | Stripe | 20.2 |
+| Database | Supabase | 2.93 |
+| Styling | Tailwind CSS | 4.1 |
+| Charts | Recharts | 3.7 |
+| Validation | Zod | 4.3 |
+| Observability | Sentry | 10.38 |
+| Testing | Vitest + Playwright | 4.0 / 1.58 |
+| Agent Runtime | Node.js + Express 5 + Socket.IO 4 | — |
+
+## Quick Start
+
+### Dashboard
+
+```bash
+cd velocitypulse-dashboard
+npm install
+# Copy .env.example to .env.local and fill in Clerk, Supabase, Stripe keys
+npm run dev          # http://localhost:3000
+npm run dev:socket   # Socket server for agent connections
+npm test             # Run Vitest unit tests
+```
+
+### Agent
+
+```bash
+cd velocitypulse-agent
+npm install
+# Copy .env.example to .env.local and fill in API URL + agent key
+npm run dev          # Starts scanning + UI on port 3001
+npm test             # Run Vitest unit tests
+```
+
+### Marketing Site
+
+```bash
+cd velocitypulse-web
+npm install
+# Copy .env.example to .env.local
+npm run dev          # http://localhost:3001
+npm test             # Run Vitest unit tests
+```
+
+## Deployment
+
+| Component | Platform | Domain |
+|-----------|----------|--------|
+| Dashboard | Vercel (`velocitypulse-dashboard`) | [app.velocitypulse.io](https://app.velocitypulse.io) |
+| Marketing | Vercel (`velocitypulse`) | [velocitypulse.io](https://velocitypulse.io) |
+| Database | Supabase | — |
+| DNS | GoDaddy | A record `app` → `76.76.21.21` |
+
+**Deploy dashboard:** Run `vercel --prod` from the repo root (Vercel project has root dir set to `velocitypulse-dashboard`). Do NOT run from inside the subdirectory.
+
+**Cron:** Lifecycle automation runs every 6 hours (`0 */6 * * *`) via Vercel Cron at `/api/cron/lifecycle`.
+
+**Migrations:** `npx supabase db push` (requires `SUPABASE_ACCESS_TOKEN` in `.env.local` at project root).
+
+## Features
+
+### Completed
+
+- **Multi-tenant SaaS** — Organizations with RBAC (Owner/Admin/Editor/Viewer), invite flow, plan-based limits
+- **Network Auto-Discovery** — ARP, ping sweep, SNMP, mDNS, SSDP/UPnP scanning with device deduplication
+- **Real-time Monitoring** — Live device status, response time tracking, status hysteresis, segment grouping
+- **Notifications** — Email, Slack, Teams, webhooks with rules and cooldowns
+- **White-label Branding** — Custom display name, logo, primary color (Unlimited tier)
+- **SSO/SAML** — Clerk Enterprise Connections with per-org domain config (Unlimited tier)
+- **Analytics** — Device status history, uptime charts, response time graphs (Recharts)
+- **Admin Backend** — Organization management, subscription admin, trial tracking, audit logs, support search
+- **Billing** — Stripe checkout, customer portal, lifecycle automation (trial expiry, grace periods, data retention)
+- **Security** — CSP, HSTS, rate limiting (in-memory + DB-backed), Zod validation, audit logging
+- **Observability** — Structured logger with Sentry, health checks, complete audit trail
+- **Testing** — 75 unit tests (Vitest) across 3 projects + Playwright E2E smoke test
+- **48 API endpoints** documented in [API.md](velocitypulse-dashboard/docs/API.md)
 
 ## Pricing
 
-### 30-Day Trial - Free
-Full access, no credit card required. Unlimited devices and agents.
+### 30-Day Trial — Free
+Full access, no credit card required. Up to 100 devices, 10 agents, 5 users.
 
-### Starter Tier - $50/year
+### Starter Tier — $50/year
 
 | Currency | Annual Price |
 |----------|--------------|
@@ -38,11 +112,11 @@ Full access, no credit card required. Unlimited devices and agents.
 | GBP | £50/year |
 | EUR | €50/year |
 
-**Includes:** Up to 100 devices, unlimited agents, unlimited users, 1-year data retention, all features, email/Slack/Teams alerts, API access, email support (48h response).
+**Includes:** Up to 100 devices, 10 agents, 10 users, 50K API calls/mo, 1-year data retention, all core features, email/Slack/Teams alerts, API access, email support (48h response).
 
 **Target:** Small businesses, single-site schools, home labs, getting started.
 
-### Unlimited Tier - $950/year
+### Unlimited Tier — $950/year
 
 | Currency | Annual Price |
 |----------|--------------|
@@ -50,11 +124,11 @@ Full access, no credit card required. Unlimited devices and agents.
 | GBP | £750/year |
 | EUR | €850/year |
 
-**Includes:** Up to 5,000 devices (unlockable on request), unlimited agents, unlimited users, 1-year data retention, SSO (SAML), white-label option, priority support (24h email, phone available), dedicated onboarding.
+**Includes:** Up to 5,000 devices (unlockable on request), 100 agents, 50 users, unlimited API calls, 1-year data retention, SSO (SAML), white-label option, priority support (24h email, phone available), dedicated onboarding.
 
 **Target:** Growing SMBs, MATs, multi-site organizations.
 
-### Partner Program - 50% Off Retail
+### Partner Program — 50% Off Retail
 
 | Tier | Retail | Partner Price |
 |------|--------|---------------|
@@ -62,6 +136,10 @@ Full access, no credit card required. Unlimited devices and agents.
 | Unlimited | $950/year | $475/year per customer |
 
 **Rules:** 50% off retail, per-customer licensing, must declare each customer, no pooling.
+
+## Product Vision
+
+**VelocityPulse** is professional network monitoring that doesn't break the bank. Start at $50/year for up to 100 devices. Scale to unlimited for $950/year. No per-device pricing, no surprises. The anti-Nagios.
 
 ## Target Markets
 
@@ -82,78 +160,21 @@ Full access, no credit card required. Unlimited devices and agents.
 - Real-time by default (not polling)
 - Cheaper than Datadog at just 5 devices
 
-## The Anti-Nagios Manifesto
-
-We believe:
-- Monitoring shouldn't require a PhD
-- Setup should take minutes, not days
-- Your dashboard should explain itself
-- Pricing should be affordable, not a negotiation
-
-**Our promise:**
-> "From signup to monitoring in under 10 minutes. From $50/year. No consultants required."
-
-## Source Projects
-
-- [it-dashboard](https://github.com/velocityeu/it-dashboard) - Dashboard frontend (Next.js 14, Supabase)
-- [it-dashboard-agent](https://github.com/velocityeu/it-dashboard-agent) - Network agent (Node.js, TypeScript)
-
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [docs/product-spec.md](docs/product-spec.md) | Technical requirements for SaaS transformation |
-| [docs/pricing.md](docs/pricing.md) | Detailed pricing strategy and rationale |
-| [docs/competitors.md](docs/competitors.md) | Competitive analysis and positioning |
+| [Dashboard README](velocitypulse-dashboard/README.md) | Dashboard setup, architecture, env vars |
+| [Agent README](velocitypulse-agent/README.md) | Agent installation, scanning, commands |
+| [Web README](velocitypulse-web/README.md) | Marketing site setup |
+| [API Reference](velocitypulse-dashboard/docs/API.md) | All 48 API endpoints |
+| [Development Plan](DEVELOPMENT_PLAN.md) | Feature comparison, implementation history |
+| [docs/product-spec.md](docs/product-spec.md) | Technical requirements |
+| [docs/pricing.md](docs/pricing.md) | Pricing strategy and rationale |
+| [docs/competitors.md](docs/competitors.md) | Competitive analysis |
 | [docs/messaging.md](docs/messaging.md) | Brand voice and copy guidelines |
 | [docs/market-analysis.md](docs/market-analysis.md) | TAM/SAM/SOM and revenue projections |
-
-## Go-to-Market Timeline
-
-### Phase 1: Foundation (Months 1-2)
-- Finalize multi-tenant architecture
-- Implement OAuth (Microsoft, Google, Apple)
-- Set up Stripe billing
-- Create marketing website
-
-### Phase 2: Soft Launch (Months 3-4)
-- Beta program with 50-100 customers
-- Collect testimonials and case studies
-- Create demo videos and documentation
-
-### Phase 3: Public Launch (Months 5-6)
-- ProductHunt launch
-- UK education sector outreach
-- MSP partner program launch
-- Content marketing
-
-## Success Metrics
-
-### Launch Goals (First 6 Months)
-- 2,000 trial starts
-- 500 paying customers (25% conversion)
-- ~$150K actual revenue
-- <2% monthly churn
-
-### Year 1 Goals
-- 500 paying customers
-- ~$150K ARR
-- Establish volume positioning in UK market
-
-### Year 3 Goals
-- 8,000 paying customers
-- ~$2.2M ARR
-- UK market leader in affordable monitoring
-
-## Decided Questions
-
-1. **Two-tier pricing model** - Starter $50/yr (100 devices), Unlimited $950/yr (5,000 devices, unlockable)
-2. **Education/Non-profit discounts** - Removed (low price covers all segments)
-3. **Partner Program** - 50% off retail, per-customer licensing, no minimum volume
-4. **Fair use policy** - 5,000 devices before unlock discussion (down from 10,000 due to lower price)
-5. **MSP program** - White-label included in Unlimited tier
 
 ---
 
 *Part of the [Velocity EU](https://github.com/velocityeu) project family.*
-# Deployment test 30 Jan 2026 11:03:25

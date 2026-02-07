@@ -4,6 +4,84 @@ All notable changes to VelocityPulse Dashboard will be documented in this file.
 
 ## [Unreleased]
 
+### Production Cleanup (2026-02-07)
+
+- Removed all demo/hardcoded data from 6 admin pages (`/internal/*`)
+- All internal pages now use real Supabase data with proper empty and error states
+- Fixed admin pages not accessible due to middleware redirect
+- Fixed `useIsStaff` build failure: guard `useUser` against missing ClerkProvider
+- Added `.env*.local` to subproject `.gitignore` files
+
+### Operational Hardening (2026-02-07)
+
+- DB-backed rate limiting with `api_usage_monthly` and `api_usage_hourly` tables
+- Atomic upsert functions: `increment_monthly_usage()`, `increment_hourly_usage()`
+- User-facing audit log page (`/audit-log`) with filtering and pagination
+- Device import/export (CSV)
+- API key rotation for agents
+- Usage quota warnings when approaching plan limits
+- Composite database indexes for performance
+- Retention pruning functions for old data
+- Migration 008: rate limiting, indexes, pruning
+
+### Tier 5 — Testing, Observability, Security, Performance, DX & Growth (2026-02-07)
+
+- 75 unit tests across 3 projects (Vitest): 26 dashboard + 38 agent + 11 web
+- Playwright E2E smoke test (`e2e/smoke.spec.ts`)
+- Structured logger (`src/lib/logger.ts`) with Sentry `captureException` on errors
+- Sentry wired into 10 priority API routes (replaced `console.error` with `logger.error`)
+- Health check endpoints (`/api/health` in dashboard + web)
+- Complete audit logging for categories, notifications, devices (~11 routes)
+- Security middleware (`src/middleware.ts`): CSP, HSTS, X-Frame-Options, rate limiting
+- Zod input validation schemas on 7 mutation routes with consistent error format
+- Zod env validation (`src/lib/env.ts`) with `getServerEnv`/`getClientEnv`
+- Error response helpers (`src/lib/api/errors.ts`): unauthorized, forbidden, notFound, etc.
+- Cache-Control headers on GET routes (categories 60s, segments 30s, subscription 300s)
+- Usage dashboard (`/usage` page + `/api/dashboard/usage`)
+- Device reports with CSV/JSON export (`/reports` page + `/api/dashboard/reports/devices`)
+- Referral tracking (migration 007: `referral_code` + `referred_by` columns)
+- API documentation (`docs/API.md`) covering all 48 routes
+
+### Tier 4 — Production SaaS Infrastructure (2026-02-07)
+
+- Lifecycle cron (`/api/cron/lifecycle`): trial warning, expiry, grace period, data retention
+- Lifecycle emails: welcome, trial warning, expired, activated, cancelled, suspended, payment failed
+- Stripe Customer Portal (`/api/billing/portal`)
+- Subscription status API (`/api/billing/subscription`)
+- Enhanced billing page with subscription card, Stripe Portal button, past-due warning
+- Route protection: suspended/cancelled orgs → `/account-blocked`, expired trial → `/trial-expired`
+- Admin panel with real data: organizations, subscriptions, trials, audit, support search
+- Staff-only admin link in sidebar + header badge via `useIsStaff()` hook
+- Vercel cron configured for 6-hourly lifecycle execution
+
+### Tier 3 — Enterprise Features (2026-02-07)
+
+- White-label branding: custom display name, logo, primary color (Unlimited tier)
+- SSO/SAML via Clerk Enterprise Connections with per-org domain config (Unlimited tier)
+- Analytics page with Recharts: response time LineChart, uptime cards, status timeline
+- `device_status_history` table with RLS + pruning (migration 006)
+- mDNS scanner (10+ service types) + SSDP scanner with UPnP description XML
+- Discovery orchestrator: ARP + mDNS + SSDP in parallel with `mergeDiscoveredDevices()` deduplication
+- Zoho Help Desk as third form delivery channel alongside Resend + Supabase
+
+### Tier 2 — Soft Launch Readiness (2026-02-07)
+
+- Form delivery: Resend email + Supabase storage for contact/partner forms
+- Stripe cancellation when admin cancels org
+- Payment failure email via Resend on `invoice.payment_failed`
+- Agent `update_config` command with validated inputs
+- Sentry integration for dashboard + web (gated on `NEXT_PUBLIC_SENTRY_DSN`)
+- Migrations 004 (notifications) + 005 (form submissions)
+
+### Tier 1 Additions (2026-01-30)
+
+- Agent local UI (Express + Socket.IO on port 3001)
+- Realtime command delivery via Supabase Realtime subscription
+- Polished installer scripts with uninstall/upgrade support
+- Device details modal with SNMP/UPnP info, discovery method, OS hints
+- Dashboard connection status indicator (green/amber/red with tooltip)
+- Notification system: email, Slack, Teams, webhooks with rules and cooldowns
+
 ### Fixed
 
 #### Stripe Integration Fixes (2026-01-30)

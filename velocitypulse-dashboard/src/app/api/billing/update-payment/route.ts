@@ -69,7 +69,6 @@ export async function POST() {
     // Create SetupIntent for collecting new payment method
     const setupIntent = await stripeClient.setupIntents.create({
       customer: org.stripe_customer_id,
-      payment_method_types: ['card'],
     })
 
     return NextResponse.json({ clientSecret: setupIntent.client_secret })

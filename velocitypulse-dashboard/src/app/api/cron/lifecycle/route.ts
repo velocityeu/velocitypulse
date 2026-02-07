@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
     trials_expired: 0,
     orgs_suspended: 0,
     orgs_purged: 0,
+    audit_logs_pruned: 0,
+    usage_records_pruned: 0,
   }
 
   try {
@@ -191,6 +193,22 @@ export async function GET(request: NextRequest) {
       await supabase.from('organizations').delete().eq('id', org.id)
 
       results.orgs_purged++
+    }
+
+    // ===== Job 5: Prune Old Audit Logs (365 days retention) =====
+    try {
+      const { data: auditPruneCount } = await supabase.rpc('prune_audit_logs', { retention_days: 365 })
+      results.audit_logs_pruned = auditPruneCount ?? 0
+    } catch (pruneError) {
+      logger.error('[Lifecycle] Audit log pruning failed', pruneError, { route: 'api/cron/lifecycle' })
+    }
+
+    // ===== Job 6: Prune Old Hourly API Usage Records (7 days) =====
+    try {
+      const { data: usagePruneCount } = await supabase.rpc('prune_api_usage')
+      results.usage_records_pruned = usagePruneCount ?? 0
+    } catch (pruneError) {
+      logger.error('[Lifecycle] API usage pruning failed', pruneError, { route: 'api/cron/lifecycle' })
     }
 
     return NextResponse.json(results)

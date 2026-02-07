@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/db/client'
 import { LATEST_AGENT_VERSION, AGENT_DOWNLOAD_URL, ENFORCE_AGENT_UPDATES } from '@/lib/constants'
 import { logger } from '@/lib/logger'
 import { validateRequest, heartbeatRequestSchema } from '@/lib/validations'
+import { checkAgentRateLimit, checkOrgMonthlyLimit, incrementUsage } from '@/lib/api/rate-limit'
+import { rateLimited } from '@/lib/api/errors'
 import type { AgentHeartbeatResponse, NetworkSegment, AgentCommand } from '@/types'
 
 /**
@@ -43,6 +45,26 @@ export async function POST(request: Request) {
       )
     }
 
+    // Rate limit checks
+    const hourlyCheck = await checkAgentRateLimit(agentContext.agentId, 'heartbeat')
+    if (!hourlyCheck.allowed) {
+      return rateLimited(hourlyCheck.retryAfter)
+    }
+
+    const supabase = createServiceClient()
+
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('plan')
+      .eq('id', agentContext.organizationId)
+      .single()
+
+    const plan = (orgData?.plan || 'trial') as 'trial' | 'starter' | 'unlimited'
+    const monthlyCheck = await checkOrgMonthlyLimit(agentContext.organizationId, plan)
+    if (!monthlyCheck.allowed) {
+      return rateLimited(3600)
+    }
+
     // Parse and validate request body
     let rawBody: unknown
     try {
@@ -59,8 +81,6 @@ export async function POST(request: Request) {
       return NextResponse.json(validation.error, { status: 400 })
     }
     const body = validation.data
-
-    const supabase = createServiceClient()
 
     // Update agent info
     await supabase
@@ -140,6 +160,9 @@ export async function POST(request: Request) {
     } catch (commandsError) {
       logger.error('[HEARTBEAT] Failed to fetch pending commands', commandsError, { route: 'api/agent/heartbeat' })
     }
+
+    // Increment usage counters
+    await incrementUsage(agentContext.organizationId, agentContext.agentId, 'heartbeat')
 
     const response: AgentHeartbeatResponse = {
       success: true,

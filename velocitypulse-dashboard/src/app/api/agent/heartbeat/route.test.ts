@@ -5,6 +5,13 @@ vi.mock('@/lib/api/agent-auth', () => ({
   authenticateAgent: vi.fn(),
 }))
 
+// Mock rate limiting (allow all)
+vi.mock('@/lib/api/rate-limit', () => ({
+  checkAgentRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  checkOrgMonthlyLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  incrementUsage: vi.fn().mockResolvedValue(undefined),
+}))
+
 // Mock constants
 vi.mock('@/lib/constants', () => ({
   LATEST_AGENT_VERSION: '2.0.0',

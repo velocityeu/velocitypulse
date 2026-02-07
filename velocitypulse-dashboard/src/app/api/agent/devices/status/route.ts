@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/db/client'
 import { triggerDeviceNotification } from '@/lib/notifications'
 import { logger } from '@/lib/logger'
 import { validateRequest, statusReportSchema } from '@/lib/validations'
+import { checkAgentRateLimit, checkOrgMonthlyLimit, incrementUsage } from '@/lib/api/rate-limit'
+import { rateLimited } from '@/lib/api/errors'
 import type { AgentStatusResponse, DeviceStatus } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +19,26 @@ export async function POST(request: Request) {
         { error: 'Invalid or disabled API key' },
         { status: 401 }
       )
+    }
+
+    // Rate limit checks
+    const hourlyCheck = await checkAgentRateLimit(agentContext.agentId, 'status')
+    if (!hourlyCheck.allowed) {
+      return rateLimited(hourlyCheck.retryAfter)
+    }
+
+    const supabase = createServiceClient()
+
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('plan')
+      .eq('id', agentContext.organizationId)
+      .single()
+
+    const orgPlan = (orgData?.plan || 'trial') as 'trial' | 'starter' | 'unlimited'
+    const monthlyCheck = await checkOrgMonthlyLimit(agentContext.organizationId, orgPlan)
+    if (!monthlyCheck.allowed) {
+      return rateLimited(3600)
     }
 
     // Parse and validate request body
@@ -36,7 +58,6 @@ export async function POST(request: Request) {
     }
     const body = validation.data
 
-    const supabase = createServiceClient()
     const errors: string[] = []
     let processed = 0
 
@@ -141,6 +162,9 @@ export async function POST(request: Request) {
         errors.push(`Error processing report: ${error}`)
       }
     }
+
+    // Increment usage counters
+    await incrementUsage(agentContext.organizationId, agentContext.agentId, 'status')
 
     const response: AgentStatusResponse = {
       success: errors.length === 0,

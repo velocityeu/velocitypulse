@@ -10,6 +10,13 @@ vi.mock('@/lib/notifications', () => ({
   triggerDeviceNotification: vi.fn().mockResolvedValue(undefined),
 }))
 
+// Mock rate limiting (allow all)
+vi.mock('@/lib/api/rate-limit', () => ({
+  checkAgentRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  checkOrgMonthlyLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  incrementUsage: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { POST } from './route'
 import { authenticateAgent } from '@/lib/api/agent-auth'
 import { createServiceClient } from '@/lib/db/client'

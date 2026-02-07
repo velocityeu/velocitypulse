@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { authenticateAgent } from '@/lib/api/agent-auth'
 import { createServiceClient } from '@/lib/db/client'
 import { logger } from '@/lib/logger'
+import { checkAgentRateLimit, checkOrgMonthlyLimit, incrementUsage } from '@/lib/api/rate-limit'
+import { rateLimited } from '@/lib/api/errors'
 import type { AgentDiscoveryRequest, AgentDiscoveryResponse, DiscoveredDevice, DiscoveryMethod } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +23,26 @@ export async function POST(request: Request) {
         { error: 'Invalid or disabled API key' },
         { status: 401 }
       )
+    }
+
+    // Rate limit checks
+    const hourlyCheck = await checkAgentRateLimit(agentContext.agentId, 'discovery')
+    if (!hourlyCheck.allowed) {
+      return rateLimited(hourlyCheck.retryAfter)
+    }
+
+    const supabase = createServiceClient()
+
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('plan')
+      .eq('id', agentContext.organizationId)
+      .single()
+
+    const plan = (orgData?.plan || 'trial') as 'trial' | 'starter' | 'unlimited'
+    const monthlyCheck = await checkOrgMonthlyLimit(agentContext.organizationId, plan)
+    if (!monthlyCheck.allowed) {
+      return rateLimited(3600)
     }
 
     // Parse request body
@@ -48,8 +70,6 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
-
-    const supabase = createServiceClient()
 
     // Verify segment belongs to this agent and organization
     const { data: segment, error: segmentError } = await supabase
@@ -103,6 +123,9 @@ export async function POST(request: Request) {
     if (updateError) {
       logger.error('Error updating segment scan stats', updateError, { route: 'api/agent/devices/discovered' })
     }
+
+    // Increment usage counters
+    await incrementUsage(agentContext.organizationId, agentContext.agentId, 'discovery')
 
     const response: AgentDiscoveryResponse = {
       success: true,

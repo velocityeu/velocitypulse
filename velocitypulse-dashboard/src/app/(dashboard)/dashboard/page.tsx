@@ -24,6 +24,7 @@ import { ViewToggle } from '@/components/dashboard/ViewToggle'
 import { SortControls } from '@/components/dashboard/SortControls'
 import { CategoryChips } from '@/components/dashboard/CategoryChips'
 import { StatusSummary } from '@/components/dashboard/StatusSummary'
+import { UsageQuotaWarnings } from '@/components/dashboard/UsageQuotaWarnings'
 import { AGENT_ONLINE_THRESHOLD_MS } from '@/lib/constants'
 
 // Local storage keys
@@ -287,6 +288,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Usage quota warnings */}
+      <UsageQuotaWarnings />
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

@@ -48,7 +48,7 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
           >
-            <Button href="/demo" size="lg">
+            <Button href="https://app.velocitypulse.io/sign-up" size="lg" target="_self">
               Start 30-Day Trial
             </Button>
             <Button href="/pricing" variant="secondary" size="lg">

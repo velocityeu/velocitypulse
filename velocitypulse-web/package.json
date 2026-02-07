@@ -12,14 +12,12 @@
   },
   "dependencies": {
     "@sentry/nextjs": "^10.38.0",
-    "@stripe/stripe-js": "^8.6.1",
     "@supabase/supabase-js": "^2.95.3",
     "framer-motion": "^12.27.0",
     "lucide-react": "^0.563.0",
     "next": "^16.1.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "stripe": "^20.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

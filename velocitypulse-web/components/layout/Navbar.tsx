@@ -126,7 +126,7 @@ export default function Navbar() {
               >
                 Sign In
               </Link>
-              <Button href="/demo" className="hidden md:inline-flex">
+              <Button href={`${DASHBOARD_URL}/sign-up`} target="_self" className="hidden md:inline-flex">
                 Start Free Trial
               </Button>
 
@@ -216,7 +216,8 @@ export default function Navbar() {
                   Sign In
                 </Link>
                 <Button
-                  href="/demo"
+                  href={`${DASHBOARD_URL}/sign-up`}
+                  target="_self"
                   className="w-full justify-center"
                   onClick={() => {
                     setIsMenuOpen(false)

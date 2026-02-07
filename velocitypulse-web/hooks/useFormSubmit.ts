@@ -127,28 +127,3 @@ export function useFormSubmit<T = unknown>(options: FormSubmitOptions<T>) {
     reset,
   }
 }
-
-// Helper hook for simple demo form that doesn't actually submit
-export function useDemoForm() {
-  const [state, setState] = useState({
-    isSubmitting: false,
-    isSubmitted: false,
-    error: null as string | null,
-  })
-
-  const handleSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setState({ isSubmitting: true, isSubmitted: false, error: null })
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    setState({ isSubmitting: false, isSubmitted: true, error: null })
-  }, [])
-
-  const reset = useCallback(() => {
-    setState({ isSubmitting: false, isSubmitted: false, error: null })
-  }, [])
-
-  return { ...state, handleSubmit, reset }
-}

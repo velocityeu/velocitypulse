@@ -13,7 +13,6 @@ interface RateLimitConfig {
 const rateLimitConfigs: Record<string, RateLimitConfig> = {
   '/api/contact': { maxRequests: 5, windowMs: 60 * 1000 }, // 5 per minute
   '/api/partners': { maxRequests: 3, windowMs: 60 * 1000 }, // 3 per minute
-  '/api/stripe': { maxRequests: 10, windowMs: 60 * 1000 }, // 10 per minute
 }
 
 function getRateLimitKey(ip: string, path: string): string {
@@ -71,12 +70,12 @@ export function middleware(request: NextRequest) {
   // Content Security Policy
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https:",
-    "connect-src 'self' https://api.stripe.com https://*.stripe.com",
-    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+    "connect-src 'self' https://*.ingest.sentry.io",
+    "frame-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

@@ -22,7 +22,7 @@ export default function CTABanner() {
             Then $50/year for Starter or $950/year for Unlimited.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button href="/demo" size="lg">
+            <Button href="https://app.velocitypulse.io/sign-up" size="lg" target="_self">
               Start Your Trial
             </Button>
             <Button href="/contact" variant="secondary" size="lg">

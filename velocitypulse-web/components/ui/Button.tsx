@@ -12,6 +12,7 @@ interface ButtonProps {
   onClick?: () => void
   disabled?: boolean
   type?: 'button' | 'submit' | 'reset'
+  target?: '_self' | '_blank'
 }
 
 export default function Button({
@@ -23,6 +24,7 @@ export default function Button({
   onClick,
   disabled = false,
   type = 'button',
+  target,
 }: ButtonProps) {
   const baseStyles = 'inline-flex items-center justify-center gap-2 font-medium rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed'
 
@@ -45,7 +47,7 @@ export default function Button({
     return href.startsWith('#') || href.startsWith('/') ? (
       <Link href={href} className={classes}>{children}</Link>
     ) : (
-      <a href={href} target="_blank" rel="noopener noreferrer" className={classes}>{children}</a>
+      <a href={href} target={target || '_blank'} rel={target === '_self' ? undefined : 'noopener noreferrer'} className={classes}>{children}</a>
     )
   }
 

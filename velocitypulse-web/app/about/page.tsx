@@ -165,7 +165,7 @@ export default function AboutPage() {
           <p className="text-lg text-secondary mb-8 max-w-xl mx-auto">
             Start your free 30-day trial today. No credit card required.
           </p>
-          <Button href="/demo" size="lg">
+          <Button href="https://app.velocitypulse.io/sign-up" size="lg" target="_self">
             Start Free Trial
           </Button>
         </motion.div>

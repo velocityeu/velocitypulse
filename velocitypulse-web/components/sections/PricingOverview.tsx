@@ -19,7 +19,7 @@ const plans = [
       'Email support (48h)',
     ],
     cta: 'Start Free Trial',
-    href: '/demo',
+    href: 'https://app.velocitypulse.io/sign-up?plan=starter',
     popular: false,
   },
   {
@@ -36,7 +36,7 @@ const plans = [
       'Dedicated onboarding',
     ],
     cta: 'Start Free Trial',
-    href: '/demo',
+    href: 'https://app.velocitypulse.io/sign-up?plan=unlimited',
     popular: true,
   },
 ]
@@ -101,6 +101,7 @@ export default function PricingOverview() {
 
               <Button
                 href={plan.href}
+                target="_self"
                 variant={plan.popular ? 'primary' : 'secondary'}
                 className="w-full justify-center"
               >

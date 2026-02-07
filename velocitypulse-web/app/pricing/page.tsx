@@ -1,16 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, ArrowRight, HelpCircle } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
-import { createCheckoutSession } from '@/lib/stripe'
-
-type PlanId = 'trial' | 'starter' | 'unlimited'
 
 const plans: Array<{
-  id: PlanId
+  id: string
   name: string
   price: string
   period: string
@@ -35,7 +31,7 @@ const plans: Array<{
       'No credit card required',
     ],
     cta: 'Start Free Trial',
-    href: '/demo',
+    href: 'https://app.velocitypulse.io/sign-up',
     variant: 'secondary',
   },
   {
@@ -55,6 +51,7 @@ const plans: Array<{
       'Email support (48h)',
     ],
     cta: 'Buy Now',
+    href: 'https://app.velocitypulse.io/sign-up?plan=starter',
     variant: 'secondary',
   },
   {
@@ -75,6 +72,7 @@ const plans: Array<{
       'Dedicated onboarding call',
     ],
     cta: 'Buy Now',
+    href: 'https://app.velocitypulse.io/sign-up?plan=unlimited',
     popular: true,
     variant: 'primary',
   },
@@ -125,25 +123,6 @@ const faqs = [
 ]
 
 export default function PricingPage() {
-  const [loadingPlan, setLoadingPlan] = useState<PlanId | null>(null)
-
-  const handleCheckout = async (planId: 'starter' | 'unlimited') => {
-    setLoadingPlan(planId)
-    try {
-      const { url } = await createCheckoutSession({
-        plan: planId,
-        successUrl: `${window.location.origin}/checkout/success`,
-        cancelUrl: `${window.location.origin}/pricing`,
-      })
-      if (url) {
-        window.location.href = url
-      }
-    } catch (error) {
-      console.error('Checkout error:', error)
-      setLoadingPlan(null)
-    }
-  }
-
   return (
     <div className="py-16 md:py-24">
       {/* Header */}
@@ -201,24 +180,14 @@ export default function PricingPage() {
                 ))}
               </ul>
 
-              {plan.id === 'trial' ? (
-                <Button
-                  href={plan.href}
-                  variant={plan.variant}
-                  className="w-full justify-center"
-                >
-                  {plan.cta}
-                </Button>
-              ) : (
-                <Button
-                  variant={plan.variant}
-                  className="w-full justify-center"
-                  onClick={() => handleCheckout(plan.id as 'starter' | 'unlimited')}
-                  disabled={loadingPlan === plan.id}
-                >
-                  {loadingPlan === plan.id ? 'Loading...' : plan.cta}
-                </Button>
-              )}
+              <Button
+                href={plan.href}
+                target="_self"
+                variant={plan.variant}
+                className="w-full justify-center"
+              >
+                {plan.cta}
+              </Button>
             </motion.div>
           ))}
         </div>

@@ -11,7 +11,7 @@ const footerLinks = {
     { name: 'Features', href: '/features' },
     { name: 'Pricing', href: '/pricing' },
     { name: 'Partners', href: '/partners' },
-    { name: 'Demo', href: '/demo' },
+    { name: 'Sign Up', href: 'https://app.velocitypulse.io/sign-up' },
     { name: 'Dashboard', href: process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.velocitypulse.io' },
   ],
   Company: [

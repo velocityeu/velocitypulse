@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   Menu,
   ExternalLink,
+  Shield,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -34,9 +35,10 @@ const navItems = [
 interface SidebarProps {
   collapsed?: boolean
   onCollapse?: (collapsed: boolean) => void
+  isStaff?: boolean
 }
 
-export function Sidebar({ collapsed = false, onCollapse }: SidebarProps) {
+export function Sidebar({ collapsed = false, onCollapse, isStaff }: SidebarProps) {
   const pathname = usePathname()
 
   return (
@@ -92,6 +94,31 @@ export function Sidebar({ collapsed = false, onCollapse }: SidebarProps) {
             )
           })}
         </ul>
+
+        {/* Admin link for staff users */}
+        {isStaff && (
+          <>
+            <div className="mx-2 my-2 border-t" />
+            <ul className="px-2">
+              <li>
+                <Link
+                  href="/internal/dashboard"
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    pathname.startsWith('/internal')
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    collapsed && 'justify-center px-2'
+                  )}
+                  title={collapsed ? 'Admin' : undefined}
+                >
+                  <Shield className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span>Admin</span>}
+                </Link>
+              </li>
+            </ul>
+          </>
+        )}
       </nav>
 
       {/* Footer - Link to marketing site */}
@@ -115,7 +142,7 @@ export function Sidebar({ collapsed = false, onCollapse }: SidebarProps) {
 }
 
 // Mobile sidebar with sheet/drawer behavior
-export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function MobileSidebar({ open, onOpenChange, isStaff }: { open: boolean; onOpenChange: (open: boolean) => void; isStaff?: boolean }) {
   const pathname = usePathname()
   const branding = useBranding()
 
@@ -180,6 +207,30 @@ export function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenCha
               )
             })}
           </ul>
+
+          {/* Admin link for staff users */}
+          {isStaff && (
+            <>
+              <div className="mx-2 my-2 border-t" />
+              <ul className="px-2">
+                <li>
+                  <Link
+                    href="/internal/dashboard"
+                    onClick={() => onOpenChange(false)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      pathname.startsWith('/internal')
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )}
+                  >
+                    <Shield className="h-4 w-4 shrink-0" />
+                    <span>Admin</span>
+                  </Link>
+                </li>
+              </ul>
+            </>
+          )}
         </nav>
 
         {/* Footer - Link to marketing site */}

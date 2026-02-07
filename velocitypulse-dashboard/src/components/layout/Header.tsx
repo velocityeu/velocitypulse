@@ -1,6 +1,6 @@
 'use client'
 
-import { RefreshCw, Bell, Settings, User } from 'lucide-react'
+import { RefreshCw, Bell, Settings, User, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
@@ -56,6 +56,7 @@ interface HeaderProps {
   trialDaysRemaining?: number | null
   brandingDisplayName?: string
   brandingLogoUrl?: string
+  isStaff?: boolean
 }
 
 // Determine badge variant based on plan/trial status
@@ -93,6 +94,7 @@ export function Header({
   trialDaysRemaining,
   brandingDisplayName,
   brandingLogoUrl,
+  isStaff,
 }: HeaderProps) {
   const displayName = brandingDisplayName || 'VelocityPulse'
   const logoUrl = brandingLogoUrl || '/velocity-symbol.png'
@@ -165,6 +167,15 @@ export function Header({
               <span className="sr-only">Settings</span>
             </Link>
           </Button>
+
+          {isStaff && (
+            <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
+              <Link href="/internal/dashboard" title="Admin Panel">
+                <Shield className="h-4 w-4" />
+                <span className="sr-only">Admin</span>
+              </Link>
+            </Button>
+          )}
 
           <ClerkUserSection />
         </div>

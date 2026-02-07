@@ -66,89 +66,23 @@ export default function SubscriptionsPage() {
   async function loadSubscriptions() {
     setIsLoading(true)
     try {
-      // In production, this would fetch from API
-      // For now, use demo data
-      const demoSubscriptions: SubscriptionSummary[] = [
-        {
-          id: '1',
-          organization_id: 'org_1',
-          organization_name: 'Acme Corporation',
-          stripe_subscription_id: 'sub_ABC123',
-          plan: 'unlimited',
-          status: 'active',
-          amount_cents: 95000,
-          current_period_start: '2026-01-01T00:00:00Z',
-          current_period_end: '2027-01-01T00:00:00Z',
-          created_at: '2025-06-15T10:00:00Z',
-        },
-        {
-          id: '2',
-          organization_id: 'org_2',
-          organization_name: 'Tech Startup Ltd',
-          stripe_subscription_id: 'sub_DEF456',
-          plan: 'starter',
-          status: 'active',
-          amount_cents: 5000,
-          current_period_start: '2026-01-15T00:00:00Z',
-          current_period_end: '2027-01-15T00:00:00Z',
-          created_at: '2025-08-01T10:00:00Z',
-        },
-        {
-          id: '3',
-          organization_id: 'org_3',
-          organization_name: 'Global Industries',
-          stripe_subscription_id: 'sub_GHI789',
-          plan: 'unlimited',
-          status: 'active',
-          amount_cents: 95000,
-          current_period_start: '2025-12-01T00:00:00Z',
-          current_period_end: '2026-12-01T00:00:00Z',
-          created_at: '2025-09-01T10:00:00Z',
-        },
-        {
-          id: '4',
-          organization_id: 'org_4',
-          organization_name: 'Small Business Co',
-          stripe_subscription_id: 'sub_JKL012',
-          plan: 'starter',
-          status: 'past_due',
-          amount_cents: 5000,
-          current_period_start: '2025-11-01T00:00:00Z',
-          current_period_end: '2026-11-01T00:00:00Z',
-          created_at: '2025-07-15T10:00:00Z',
-        },
-        {
-          id: '5',
-          organization_id: 'org_5',
-          organization_name: 'Old Customer Inc',
-          stripe_subscription_id: 'sub_MNO345',
-          plan: 'starter',
-          status: 'cancelled',
-          amount_cents: 5000,
-          current_period_start: '2025-06-01T00:00:00Z',
-          current_period_end: '2026-06-01T00:00:00Z',
-          created_at: '2025-03-01T10:00:00Z',
-        },
-      ]
+      const response = await fetch('/api/internal/subscriptions')
+      if (!response.ok) throw new Error('API error')
 
-      setSubscriptions(demoSubscriptions)
+      const data = await response.json()
+      setSubscriptions(data.subscriptions ?? [])
 
-      // Calculate metrics
-      const active = demoSubscriptions.filter(s => s.status === 'active')
-      const pastDue = demoSubscriptions.filter(s => s.status === 'past_due')
-      const cancelled = demoSubscriptions.filter(s => s.status === 'cancelled')
-
-      const mrr = active.reduce((sum, s) => sum + s.amount_cents / 12, 0)
-
-      setMetrics({
-        mrr: Math.round(mrr),
-        arr: Math.round(mrr * 12),
-        activeCount: active.length,
-        pastDueCount: pastDue.length,
-        cancelledCount: cancelled.length,
-        churnRate: cancelled.length / (active.length + cancelled.length) * 100,
-        mrrGrowth: 12.5, // Demo value
-      })
+      if (data.metrics) {
+        setMetrics({
+          mrr: data.metrics.mrr ?? 0,
+          arr: data.metrics.arr ?? 0,
+          activeCount: data.metrics.active_count ?? 0,
+          pastDueCount: data.metrics.past_due_count ?? 0,
+          cancelledCount: data.metrics.cancelled_count ?? 0,
+          churnRate: data.metrics.churn_rate ?? 0,
+          mrrGrowth: 0,
+        })
+      }
     } catch (error) {
       console.error('Failed to load subscriptions:', error)
     } finally {
@@ -385,9 +319,6 @@ export default function SubscriptionsPage() {
         </CardContent>
       </Card>
 
-      <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-200">
-        Showing demo data. Connect to Stripe webhook to sync real subscription data.
-      </div>
     </div>
   )
 }

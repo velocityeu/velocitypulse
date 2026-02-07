@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
-import { Check, Loader2 } from 'lucide-react'
+import { Check, Loader2, CreditCard, AlertTriangle, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +17,13 @@ interface Organization {
   plan: string
   status: string
   trial_ends_at: string | null
+}
+
+interface SubscriptionInfo {
+  plan: string
+  status: string
+  current_period_end: string
+  amount_cents: number
 }
 
 const plans = [
@@ -36,7 +43,7 @@ const plans = [
   },
   {
     name: 'Starter',
-    price: '£50',
+    price: '\u00a350',
     period: '/year',
     description: 'For small teams and organizations',
     features: [
@@ -52,7 +59,7 @@ const plans = [
   },
   {
     name: 'Unlimited',
-    price: '£950',
+    price: '\u00a3950',
     period: '/year',
     description: 'For large organizations',
     features: [
@@ -77,32 +84,44 @@ export default function BillingPage() {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
   const [fetchingOrg, setFetchingOrg] = useState(true)
+  const [portalLoading, setPortalLoading] = useState(false)
 
-  // Fetch user's organization
+  // Fetch user's organization and subscription
   useEffect(() => {
-    async function fetchOrganization() {
+    async function fetchData() {
       try {
-        const response = await fetch('/api/onboarding')
-        const data = await response.json()
+        const [orgResponse, subResponse] = await Promise.all([
+          fetch('/api/onboarding'),
+          fetch('/api/billing/subscription'),
+        ])
 
-        if (!data.hasOrganization) {
-          // Redirect to onboarding if no organization
+        const orgData = await orgResponse.json()
+
+        if (!orgData.hasOrganization) {
           router.push('/onboarding')
           return
         }
 
-        setOrganization(data.organization)
+        setOrganization(orgData.organization)
+
+        if (subResponse.ok) {
+          const subData = await subResponse.json()
+          if (subData.subscription) {
+            setSubscription(subData.subscription)
+          }
+        }
       } catch (err) {
-        console.error('Failed to fetch organization:', err)
-        setError('Failed to load organization')
+        console.error('Failed to fetch billing data:', err)
+        setError('Failed to load billing information')
       } finally {
         setFetchingOrg(false)
       }
     }
 
     if (isLoaded && user) {
-      fetchOrganization()
+      fetchData()
     }
   }, [isLoaded, user, router])
 
@@ -138,6 +157,28 @@ export default function BillingPage() {
     }
   }
 
+  const handleManageSubscription = async () => {
+    setPortalLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/billing/portal', { method: 'POST' })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to open billing portal')
+      }
+
+      if (data.url) {
+        window.location.href = data.url
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setPortalLoading(false)
+    }
+  }
+
   if (!isLoaded || fetchingOrg) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -152,6 +193,18 @@ export default function BillingPage() {
     current: (plan.name.toLowerCase() === currentPlan) ||
              (plan.name === 'Trial' && currentPlan === 'trial'),
   }))
+
+  const formatRenewalDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+  }
+
+  const formatAmount = (cents: number) => {
+    return `\u00a3${(cents / 100).toFixed(2)}`
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -168,7 +221,66 @@ export default function BillingPage() {
         </div>
       )}
 
-      <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+      {/* Current Subscription Card */}
+      {subscription && (
+        <div className="max-w-2xl mx-auto mb-10">
+          {organization?.status === 'past_due' && (
+            <div className="mb-4 p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0" />
+              <div>
+                <p className="font-medium text-orange-500">Payment failed</p>
+                <p className="text-sm text-muted-foreground">Please update your payment method to avoid service interruption.</p>
+              </div>
+            </div>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Current Subscription
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-semibold">
+                      {subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1)} Plan
+                    </span>
+                    <Badge variant={subscription.status === 'active' ? 'default' : 'destructive'}>
+                      {subscription.status === 'active' ? 'Active' : 'Past Due'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Next renewal: {formatRenewalDate(subscription.current_period_end)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold">{formatAmount(subscription.amount_cents)}</div>
+                  <p className="text-sm text-muted-foreground">/year</p>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="flex gap-2">
+              <Button onClick={handleManageSubscription} disabled={portalLoading}>
+                {portalLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                )}
+                Manage Subscription
+              </Button>
+              <Button variant="outline" asChild>
+                <a href="#plans">Change Plan</a>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
+
+      {/* Plan Cards */}
+      <div id="plans" className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
         {plansWithCurrent.map((plan) => (
           <Card
             key={plan.name}

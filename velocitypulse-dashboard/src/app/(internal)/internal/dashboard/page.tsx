@@ -42,7 +42,22 @@ export default function InternalDashboardPage() {
       const response = await fetch('/api/internal/metrics')
       if (response.ok) {
         const data = await response.json()
-        setMetrics(data)
+        // Map the nested API response to the flat DashboardMetrics interface
+        setMetrics({
+          totalOrganizations: data.organizations?.total ?? 0,
+          activeOrganizations: data.organizations?.active ?? 0,
+          trialOrganizations: data.organizations?.trial ?? 0,
+          suspendedOrganizations: data.organizations?.suspended ?? 0,
+          totalUsers: data.usage?.total_users ?? 0,
+          mrr: data.revenue?.mrr ?? 0,
+          arr: data.revenue?.arr ?? 0,
+          trialConversionRate: data.organizations?.trial > 0
+            ? ((data.conversions?.trial_to_paid_30d ?? 0) / data.organizations.trial) * 100
+            : 0,
+          expiringTrials: 0, // Calculated client-side from trials endpoint
+          recentSignups: 0,
+          churnedThisMonth: data.organizations?.cancelled ?? 0,
+        })
       }
     } catch (error) {
       console.error('Failed to load metrics:', error)

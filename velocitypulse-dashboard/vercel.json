@@ -9,5 +9,11 @@
       "master": true,
       "main": true
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/lifecycle",
+      "schedule": "0 */6 * * *"
+    }
+  ]
 }

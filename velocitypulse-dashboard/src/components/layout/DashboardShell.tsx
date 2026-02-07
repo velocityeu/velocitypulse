@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Bell, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -46,11 +46,56 @@ function getBadgeVariant(planName: string, trialDaysRemaining?: number | null): 
   return 'starter'
 }
 
+/**
+ * Hook to check staff status client-side.
+ * Uses dynamic import to avoid SSR issues with Clerk.
+ */
+function useIsStaff(): boolean {
+  const [isStaff, setIsStaff] = useState(false)
+
+  useEffect(() => {
+    // Dynamically import and check user metadata client-side only
+    import('@clerk/nextjs')
+      .then((clerk) => {
+        // Access window.__clerk_frontend_api to check if Clerk is loaded
+        // We use the Clerk singleton
+        const clerkInstance = (clerk as Record<string, unknown>).default
+        if (clerkInstance && typeof clerkInstance === 'object' && 'useUser' in clerkInstance) {
+          return
+        }
+      })
+      .catch(() => {
+        // Clerk not available
+      })
+
+    // Alternative: check via Clerk's window object
+    const checkClerk = () => {
+      try {
+        const w = window as unknown as { Clerk?: { user?: { publicMetadata?: { role?: string } } } }
+        const role = w.Clerk?.user?.publicMetadata?.role
+        if (role === 'staff' || role === 'admin') {
+          setIsStaff(true)
+        }
+      } catch {
+        // Not available yet
+      }
+    }
+
+    // Check immediately and after a delay (Clerk loads async)
+    checkClerk()
+    const timer = setTimeout(checkClerk, 2000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  return isStaff
+}
+
 export function DashboardShell({ children }: DashboardShellProps) {
   const { organization, isLoading, error } = useOrganization()
   const branding = useBranding()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const isStaff = useIsStaff()
 
   // Get plan info
   const planInfo = organization ? formatTrialStatus(organization) : undefined
@@ -131,7 +176,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
       <div className="min-h-screen bg-background flex flex-col">
         {renderHeader()}
         <div className="flex flex-1">
-          <Sidebar collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} />
+          <Sidebar collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} isStaff={isStaff} />
           <main className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -149,7 +194,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
       <div className="min-h-screen bg-background flex flex-col">
         {renderHeader()}
         <div className="flex flex-1">
-          <Sidebar collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} />
+          <Sidebar collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} isStaff={isStaff} />
           <main className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3 text-center">
               <p className="text-lg font-medium text-destructive">Failed to load organization</p>
@@ -165,9 +210,9 @@ export function DashboardShell({ children }: DashboardShellProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {renderHeader()}
-      <MobileSidebar open={mobileMenuOpen} onOpenChange={setMobileMenuOpen} />
+      <MobileSidebar open={mobileMenuOpen} onOpenChange={setMobileMenuOpen} isStaff={isStaff} />
       <div className="flex flex-1">
-        <Sidebar collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} />
+        <Sidebar collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} isStaff={isStaff} />
         <main className="flex-1 overflow-auto">
           <div className="container px-4 py-6 max-w-7xl">
             {children}

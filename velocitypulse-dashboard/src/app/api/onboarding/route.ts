@@ -3,6 +3,7 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { PLAN_LIMITS, TRIAL_DURATION_DAYS } from '@/lib/constants'
 import { generateCustomerNumber, generateUniqueSlug } from '@/lib/utils'
+import { sendWelcomeEmail } from '@/lib/emails/lifecycle'
 
 export async function POST(request: Request) {
   try {
@@ -144,6 +145,14 @@ export async function POST(request: Request) {
       // Non-fatal: organization is still usable without audit log
     }
 
+    // Send welcome email (non-fatal)
+    const ownerEmail = user?.emailAddresses[0]?.emailAddress
+    if (ownerEmail) {
+      sendWelcomeEmail(name, ownerEmail).catch(err =>
+        console.error('Failed to send welcome email:', err)
+      )
+    }
+
     return NextResponse.json({
       organization: newOrg,
       isNew: true,
@@ -184,6 +193,8 @@ export async function GET() {
           agent_limit,
           user_limit,
           trial_ends_at,
+          suspended_at,
+          cancelled_at,
           stripe_customer_id,
           branding_display_name,
           branding_logo_url,

@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: ~98% Feature Complete for MVP**
+**Current Status: MVP Complete - Ready for Soft Launch**
 
 ---
 
@@ -87,7 +87,7 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 | Landing page | COMPLETE | velocitypulse.io |
 | Pricing page | COMPLETE | Plan comparison |
 | Features page | COMPLETE | Feature showcase |
-| Contact/demo forms | COMPLETE | Lead capture |
+| Contact/demo forms | COMPLETE | Lead capture (email + Supabase delivery) |
 | Legal pages | COMPLETE | Privacy/Terms/GDPR |
 | **Onboarding** |
 | First-time setup | COMPLETE | Org creation flow |
@@ -115,9 +115,13 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 1. ~~**Notifications**~~ - COMPLETE (Email/Slack/Teams/Webhooks with rules and cooldowns)
 2. ~~**Custom Webhooks**~~ - COMPLETE (generic webhook sender)
-3. **White-label** - Unlimited tier feature
-4. **Advanced Analytics** - Charts/reports
-5. **SSO (SAML)** - Enterprise feature
+3. ~~**Error Tracking**~~ - COMPLETE (Sentry integration on web + dashboard)
+4. ~~**Form Delivery**~~ - COMPLETE (Resend email + Supabase storage for contact/partner forms)
+5. ~~**Stripe Cancellation**~~ - COMPLETE (admin cancel cancels Stripe subscription)
+6. ~~**Payment Failure Email**~~ - COMPLETE (Resend email on invoice.payment_failed)
+7. **White-label** - Unlimited tier feature
+8. **Advanced Analytics** - Charts/reports
+9. **SSO (SAML)** - Enterprise feature
 
 ---
 
@@ -143,7 +147,7 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 | `scan_segment` | COMPLETE |
 | `restart` | COMPLETE |
 | `upgrade` | COMPLETE (acknowledgment only) |
-| `update_config` | NOT IMPLEMENTED |
+| `update_config` | COMPLETE |
 
 #### Dashboard UI Components
 
@@ -218,14 +222,37 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [x] Add notification trigger on device status change
 - [x] Add Notifications link to sidebar
 
-### Phase 6: Enterprise Features (Priority: LOW)
+### Phase 6: Soft Launch Readiness (Priority: HIGH) - COMPLETE
 
-#### 6.1 White-Label
+#### 6.1 Billing Hardening - COMPLETE
+- [x] Cancel Stripe subscription when admin cancels org
+- [x] Send payment failure email via Resend on invoice.payment_failed
+- [x] Marketing site Stripe webhook stubs cleaned up (dashboard handles all billing)
+
+#### 6.2 Form Delivery - COMPLETE
+- [x] Contact form: email via Resend + store in Supabase `form_submissions` table
+- [x] Partner form: email via Resend + store in Supabase `form_submissions` table
+- [x] Graceful degradation when Resend/Supabase not configured
+
+#### 6.3 Agent update_config Command - COMPLETE
+- [x] Runtime config updates (heartbeatInterval, statusCheckInterval, logLevel, etc.)
+- [x] Validated inputs with minimum value enforcement
+- [x] Returns applied changes in command acknowledgment
+
+#### 6.4 Error Tracking (Sentry) - COMPLETE
+- [x] @sentry/nextjs integrated in velocitypulse-web
+- [x] @sentry/nextjs integrated in velocitypulse-dashboard
+- [x] ErrorBoundary reports to Sentry in production
+- [x] Gated on NEXT_PUBLIC_SENTRY_DSN (disabled until DSN configured)
+
+### Phase 7: Enterprise Features (Priority: LOW)
+
+#### 7.1 White-Label
 - [ ] Custom branding support (logo, colors)
 - [ ] Custom domain support
 - [ ] Remove VelocityPulse branding for Unlimited tier
 
-#### 6.2 SSO
+#### 7.2 SSO
 - [ ] SAML integration via Clerk
 - [ ] Custom identity provider support
 
@@ -269,13 +296,39 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - `velocitypulse-dashboard/src/app/api/agent/devices/status/route.ts` (MODIFIED - trigger notifications)
 
 **Agent:**
-- `velocitypulse-agent/src/index.ts` (MODIFIED - command handling, UI integration, realtime setup)
+- `velocitypulse-agent/src/index.ts` (MODIFIED - command handling, UI integration, realtime setup, update_config)
 - `velocitypulse-agent/src/api/client.ts` (MODIFIED - updated acknowledgeCommand, added sendPong)
 - `velocitypulse-agent/src/api/realtime.ts` (CREATED - Supabase Realtime client)
 - `velocitypulse-agent/src/ui/server.ts` (CREATED - Express + Socket.IO UI server)
 - `velocitypulse-agent/src/ui/public/index.html` (MODIFIED - full dashboard UI)
 - `velocitypulse-agent/scripts/install.ps1` (MODIFIED - uninstall, upgrade, UI port)
 - `velocitypulse-agent/scripts/install.sh` (MODIFIED - uninstall, upgrade, unattended mode)
+
+**Billing & Webhooks:**
+- `velocitypulse-dashboard/src/app/api/internal/organizations/[id]/actions/route.ts` (MODIFIED - Stripe cancellation)
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts` (MODIFIED - payment failure email)
+- `velocitypulse-web/app/api/stripe/webhook/route.ts` (SIMPLIFIED - stubs removed, redirects to dashboard)
+
+**Form Delivery:**
+- `velocitypulse-web/lib/form-delivery.ts` (CREATED - Resend email + Supabase storage)
+- `velocitypulse-web/app/api/contact/route.ts` (MODIFIED - uses form delivery)
+- `velocitypulse-web/app/api/partners/route.ts` (MODIFIED - uses form delivery)
+- `velocitypulse-web/lib/env.ts` (MODIFIED - added Resend/Supabase env vars)
+
+**Error Tracking (Sentry):**
+- `velocitypulse-web/sentry.client.config.ts` (CREATED)
+- `velocitypulse-web/sentry.server.config.ts` (CREATED)
+- `velocitypulse-web/sentry.edge.config.ts` (CREATED)
+- `velocitypulse-web/instrumentation.ts` (CREATED)
+- `velocitypulse-dashboard/sentry.client.config.ts` (CREATED)
+- `velocitypulse-dashboard/sentry.server.config.ts` (CREATED)
+- `velocitypulse-dashboard/sentry.edge.config.ts` (CREATED)
+- `velocitypulse-dashboard/instrumentation.ts` (CREATED)
+- `velocitypulse-web/components/ErrorBoundary.tsx` (MODIFIED - reports to Sentry)
+
+**Migrations:**
+- `supabase/migrations/004_notifications.sql` (CREATED - notification system tables)
+- `supabase/migrations/005_form_submissions.sql` (CREATED - form submissions table)
 
 ---
 
@@ -313,4 +366,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: February 6, 2026 - Phase 3, 4, & 5 Complete. Stripe cancellation and payment failure emails implemented.*
+*Last Updated: February 7, 2026 - Phases 3-6 Complete. MVP ready for soft launch. Remaining: E2E smoke test, Lighthouse check, enterprise features (white-label, SSO).*

@@ -38,12 +38,12 @@ const securityHeaders: Record<string, string> = {
   'X-API-Version': '1',
   'Content-Security-Policy': [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.clerk.accounts.dev",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.clerk.accounts.dev https://challenges.cloudflare.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://*.supabase.co https://img.clerk.com",
     "font-src 'self'",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.clerk.accounts.dev https://*.ingest.sentry.io",
-    "frame-src https://js.stripe.com https://*.clerk.accounts.dev",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.clerk.accounts.dev https://*.ingest.sentry.io https://challenges.cloudflare.com",
+    "frame-src https://js.stripe.com https://*.clerk.accounts.dev https://challenges.cloudflare.com",
     "form-action 'self'",
   ].join('; '),
 }
@@ -57,7 +57,12 @@ const RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
   '/api/agent/devices/status': { max: 60, windowMs: 60000 },
   '/api/agent/devices/discovered': { max: 30, windowMs: 60000 },
   '/api/onboarding': { max: 5, windowMs: 60000 },
+  '/api/checkout/embedded': { max: 10, windowMs: 60000 },
   '/api/checkout': { max: 10, windowMs: 60000 },
+  '/api/billing/change-plan': { max: 5, windowMs: 60000 },
+  '/api/billing/cancel': { max: 3, windowMs: 60000 },
+  '/api/billing/update-payment': { max: 5, windowMs: 60000 },
+  '/api/billing/reactivate': { max: 5, windowMs: 60000 },
   '/api/dashboard/agents': { max: 10, windowMs: 60000 },
 }
 

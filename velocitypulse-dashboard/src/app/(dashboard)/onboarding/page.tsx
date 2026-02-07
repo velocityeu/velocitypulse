@@ -7,11 +7,16 @@ import { Building2, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { PlanCards } from '@/components/billing/PlanCards'
+import { EmbeddedCheckout } from '@/components/billing/EmbeddedCheckout'
 
 export default function OnboardingPage() {
   const router = useRouter()
   const { user, isLoaded } = useUser()
+  const [step, setStep] = useState<1 | 2>(1)
   const [orgName, setOrgName] = useState('')
+  const [organizationId, setOrganizationId] = useState<string>('')
+  const [selectedPriceId, setSelectedPriceId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,7 +29,6 @@ export default function OnboardingPage() {
         const data = await response.json()
 
         if (data.hasOrganization) {
-          // User already has an org, redirect to dashboard
           router.push('/dashboard')
           return
         }
@@ -40,14 +44,13 @@ export default function OnboardingPage() {
     }
   }, [isLoaded, user, router])
 
-  // Pre-fill with user's name or email domain
+  // Pre-fill with user's email domain
   useEffect(() => {
     if (user && !orgName) {
       const email = user.emailAddresses[0]?.emailAddress
       if (email) {
         const domain = email.split('@')[1]
         if (domain && !['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com'].includes(domain)) {
-          // Use domain name as suggestion for business emails
           const domainName = domain.split('.')[0]
           setOrgName(domainName.charAt(0).toUpperCase() + domainName.slice(1))
         }
@@ -55,7 +58,7 @@ export default function OnboardingPage() {
     }
   }, [user, orgName])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!orgName.trim() || orgName.trim().length < 2) {
@@ -79,13 +82,24 @@ export default function OnboardingPage() {
         throw new Error(data.error || 'Failed to create organization')
       }
 
-      // Redirect to dashboard
-      router.push('/dashboard')
+      // Store org ID and advance to step 2
+      setOrganizationId(data.organization.id)
+      setStep(2)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSelectPlan = (planId: string, priceId: string | null) => {
+    if (!priceId) {
+      // Free trial — go straight to dashboard
+      router.push('/dashboard')
+      return
+    }
+    // Paid plan — show embedded checkout
+    setSelectedPriceId(priceId)
   }
 
   if (!isLoaded || checking) {
@@ -97,68 +111,111 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-            <Building2 className="h-6 w-6 text-primary" />
-          </div>
-          <CardTitle className="text-2xl">Welcome to VelocityPulse</CardTitle>
-          <CardDescription>
-            Let&apos;s set up your organization to get started with network monitoring.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label
-                htmlFor="orgName"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                Organization Name
-              </label>
-              <Input
-                type="text"
-                id="orgName"
-                value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
-                placeholder="e.g., Acme Corp"
-                disabled={loading}
-                autoFocus
-              />
-              <p className="mt-2 text-sm text-muted-foreground">
-                This is how your organization will appear in VelocityPulse.
-              </p>
+    <div className="flex items-center justify-center min-h-screen bg-background px-4 py-8">
+      {step === 1 && (
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <Building2 className="h-6 w-6 text-primary" />
             </div>
+            <CardTitle className="text-2xl">Welcome to VelocityPulse</CardTitle>
+            <CardDescription>
+              Let&apos;s set up your organization to get started with network monitoring.
+            </CardDescription>
+          </CardHeader>
 
-            {error && (
-              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
-                {error}
+          <CardContent>
+            <form onSubmit={handleCreateOrg} className="space-y-6">
+              <div>
+                <label
+                  htmlFor="orgName"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  Organization Name
+                </label>
+                <Input
+                  type="text"
+                  id="orgName"
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  placeholder="e.g., Acme Corp"
+                  disabled={loading}
+                  autoFocus
+                />
+                <p className="mt-2 text-sm text-muted-foreground">
+                  This is how your organization will appear in VelocityPulse.
+                </p>
               </div>
-            )}
 
-            <Button type="submit" className="w-full" disabled={loading || !orgName.trim()}>
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  Continue
-                  <ArrowRight className="h-4 w-4" />
-                </span>
+              {error && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
+                  {error}
+                </div>
               )}
-            </Button>
-          </form>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Your 14-day free trial starts now.</p>
-            <p>No credit card required.</p>
+              <Button type="submit" className="w-full" disabled={loading || !orgName.trim()}>
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    Continue
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 2 && !selectedPriceId && (
+        <div className="w-full max-w-6xl">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold mb-2">Choose Your Plan</h1>
+            <p className="text-muted-foreground">
+              Start with a free trial or pick a plan to get going right away.
+            </p>
           </div>
-        </CardContent>
-      </Card>
+
+          <PlanCards
+            onSelectPlan={handleSelectPlan}
+            showTrialCard={true}
+          />
+
+          <p className="text-center mt-8 text-sm text-muted-foreground">
+            All prices exclude VAT. Cancel anytime.
+          </p>
+        </div>
+      )}
+
+      {step === 2 && selectedPriceId && (
+        <div className="w-full max-w-2xl">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold mb-2">Complete Your Subscription</h1>
+            <p className="text-muted-foreground">
+              Enter your payment details to activate your plan.
+            </p>
+          </div>
+
+          <EmbeddedCheckout
+            priceId={selectedPriceId}
+            organizationId={organizationId}
+          />
+
+          <div className="text-center mt-4">
+            <Button
+              variant="ghost"
+              onClick={() => setSelectedPriceId(null)}
+              className="text-sm text-muted-foreground"
+            >
+              Back to plan selection
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

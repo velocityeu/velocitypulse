@@ -42,6 +42,64 @@ export const PLAN_LIMITS = {
   },
 } as const
 
+// Centralized plan definitions (used by PlanCards, billing page, onboarding, trial-expired)
+export const PLANS = [
+  {
+    id: 'trial' as const,
+    name: 'Trial',
+    price: 'Free',
+    period: '14 days',
+    description: 'Try VelocityPulse with full features',
+    features: [
+      'Up to 100 devices',
+      'Up to 10 agents',
+      'Up to 5 users',
+      '10,000 API calls/month',
+      'Email support',
+    ],
+    priceId: null as string | null,
+  },
+  {
+    id: 'starter' as const,
+    name: 'Starter',
+    price: '\u00a350',
+    period: '/year',
+    description: 'For small teams and organizations',
+    features: [
+      'Up to 100 devices',
+      'Up to 10 agents',
+      'Up to 10 users',
+      '50,000 API calls/month',
+      'Priority email support',
+      'Audit logs',
+    ],
+    priceId: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID || 'price_1Sv1fgClbxBbMUCj2cyRStNN',
+    popular: true,
+  },
+  {
+    id: 'unlimited' as const,
+    name: 'Unlimited',
+    price: '\u00a3950',
+    period: '/year',
+    description: 'For large organizations',
+    features: [
+      'Up to 5,000 devices',
+      'Up to 100 agents',
+      'Up to 50 users',
+      'Unlimited API calls',
+      'Priority phone & email support',
+      'Advanced audit logs',
+      'Custom integrations',
+      'SLA guarantee',
+      'White-label branding',
+      'SSO / SAML authentication',
+    ],
+    priceId: process.env.NEXT_PUBLIC_STRIPE_UNLIMITED_PRICE_ID || 'price_1Sv1hNClbxBbMUCj68XSyZ5D',
+  },
+] as const
+
+export type PlanId = 'trial' | 'starter' | 'unlimited'
+
 // Default branding (used when no custom branding is set)
 export const DEFAULT_BRANDING = {
   displayName: 'VelocityPulse',

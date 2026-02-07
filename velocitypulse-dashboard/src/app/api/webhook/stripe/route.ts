@@ -166,7 +166,7 @@ export async function POST(request: Request) {
         // Get organization
         const { data: org } = await supabase
           .from('organizations')
-          .select('id')
+          .select('id, plan')
           .eq('stripe_customer_id', customerId)
           .single()
 
@@ -176,22 +176,51 @@ export async function POST(request: Request) {
                         subscription.status === 'past_due' ? 'past_due' :
                         subscription.status === 'canceled' ? 'cancelled' : 'incomplete'
 
+          // Detect plan change from price ID
+          const priceId = subscription.items.data[0]?.price.id
+          const newPlan = priceId === process.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited' : 'starter'
+
           await supabase
             .from('subscriptions')
             .update({
               status,
+              plan: newPlan,
               current_period_start: new Date((subscription.items.data[0]?.current_period_start ?? 0) * 1000).toISOString(),
               current_period_end: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toISOString(),
+              amount_cents: subscription.items.data[0]?.price.unit_amount || 0,
             })
             .eq('stripe_subscription_id', subscription.id)
 
-          // Update organization status
+          // Update organization status + plan/limits if plan changed
+          const orgUpdate: Record<string, unknown> = {
+            status: status === 'cancelled' ? 'cancelled' : status,
+          }
+
+          if (newPlan !== org.plan && (status === 'active' || status === 'past_due')) {
+            const limits = newPlan === 'unlimited' ? PLAN_LIMITS.unlimited : PLAN_LIMITS.starter
+            orgUpdate.plan = newPlan
+            orgUpdate.device_limit = limits.devices
+            orgUpdate.agent_limit = limits.agents
+            orgUpdate.user_limit = limits.users
+          }
+
           await supabase
             .from('organizations')
-            .update({
-              status: status === 'cancelled' ? 'cancelled' : status,
-            })
+            .update(orgUpdate)
             .eq('id', org.id)
+
+          // Audit log if plan changed
+          if (newPlan !== org.plan) {
+            await supabase.from('audit_logs').insert({
+              organization_id: org.id,
+              actor_type: 'webhook',
+              actor_id: 'stripe',
+              action: 'subscription.plan_changed',
+              resource_type: 'subscription',
+              resource_id: subscription.id,
+              metadata: { old_plan: org.plan, new_plan: newPlan, price_id: priceId },
+            })
+          }
         }
         break
       }

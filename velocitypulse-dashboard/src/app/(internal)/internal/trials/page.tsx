@@ -63,76 +63,7 @@ export default function TrialsPage() {
     }
   }
 
-  // Demo data
-  const demoTrials: TrialOrganization[] = [
-    {
-      id: '1',
-      name: 'NewCo Industries',
-      slug: 'newco',
-      customer_number: 'VEU-G5H6I',
-      plan: 'trial',
-      status: 'trial',
-      device_limit: 100,
-      agent_limit: 10,
-      user_limit: 5,
-      trial_ends_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days
-      member_count: 2,
-      device_count: 18,
-      created_at: '2025-01-15T12:00:00Z',
-      updated_at: '2025-01-28T16:45:00Z',
-    },
-    {
-      id: '2',
-      name: 'StartupX',
-      slug: 'startupx',
-      customer_number: 'VEU-K1L2M',
-      plan: 'trial',
-      status: 'trial',
-      device_limit: 100,
-      agent_limit: 10,
-      user_limit: 5,
-      trial_ends_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days
-      member_count: 3,
-      device_count: 25,
-      created_at: '2025-01-20T09:00:00Z',
-      updated_at: '2025-01-27T11:30:00Z',
-    },
-    {
-      id: '3',
-      name: 'TechDemo Co',
-      slug: 'techdemo',
-      customer_number: 'VEU-N3O4P',
-      plan: 'trial',
-      status: 'trial',
-      device_limit: 100,
-      agent_limit: 10,
-      user_limit: 5,
-      trial_ends_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days
-      member_count: 1,
-      device_count: 8,
-      created_at: '2025-01-25T14:00:00Z',
-      updated_at: '2025-01-26T09:00:00Z',
-    },
-    {
-      id: '4',
-      name: 'Expired Trial Ltd',
-      slug: 'expired',
-      customer_number: 'VEU-Q5R6S',
-      plan: 'trial',
-      status: 'suspended',
-      device_limit: 100,
-      agent_limit: 10,
-      user_limit: 5,
-      trial_ends_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // expired yesterday
-      suspended_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      member_count: 1,
-      device_count: 5,
-      created_at: '2025-01-10T10:00:00Z',
-      updated_at: '2025-01-28T00:00:00Z',
-    },
-  ]
-
-  const data = trials.length > 0 ? trials : demoTrials
+  const data = trials
 
   // Categorize trials
   const expiringTrials = data.filter(t => {
@@ -311,11 +242,6 @@ export default function TrialsPage() {
         </Card>
       )}
 
-      {trials.length === 0 && (
-        <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-200">
-          Showing demo data. Connect to database to see real trials.
-        </div>
-      )}
     </div>
   )
 }

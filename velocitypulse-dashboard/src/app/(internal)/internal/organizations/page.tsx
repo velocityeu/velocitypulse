@@ -64,93 +64,7 @@ export default function OrganizationsPage() {
     }
   }
 
-  // Demo data
-  const demoOrganizations: AdminOrganization[] = [
-    {
-      id: '1',
-      name: 'Acme Corporation',
-      slug: 'acme-corp',
-      customer_number: 'VEU-A1B2C',
-      plan: 'unlimited',
-      status: 'active',
-      device_limit: 5000,
-      agent_limit: 100,
-      user_limit: 50,
-      member_count: 12,
-      device_count: 245,
-      agent_count: 8,
-      created_at: '2024-06-15T10:00:00Z',
-      updated_at: '2025-01-20T14:30:00Z',
-    },
-    {
-      id: '2',
-      name: 'TechStart Ltd',
-      slug: 'techstart',
-      customer_number: 'VEU-D3E4F',
-      plan: 'starter',
-      status: 'active',
-      device_limit: 100,
-      agent_limit: 10,
-      user_limit: 10,
-      member_count: 3,
-      device_count: 45,
-      agent_count: 2,
-      created_at: '2024-09-20T08:00:00Z',
-      updated_at: '2025-01-18T09:15:00Z',
-    },
-    {
-      id: '3',
-      name: 'NewCo Industries',
-      slug: 'newco',
-      customer_number: 'VEU-G5H6I',
-      plan: 'trial',
-      status: 'trial',
-      device_limit: 100,
-      agent_limit: 10,
-      user_limit: 5,
-      trial_ends_at: '2025-02-10T00:00:00Z',
-      member_count: 2,
-      device_count: 18,
-      agent_count: 1,
-      created_at: '2025-01-27T12:00:00Z',
-      updated_at: '2025-01-28T16:45:00Z',
-    },
-    {
-      id: '4',
-      name: 'Legacy Systems',
-      slug: 'legacy',
-      customer_number: 'VEU-J7K8L',
-      plan: 'starter',
-      status: 'past_due',
-      device_limit: 100,
-      agent_limit: 10,
-      user_limit: 10,
-      member_count: 4,
-      device_count: 67,
-      agent_count: 3,
-      created_at: '2024-03-10T14:00:00Z',
-      updated_at: '2025-01-25T11:20:00Z',
-    },
-    {
-      id: '5',
-      name: 'Defunct Corp',
-      slug: 'defunct',
-      customer_number: 'VEU-M9N0P',
-      plan: 'starter',
-      status: 'cancelled',
-      device_limit: 100,
-      agent_limit: 10,
-      user_limit: 10,
-      cancelled_at: '2025-01-15T00:00:00Z',
-      member_count: 0,
-      device_count: 0,
-      agent_count: 0,
-      created_at: '2024-01-05T09:00:00Z',
-      updated_at: '2025-01-15T00:00:00Z',
-    },
-  ]
-
-  const data = organizations.length > 0 ? organizations : demoOrganizations
+  const data = organizations
 
   // Filter organizations
   const filteredOrgs = data.filter((org) => {
@@ -310,11 +224,6 @@ export default function OrganizationsPage() {
         )}
       </div>
 
-      {organizations.length === 0 && (
-        <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-200">
-          Showing demo data. Connect to database to see real organizations.
-        </div>
-      )}
     </div>
   )
 }

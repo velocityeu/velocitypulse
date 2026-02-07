@@ -50,81 +50,14 @@ export default function SupportPage() {
         const data = await response.json()
         setSearchResults(data.results)
       } else {
-        // Demo data for when API is not connected
-        simulateDemoSearch()
+        setSearchResults([])
       }
     } catch (error) {
       console.error('Search failed:', error)
-      // Use demo search as fallback
-      simulateDemoSearch()
+      setSearchResults([])
     } finally {
       setIsSearching(false)
     }
-  }
-
-  function simulateDemoSearch() {
-    const query = searchQuery.toLowerCase()
-
-    const demoOrgs: SearchResult[] = [
-      {
-        id: '1',
-        name: 'Acme Corporation',
-        slug: 'acme-corp',
-        customer_number: 'VEU-A1B2C',
-        plan: 'unlimited',
-        status: 'active',
-        device_limit: 5000,
-        agent_limit: 100,
-        user_limit: 50,
-        member_count: 12,
-        device_count: 245,
-        agent_count: 8,
-        created_at: '2024-06-15T10:00:00Z',
-        updated_at: '2025-01-20T14:30:00Z',
-      },
-      {
-        id: '2',
-        name: 'TechStart Ltd',
-        slug: 'techstart',
-        customer_number: 'VEU-D3E4F',
-        plan: 'starter',
-        status: 'active',
-        device_limit: 100,
-        agent_limit: 10,
-        user_limit: 10,
-        member_count: 3,
-        device_count: 45,
-        agent_count: 2,
-        created_at: '2024-09-20T08:00:00Z',
-        updated_at: '2025-01-18T09:15:00Z',
-      },
-      {
-        id: '3',
-        name: 'NewCo Industries',
-        slug: 'newco',
-        customer_number: 'VEU-G5H6I',
-        plan: 'trial',
-        status: 'trial',
-        device_limit: 100,
-        agent_limit: 10,
-        user_limit: 5,
-        trial_ends_at: '2025-02-10T00:00:00Z',
-        member_count: 2,
-        device_count: 18,
-        agent_count: 1,
-        created_at: '2025-01-27T12:00:00Z',
-        updated_at: '2025-01-28T16:45:00Z',
-      },
-    ]
-
-    // Filter by search query
-    const filtered = demoOrgs.filter(org =>
-      org.name.toLowerCase().includes(query) ||
-      org.customer_number.toLowerCase().includes(query) ||
-      org.slug.toLowerCase().includes(query)
-    )
-
-    setSearchResults(filtered)
   }
 
   return (

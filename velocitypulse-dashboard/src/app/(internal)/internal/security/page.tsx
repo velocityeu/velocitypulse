@@ -66,78 +66,7 @@ export default function SecurityPage() {
     }
   }
 
-  // Demo data
-  const demoLogs: AuditLog[] = [
-    {
-      id: '1',
-      organization_id: 'org_1',
-      actor_type: 'user',
-      actor_id: 'user_abc123',
-      action: 'agent.created',
-      resource_type: 'agent',
-      resource_id: 'agent_xyz',
-      metadata: { name: 'Office Agent' },
-      ip_address: '192.168.1.100',
-      created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '2',
-      organization_id: 'org_2',
-      actor_type: 'webhook',
-      actor_id: 'stripe',
-      action: 'subscription.created',
-      resource_type: 'subscription',
-      resource_id: 'sub_123',
-      metadata: { plan: 'starter' },
-      created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '3',
-      organization_id: 'org_3',
-      actor_type: 'system',
-      action: 'organization.suspended',
-      resource_type: 'organization',
-      resource_id: 'org_3',
-      metadata: { reason: 'trial_expired' },
-      created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '4',
-      organization_id: 'org_1',
-      actor_type: 'user',
-      actor_id: 'user_def456',
-      action: 'member.invited',
-      resource_type: 'member',
-      resource_id: 'member_789',
-      metadata: { email: 'newuser@example.com', role: 'editor' },
-      ip_address: '10.0.0.50',
-      created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '5',
-      organization_id: 'org_4',
-      actor_type: 'webhook',
-      actor_id: 'stripe',
-      action: 'subscription.payment_failed',
-      resource_type: 'invoice',
-      resource_id: 'inv_abc',
-      metadata: { amount: 5000 },
-      created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '6',
-      organization_id: 'org_5',
-      actor_type: 'user',
-      actor_id: 'user_ghi789',
-      action: 'agent.api_key_rotated',
-      resource_type: 'agent',
-      resource_id: 'agent_old',
-      ip_address: '172.16.0.1',
-      created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    },
-  ]
-
-  const data = logs.length > 0 ? logs : demoLogs
+  const data = logs
 
   // Filter logs
   const filteredLogs = data.filter((log) => {
@@ -304,11 +233,6 @@ export default function SecurityPage() {
         </CardContent>
       </Card>
 
-      {logs.length === 0 && (
-        <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-200">
-          Showing demo data. Connect to database to see real audit logs.
-        </div>
-      )}
     </div>
   )
 }

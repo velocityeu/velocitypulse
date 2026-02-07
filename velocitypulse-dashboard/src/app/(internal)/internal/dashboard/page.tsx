@@ -8,7 +8,6 @@ import {
   CreditCard,
   TrendingUp,
   Clock,
-  AlertTriangle,
   CheckCircle,
   XCircle,
 } from 'lucide-react'
@@ -66,22 +65,43 @@ export default function InternalDashboardPage() {
     }
   }
 
-  // Demo data while API is not connected
-  const demoMetrics: DashboardMetrics = {
-    totalOrganizations: 47,
-    activeOrganizations: 32,
-    trialOrganizations: 12,
-    suspendedOrganizations: 3,
-    totalUsers: 156,
-    mrr: 245000, // in pence
-    arr: 2940000,
-    trialConversionRate: 34.5,
-    expiringTrials: 5,
-    recentSignups: 8,
-    churnedThisMonth: 2,
+  const data = metrics
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Admin Dashboard</h1>
+          <p className="text-muted-foreground">
+            Overview of VelocityPulse platform metrics
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-32 rounded-lg bg-muted animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
   }
 
-  const data = metrics || demoMetrics
+  if (!data) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Admin Dashboard</h1>
+          <p className="text-muted-foreground">
+            Overview of VelocityPulse platform metrics
+          </p>
+        </div>
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            Failed to load metrics. Please try again later.
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   const statCards = [
     {
@@ -235,11 +255,6 @@ export default function InternalDashboardPage() {
         </CardContent>
       </Card>
 
-      {!metrics && (
-        <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-200">
-          Showing demo data. Connect to database to see real metrics.
-        </div>
-      )}
     </div>
   )
 }

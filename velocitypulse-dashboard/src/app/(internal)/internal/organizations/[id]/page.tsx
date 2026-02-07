@@ -118,104 +118,31 @@ export default function OrganizationDetailPage() {
     }
   }
 
-  // Demo data
-  const demoOrg: OrganizationDetails = {
-    id: params.id as string,
-    name: 'Acme Corporation',
-    slug: 'acme-corp',
-    customer_number: 'VEU-A1B2C',
-    stripe_customer_id: 'cus_ABC123',
-    stripe_subscription_id: 'sub_XYZ789',
-    plan: 'unlimited',
-    status: 'active',
-    device_limit: 5000,
-    agent_limit: 100,
-    user_limit: 50,
-    member_count: 12,
-    device_count: 245,
-    agent_count: 8,
-    created_at: '2024-06-15T10:00:00Z',
-    updated_at: '2025-01-20T14:30:00Z',
-    agents: [
-      {
-        id: 'agent_1',
-        name: 'Office Network Agent',
-        description: 'Main office monitoring',
-        api_key_prefix: 'vp_acme1234',
-        is_enabled: true,
-        last_seen_at: new Date(Date.now() - 60000).toISOString(),
-        last_ip_address: '192.168.1.100',
-        version: '1.0.0',
-        device_count: 156,
-        segment_count: 3,
-        is_online: true,
-      },
-      {
-        id: 'agent_2',
-        name: 'Data Center Agent',
-        description: 'Server room monitoring',
-        api_key_prefix: 'vp_acme5678',
-        is_enabled: true,
-        last_seen_at: new Date(Date.now() - 300000).toISOString(),
-        version: '1.0.0',
-        device_count: 89,
-        segment_count: 2,
-        is_online: true,
-      },
-    ],
-    segments: [
-      {
-        id: 'seg_1',
-        agent_id: 'agent_1',
-        name: 'Office LAN',
-        cidr: '192.168.1.0/24',
-        scan_interval_seconds: 300,
-        is_enabled: true,
-        last_scan_at: new Date(Date.now() - 120000).toISOString(),
-        device_count: 85,
-      },
-      {
-        id: 'seg_2',
-        agent_id: 'agent_1',
-        name: 'Guest Network',
-        cidr: '192.168.10.0/24',
-        scan_interval_seconds: 600,
-        is_enabled: true,
-        last_scan_at: new Date(Date.now() - 180000).toISOString(),
-        device_count: 45,
-      },
-    ],
-    recent_audit_logs: [
-      {
-        id: '1',
-        organization_id: params.id as string,
-        actor_type: 'user',
-        actor_id: 'user_123',
-        action: 'agent.created',
-        resource_type: 'agent',
-        resource_id: 'agent_456',
-        created_at: '2025-01-28T14:30:00Z',
-      },
-      {
-        id: '2',
-        organization_id: params.id as string,
-        actor_type: 'webhook',
-        actor_id: 'stripe',
-        action: 'subscription.created',
-        resource_type: 'subscription',
-        resource_id: 'sub_789',
-        created_at: '2025-01-20T10:00:00Z',
-      },
-    ],
-  }
-
-  const data = org || demoOrg
+  const data = org
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="h-8 w-48 bg-muted animate-pulse rounded" />
         <div className="h-64 bg-muted animate-pulse rounded-lg" />
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-2xl font-bold tracking-tight">Organization Not Found</h1>
+        </div>
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            This organization could not be found or you do not have access.
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -607,11 +534,6 @@ export default function OrganizationDetailPage() {
         </div>
       </div>
 
-      {!org && (
-        <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-200">
-          Showing demo data. Connect to database to see real organization details.
-        </div>
-      )}
     </div>
   )
 }

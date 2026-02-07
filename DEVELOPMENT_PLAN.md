@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: MVP Complete - Ready for Soft Launch**
+**Current Status: Tier 3 Complete - Enterprise Features Shipped**
 
 ---
 
@@ -119,9 +119,11 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 4. ~~**Form Delivery**~~ - COMPLETE (Resend email + Supabase storage for contact/partner forms)
 5. ~~**Stripe Cancellation**~~ - COMPLETE (admin cancel cancels Stripe subscription)
 6. ~~**Payment Failure Email**~~ - COMPLETE (Resend email on invoice.payment_failed)
-7. **White-label** - Unlimited tier feature
-8. **Advanced Analytics** - Charts/reports
-9. **SSO (SAML)** - Enterprise feature
+7. ~~**White-label**~~ - COMPLETE (custom branding for unlimited tier: display name, logo, primary color)
+8. ~~**Advanced Analytics**~~ - COMPLETE (device status history, uptime charts, response time graphs via Recharts)
+9. ~~**SSO (SAML)**~~ - COMPLETE (Clerk Enterprise Connections, per-org domain + IdP config)
+10. ~~**mDNS + SSDP Discovery**~~ - COMPLETE (parallel multicast scanning with device deduplication)
+11. ~~**Zoho Help Desk**~~ - COMPLETE (third form delivery channel alongside Resend + Supabase)
 
 ---
 
@@ -245,16 +247,44 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [x] ErrorBoundary reports to Sentry in production
 - [x] Gated on NEXT_PUBLIC_SENTRY_DSN (disabled until DSN configured)
 
-### Phase 7: Enterprise Features (Priority: LOW)
+### Phase 7: Enterprise Features (Priority: LOW) - COMPLETE
 
-#### 7.1 White-Label
-- [ ] Custom branding support (logo, colors)
-- [ ] Custom domain support
-- [ ] Remove VelocityPulse branding for Unlimited tier
+#### 7.1 White-Label Branding - COMPLETE
+- [x] Custom branding support (display name, logo URL, primary color)
+- [x] `useBranding()` hook with `resolveBranding()` for non-hook use
+- [x] Branding API route (`PUT /api/dashboard/branding`) with validation + audit logging
+- [x] Layout components (DashboardShell, Sidebar, Header, Footer) use resolved branding
+- [x] Settings page Branding tab (conditional on unlimited plan) with preview + reset
+- [x] Gated to unlimited tier via `PLAN_LIMITS.whiteLabel`
 
-#### 7.2 SSO
-- [ ] SAML integration via Clerk
-- [ ] Custom identity provider support
+#### 7.2 SSO/SAML - COMPLETE
+- [x] SAML integration via Clerk Enterprise Connections API
+- [x] SSO API routes (`GET/PUT/DELETE /api/dashboard/sso`)
+- [x] Settings page SSO tab with domain input, metadata URL, IdP config details (ACS URL, Entity ID)
+- [x] Enable/disable toggle with graceful Clerk plan detection
+- [x] Gated to unlimited tier via `PLAN_LIMITS.sso`
+
+#### 7.3 Advanced Analytics - COMPLETE
+- [x] `device_status_history` table with RLS + pruning function (migration 006)
+- [x] Fire-and-forget history INSERT in device status update route
+- [x] Analytics API (`GET /api/dashboard/analytics?range=24h|7d|30d&deviceId=`)
+- [x] Analytics page with Recharts: response time LineChart, uptime cards, status timeline
+- [x] Device selector dropdown and time range toggle
+- [x] Sidebar Analytics nav item with BarChart3 icon
+
+#### 7.4 mDNS + SSDP Discovery - COMPLETE
+- [x] mDNS scanner querying 10+ service types (`_http._tcp`, `_printer._tcp`, `_googlecast._tcp`, etc.)
+- [x] SSDP scanner with UPnP description XML fetching (friendlyName, manufacturer)
+- [x] Discovery orchestrator runs ARP + mDNS + SSDP in parallel for local networks
+- [x] `mergeDiscoveredDevices()` deduplicates by IP, merges fields from all sources
+- [x] CIDR filtering for mDNS/SSDP results before merge
+- [x] `multicast-dns` npm package installed; `node-ssdp` already present
+
+#### 7.5 Zoho Help Desk Integration - COMPLETE
+- [x] Fixed optional `phone`/`website` params in `createPartnerApplicationTicket`
+- [x] Added `ZOHO_DEPARTMENT_ID` to env schema
+- [x] Wired Zoho as third delivery channel in `form-delivery.ts` via `Promise.allSettled`
+- [x] Skips silently if Zoho not configured; failures don't affect other channels
 
 ---
 
@@ -326,9 +356,33 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - `velocitypulse-dashboard/instrumentation.ts` (CREATED)
 - `velocitypulse-web/components/ErrorBoundary.tsx` (MODIFIED - reports to Sentry)
 
+**Tier 3 - Enterprise:**
+- `supabase/migrations/006_org_branding_and_analytics.sql` (CREATED - branding columns, SSO columns, device_status_history table)
+- `velocitypulse-dashboard/src/lib/hooks/useBranding.ts` (CREATED - branding resolution hook)
+- `velocitypulse-dashboard/src/lib/api/clerk-sso.ts` (CREATED - Clerk SAML utilities)
+- `velocitypulse-dashboard/src/app/api/dashboard/branding/route.ts` (CREATED - branding CRUD API)
+- `velocitypulse-dashboard/src/app/api/dashboard/sso/route.ts` (CREATED - SSO config API)
+- `velocitypulse-dashboard/src/app/api/dashboard/analytics/route.ts` (CREATED - analytics data API)
+- `velocitypulse-dashboard/src/app/(dashboard)/analytics/page.tsx` (CREATED - analytics page with Recharts)
+- `velocitypulse-dashboard/src/app/(dashboard)/settings/page.tsx` (MODIFIED - added Branding + SSO tabs)
+- `velocitypulse-dashboard/src/app/(dashboard)/billing/page.tsx` (MODIFIED - added enterprise features to Unlimited)
+- `velocitypulse-dashboard/src/components/layout/DashboardShell.tsx` (MODIFIED - useBranding)
+- `velocitypulse-dashboard/src/components/layout/Sidebar.tsx` (MODIFIED - useBranding + Analytics nav)
+- `velocitypulse-dashboard/src/components/layout/Header.tsx` (MODIFIED - optional branding props)
+- `velocitypulse-dashboard/src/components/layout/Footer.tsx` (MODIFIED - optional displayName prop)
+- `velocitypulse-dashboard/src/app/api/agent/devices/status/route.ts` (MODIFIED - history INSERT)
+- `velocitypulse-agent/src/scanner/mdns.ts` (CREATED - mDNS discovery)
+- `velocitypulse-agent/src/scanner/ssdp.ts` (CREATED - SSDP/UPnP discovery)
+- `velocitypulse-agent/src/scanner/discover.ts` (MODIFIED - mDNS/SSDP integration + merge)
+- `velocitypulse-agent/src/scanner/arp.ts` (MODIFIED - optional mac_address, added upnp_info/snmp_info)
+- `velocitypulse-web/lib/form-delivery.ts` (MODIFIED - Zoho as third channel)
+- `velocitypulse-web/lib/zoho.ts` (MODIFIED - optional phone/website params)
+- `velocitypulse-web/lib/env.ts` (MODIFIED - ZOHO_DEPARTMENT_ID)
+
 **Migrations:**
 - `supabase/migrations/004_notifications.sql` (CREATED - notification system tables)
 - `supabase/migrations/005_form_submissions.sql` (CREATED - form submissions table)
+- `supabase/migrations/006_org_branding_and_analytics.sql` (CREATED - branding, SSO, analytics)
 
 ---
 
@@ -366,4 +420,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: February 7, 2026 - Phases 3-6 Complete. MVP ready for soft launch. Remaining: E2E smoke test, Lighthouse check, enterprise features (white-label, SSO).*
+*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-3). Enterprise features shipped: white-label branding, SSO/SAML, advanced analytics, mDNS/SSDP discovery, Zoho integration. Remaining: E2E smoke test, Lighthouse check.*

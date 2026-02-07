@@ -139,6 +139,12 @@ export default clerkMiddleware(async (auth, request) => {
   // Auth check
   const { userId, sessionClaims } = await auth()
   if (!userId) {
+    // API routes get a JSON 401 — never redirect to HTML
+    if (pathname.startsWith('/api/')) {
+      return addSecurityHeaders(
+        NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      )
+    }
     const signInUrl = new URL('/sign-in', request.url)
     signInUrl.searchParams.set('redirect_url', request.url)
     return addSecurityHeaders(NextResponse.redirect(signInUrl))

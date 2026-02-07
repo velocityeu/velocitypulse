@@ -48,7 +48,7 @@ CREATE POLICY "device_status_history_org_isolation"
   FOR ALL
   USING (organization_id IN (
     SELECT organization_id FROM organization_members
-    WHERE user_id = auth.uid()
+    WHERE user_id = auth.uid()::text
   ));
 
 -- Service role bypass for agent API inserts

@@ -220,11 +220,19 @@ export async function GET() {
       return NextResponse.json({ hasOrganization: false })
     }
 
+    // Fetch staff status from users table
+    const { data: userRecord } = await supabase
+      .from('users')
+      .select('is_staff')
+      .eq('id', userId)
+      .single()
+
     return NextResponse.json({
       hasOrganization: true,
       organization: membership.organizations,
       role: membership.role,
       permissions: membership.permissions,
+      isStaff: userRecord?.is_staff === true,
     })
   } catch (error) {
     logger.error('Get organization error', error, { route: 'api/onboarding' })

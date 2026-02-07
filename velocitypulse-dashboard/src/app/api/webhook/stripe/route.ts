@@ -360,6 +360,7 @@ export async function POST(request: Request) {
 
 /**
  * Get email addresses of owners and admins for an organization.
+ * Joins organization_members with users table to resolve emails.
  */
 async function getOrgRecipients(
   supabase: ReturnType<typeof createServiceClient>,
@@ -367,9 +368,17 @@ async function getOrgRecipients(
 ): Promise<string[]> {
   const { data: members } = await supabase
     .from('organization_members')
-    .select('email, role')
+    .select('user_id, role')
     .eq('organization_id', orgId)
     .in('role', ['owner', 'admin'])
 
-  return members?.map(m => m.email).filter(Boolean) ?? []
+  if (!members || members.length === 0) return []
+
+  const userIds = members.map(m => m.user_id)
+  const { data: users } = await supabase
+    .from('users')
+    .select('email')
+    .in('id', userIds)
+
+  return users?.map(u => u.email).filter(Boolean) ?? []
 }

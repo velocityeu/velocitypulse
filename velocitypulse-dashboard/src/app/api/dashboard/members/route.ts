@@ -73,28 +73,31 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch members' }, { status: 500 })
     }
 
-    // Get Clerk user details for each member
-    const clerk = await clerkClient()
-    const membersWithUserData = await Promise.all(
-      (members || []).map(async (member) => {
-        try {
-          const user = await clerk.users.getUser(member.user_id)
-          return {
-            ...member,
-            user: {
+    // Batch-fetch user details from Supabase users table
+    const userIds = (members || []).map(m => m.user_id)
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, email, first_name, last_name, image_url')
+      .in('id', userIds)
+
+    const userMap = new Map(
+      (users || []).map((u: { id: string; email: string; first_name: string | null; last_name: string | null; image_url: string | null }) => [u.id, u])
+    )
+
+    const membersWithUserData = (members || []).map(member => {
+      const user = userMap.get(member.user_id)
+      return {
+        ...member,
+        user: user
+          ? {
               id: user.id,
-              email: user.emailAddresses[0]?.emailAddress || '',
-              firstName: user.firstName,
-              lastName: user.lastName,
-              fullName: [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Unknown',
-              imageUrl: user.imageUrl,
-            },
-          }
-        } catch {
-          // User might have been deleted from Clerk
-          return {
-            ...member,
-            user: {
+              email: user.email,
+              firstName: user.first_name,
+              lastName: user.last_name,
+              fullName: [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Unknown',
+              imageUrl: user.image_url,
+            }
+          : {
               id: member.user_id,
               email: 'Unknown',
               firstName: null,
@@ -102,10 +105,8 @@ export async function GET() {
               fullName: 'Unknown User',
               imageUrl: null,
             },
-          }
-        }
-      })
-    )
+      }
+    })
 
     return NextResponse.json({ members: membersWithUserData })
   } catch (error) {

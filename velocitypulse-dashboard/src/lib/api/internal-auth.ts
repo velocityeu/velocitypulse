@@ -1,13 +1,13 @@
-import { auth, currentUser } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/db/client'
 
 /**
- * Verify the current user has internal/staff access
- * Staff users are identified by:
- * 1. Being in the 'staff' organization in Clerk
- * 2. Having publicMetadata.role === 'staff' or 'admin'
+ * Verify the current user has internal/staff access.
+ * Staff status is stored in the Supabase `users.is_staff` column,
+ * synced from Clerk publicMetadata via the Clerk webhook.
  *
- * Development bypass requires ALLOW_DEV_BYPASS=true to be explicitly set
+ * Development bypass requires ALLOW_DEV_BYPASS=true to be explicitly set.
  */
 export async function verifyInternalAccess(): Promise<{
   authorized: boolean
@@ -22,7 +22,6 @@ export async function verifyInternalAccess(): Promise<{
     const { userId } = await auth()
 
     if (!userId) {
-      // In development with explicit bypass, allow anonymous access
       if (isDevelopment && allowDevBypass) {
         console.warn('[Internal Auth] Dev bypass: allowing unauthenticated access')
         return {
@@ -41,29 +40,22 @@ export async function verifyInternalAccess(): Promise<{
       }
     }
 
-    const user = await currentUser()
+    // Check staff status from Supabase users table
+    const supabase = createServiceClient()
+    const { data: user } = await supabase
+      .from('users')
+      .select('email, is_staff')
+      .eq('id', userId)
+      .single()
 
-    if (!user) {
-      return {
-        authorized: false,
-        error: NextResponse.json(
-          { error: 'User not found' },
-          { status: 401 }
-        ),
-      }
-    }
+    const isStaff = user?.is_staff === true
 
-    // Check for staff role in public metadata
-    const metadata = user.publicMetadata as { role?: string } | undefined
-    const isStaff = metadata?.role === 'staff' || metadata?.role === 'admin'
-
-    // In development with explicit bypass, allow non-staff users
     if (!isStaff && isDevelopment && allowDevBypass) {
-      console.warn(`[Internal Auth] Dev bypass: granting staff access to user ${user.id}`)
+      console.warn(`[Internal Auth] Dev bypass: granting staff access to user ${userId}`)
       return {
         authorized: true,
-        userId: user.id,
-        email: user.emailAddresses[0]?.emailAddress,
+        userId,
+        email: user?.email,
       }
     }
 
@@ -79,13 +71,12 @@ export async function verifyInternalAccess(): Promise<{
 
     return {
       authorized: true,
-      userId: user.id,
-      email: user.emailAddresses[0]?.emailAddress,
+      userId,
+      email: user?.email,
     }
   } catch (error) {
     console.error('Internal auth error:', error)
 
-    // In development with explicit bypass, allow access even if auth fails
     if (isDevelopment && allowDevBypass) {
       console.warn('[Internal Auth] Dev bypass: allowing access despite auth error')
       return {

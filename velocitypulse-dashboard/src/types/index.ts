@@ -12,6 +12,21 @@ export type SortField = 'name' | 'ip_address' | 'status' | 'last_check' | 'respo
 export type SortDirection = 'asc' | 'desc'
 
 // ==============================================
+// User Types (Clerk profile cache in Supabase)
+// ==============================================
+
+export interface User {
+  id: string              // Clerk user_id
+  email: string
+  first_name: string | null
+  last_name: string | null
+  image_url: string | null
+  is_staff: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ==============================================
 // Multi-Tenant: Organization Types
 // ==============================================
 

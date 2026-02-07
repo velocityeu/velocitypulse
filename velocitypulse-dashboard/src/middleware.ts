@@ -11,6 +11,7 @@ const isPublicRoute = createRouteMatcher([
   '/account-blocked(.*)',
   '/trial-expired(.*)',
   '/api/webhook/stripe',
+  '/api/webhook/clerk',
   '/api/agent/(.*)',
   '/api/cron/(.*)',
   '/api/health',
@@ -155,14 +156,23 @@ export default clerkMiddleware(async (auth, request) => {
     return addSecurityHeaders(NextResponse.redirect(signInUrl))
   }
 
-  // Internal routes require staff role
+  // Internal routes require staff role (checked via Supabase users table)
   if (isInternalRoute(request)) {
-    const { clerkClient: clerk } = await import('@clerk/nextjs/server')
-    const client = await clerk()
-    const user = await client.users.getUser(userId)
-    const metadata = user.publicMetadata as { role?: string } | undefined
-    const userRole = metadata?.role
-    if (userRole !== 'staff' && userRole !== 'admin') {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    let isStaff = false
+
+    if (url && key) {
+      const sb = createClient(url, key)
+      const { data: staffUser } = await sb
+        .from('users')
+        .select('is_staff')
+        .eq('id', userId)
+        .single()
+      isStaff = staffUser?.is_staff === true
+    }
+
+    if (!isStaff) {
       return addSecurityHeaders(NextResponse.redirect(new URL('/dashboard', request.url)))
     }
   }

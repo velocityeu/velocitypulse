@@ -155,6 +155,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Failed to update device' }, { status: 500 })
     }
 
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: membership.organization_id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'device.updated',
+      resource_type: 'device',
+      resource_id: id,
+      metadata: { name: device.name },
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] device.updated failed:', auditError)
+    })
+
     return NextResponse.json({ device })
   } catch (error) {
     console.error('Update device error:', error)

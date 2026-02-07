@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { authenticateAgent } from '@/lib/api/agent-auth'
 import { createServiceClient } from '@/lib/db/client'
 import { LATEST_AGENT_VERSION, AGENT_DOWNLOAD_URL, ENFORCE_AGENT_UPDATES } from '@/lib/constants'
-import type { AgentHeartbeatRequest, AgentHeartbeatResponse, NetworkSegment, AgentCommand } from '@/types'
+import { logger } from '@/lib/logger'
+import { validateRequest, heartbeatRequestSchema } from '@/lib/validations'
+import type { AgentHeartbeatResponse, NetworkSegment, AgentCommand } from '@/types'
 
 /**
  * Compare two semantic version strings
@@ -41,16 +43,22 @@ export async function POST(request: Request) {
       )
     }
 
-    // Parse request body
-    let body: AgentHeartbeatRequest
+    // Parse and validate request body
+    let rawBody: unknown
     try {
-      body = await request.json()
+      rawBody = await request.json()
     } catch {
       return NextResponse.json(
         { error: 'Invalid JSON body' },
         { status: 400 }
       )
     }
+
+    const validation = validateRequest(heartbeatRequestSchema, rawBody)
+    if (!validation.success) {
+      return NextResponse.json(validation.error, { status: 400 })
+    }
+    const body = validation.data
 
     const supabase = createServiceClient()
 
@@ -73,7 +81,7 @@ export async function POST(request: Request) {
       .order('created_at')
 
     if (segmentsError) {
-      console.error('Error fetching segments:', segmentsError)
+      logger.error('Error fetching segments', segmentsError, { route: 'api/agent/heartbeat' })
       return NextResponse.json(
         { error: 'Failed to fetch network segments' },
         { status: 500 }
@@ -114,7 +122,7 @@ export async function POST(request: Request) {
           })
         }
       } catch (autoUpgradeError) {
-        console.error('[AUTO-UPGRADE] Failed to queue upgrade:', autoUpgradeError)
+        logger.error('[AUTO-UPGRADE] Failed to queue upgrade', autoUpgradeError, { route: 'api/agent/heartbeat' })
       }
     }
 
@@ -130,7 +138,7 @@ export async function POST(request: Request) {
 
       pendingCommands = (commands || []) as AgentCommand[]
     } catch (commandsError) {
-      console.error('[HEARTBEAT] Failed to fetch pending commands:', commandsError)
+      logger.error('[HEARTBEAT] Failed to fetch pending commands', commandsError, { route: 'api/agent/heartbeat' })
     }
 
     const response: AgentHeartbeatResponse = {
@@ -150,7 +158,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error('Heartbeat error:', error)
+    logger.error('Heartbeat error', error, { route: 'api/agent/heartbeat' })
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

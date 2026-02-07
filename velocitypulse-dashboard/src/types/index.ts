@@ -42,6 +42,9 @@ export interface Organization {
   sso_enabled?: boolean
   sso_domain?: string
   sso_provider?: string
+  // Referral tracking
+  referral_code?: string
+  referred_by?: string
   created_at: string
   updated_at: string
 }
@@ -229,8 +232,19 @@ export type AuditAction =
   | 'segment.created'
   | 'segment.updated'
   | 'segment.deleted'
+  | 'category.created'
+  | 'category.updated'
+  | 'category.deleted'
+  | 'category.reordered'
   | 'device.created'
+  | 'device.updated'
   | 'device.deleted'
+  | 'notification_channel.created'
+  | 'notification_channel.updated'
+  | 'notification_channel.deleted'
+  | 'notification_rule.created'
+  | 'notification_rule.updated'
+  | 'notification_rule.deleted'
   | 'subscription.created'
   | 'subscription.cancelled'
   | 'subscription.payment_failed'

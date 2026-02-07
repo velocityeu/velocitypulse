@@ -80,6 +80,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create channel' }, { status: 500 })
     }
 
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: org.id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'notification_channel.created',
+      resource_type: 'notification_channel',
+      resource_id: channel.id,
+      metadata: { name: channel.name, channel_type },
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] notification_channel.created failed:', auditError)
+    })
+
     return NextResponse.json({ channel }, { status: 201 })
   } catch (error) {
     console.error('[NotificationChannels] Error:', error)

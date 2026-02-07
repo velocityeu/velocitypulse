@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
+import { validateRequest, createCategorySchema } from '@/lib/validations'
 
 export async function GET() {
   try {
@@ -54,7 +55,9 @@ export async function GET() {
       device_count: countMap[cat.id] || 0,
     }))
 
-    return NextResponse.json({ categories: categoriesWithCount })
+    const response = NextResponse.json({ categories: categoriesWithCount })
+    response.headers.set('Cache-Control', 'private, max-age=60')
+    return response
   } catch (error) {
     console.error('Dashboard categories error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -94,26 +97,22 @@ export async function POST(request: NextRequest) {
 
     const organizationId = membership.organization_id
 
-    // Parse request body
-    let body: {
-      name: string
-      slug?: string
-      icon?: string
-      color?: string
-      description?: string
-    }
+    // Parse and validate request body
+    let rawBody: unknown
     try {
-      body = await request.json()
+      rawBody = await request.json()
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    if (!body.name || body.name.trim().length < 1) {
-      return NextResponse.json({ error: 'Category name is required' }, { status: 400 })
+    const validation = validateRequest(createCategorySchema, rawBody)
+    if (!validation.success) {
+      return NextResponse.json(validation.error, { status: 400 })
     }
+    const body = validation.data
 
-    // Generate slug if not provided
-    const slug = body.slug?.trim() || body.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    // Generate slug from name
+    const slug = body.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
     // Get max sort_order
     const { data: maxCategory } = await supabase
@@ -148,6 +147,19 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({ error: 'Failed to create category' }, { status: 500 })
     }
+
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: organizationId,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'category.created',
+      resource_type: 'category',
+      resource_id: category.id,
+      metadata: { name: category.name },
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] category.created failed:', auditError)
+    })
 
     return NextResponse.json({ category: { ...category, device_count: 0 } }, { status: 201 })
   } catch (error) {

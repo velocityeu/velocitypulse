@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/db/client'
 import { PLAN_LIMITS } from '@/lib/constants'
+import { logger } from '@/lib/logger'
 import {
   sendSubscriptionActivatedEmail,
   sendSubscriptionCancelledEmail,
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
   try {
     event = stripeClient.webhooks.constructEvent(body, signature, webhookSecret)
   } catch (err) {
-    console.error('Webhook signature verification failed:', err)
+    logger.error('Webhook signature verification failed', err, { route: 'api/webhook/stripe' })
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
             .eq('stripe_customer_id', customerId)
 
           if (updateError) {
-            console.error('Failed to update organization:', updateError)
+            logger.error('Failed to update organization', updateError, { route: 'api/webhook/stripe' })
           }
 
           // Create subscription record
@@ -149,7 +150,7 @@ export async function POST(request: Request) {
               .single()
             if (orgForEmail && recipients.length > 0) {
               sendSubscriptionActivatedEmail(orgForEmail.name, plan, recipients).catch(err =>
-                console.error('[Webhook] Failed to send activation email:', err)
+                logger.error('[Webhook] Failed to send activation email', err, { route: 'api/webhook/stripe' })
               )
             }
           }
@@ -240,7 +241,7 @@ export async function POST(request: Request) {
             .single()
           if (cancelOrg && cancelRecipients.length > 0) {
             sendSubscriptionCancelledEmail(cancelOrg.name, cancelRecipients).catch(err =>
-              console.error('[Webhook] Failed to send cancellation email:', err)
+              logger.error('[Webhook] Failed to send cancellation email', err, { route: 'api/webhook/stripe' })
             )
           }
         }
@@ -289,7 +290,7 @@ export async function POST(request: Request) {
               : 'unknown'
             const currency = (invoice.currency ?? 'gbp').toUpperCase()
             sendPaymentFailedEmail(failOrg.name, amountFormatted, currency, failRecipients).catch(err =>
-              console.error('[Webhook] Failed to send payment failed email:', err)
+              logger.error('[Webhook] Failed to send payment failed email', err, { route: 'api/webhook/stripe' })
             )
           }
         }
@@ -320,7 +321,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error('Webhook error:', error)
+    logger.error('Webhook error', error, { route: 'api/webhook/stripe' })
     return NextResponse.json(
       { error: 'Webhook handler failed' },
       { status: 500 }

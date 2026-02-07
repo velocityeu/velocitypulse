@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: Tier 4 Complete - Production SaaS Infrastructure Shipped**
+**Current Status: Tier 5 Complete - Testing, Observability, Security, Performance, DX & Growth**
 
 ---
 
@@ -333,6 +333,44 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [x] Dashboard link added to marketing site footer (Product section)
 - [x] Uses `NEXT_PUBLIC_DASHBOARD_URL` env var with fallback to `https://app.velocitypulse.io`
 
+### Phase 9: Testing, Observability, Security, Performance, DX & Growth (Priority: HIGH) - COMPLETE
+
+#### 9.1 Testing & QA - COMPLETE
+- [x] Vitest setup for velocitypulse-dashboard (vitest.config.ts, test/setup.ts, test scripts)
+- [x] 5 critical API route unit tests (heartbeat, device status, agents CRUD, billing subscription, onboarding) — 26 tests
+- [x] 4 agent unit test suites (ip-utils, arp, config, discover) — 38 tests
+- [x] Vitest setup for velocitypulse-web + env.test.ts — 11 tests
+- [x] Playwright E2E smoke test (playwright.config.ts + e2e/smoke.spec.ts)
+
+#### 9.2 Observability - COMPLETE
+- [x] Structured logger (`src/lib/logger.ts`) with Sentry captureException on errors
+- [x] Sentry wired into 10 priority API routes (replaced console.error with logger.error)
+- [x] Health check endpoints (`/api/health` in dashboard + web, no auth required)
+- [x] Complete audit logging for categories, notifications, and devices (~11 routes)
+- [x] New AuditAction types: category.created/updated/deleted/reordered, device.updated, notification_channel.created/updated/deleted, notification_rule.created/updated/deleted
+
+#### 9.3 Performance - COMPLETE
+- [x] Cache-Control headers on GET routes (categories 60s, segments 30s, subscription 300s)
+- [x] Zod env validation for dashboard (`src/lib/env.ts` — getServerEnv/getClientEnv with caching)
+
+#### 9.4 Security Hardening - COMPLETE
+- [x] New `src/middleware.ts` merging proxy.ts + security headers + rate limiting
+- [x] Security headers: CSP (Clerk, Supabase, Stripe, Sentry domains), HSTS, X-Frame-Options DENY, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, X-API-Version
+- [x] In-memory per-IP rate limiting on agent POST endpoints (heartbeat 120/min, status 60/min, discovered 30/min) and user mutations (onboarding 5/min, checkout 10/min, agents 10/min)
+- [x] Zod input validation schemas (`src/lib/validations/index.ts`) for 7 routes
+- [x] Consistent validation error format: `{ error, code: 'VALIDATION_ERROR', details }`
+
+#### 9.5 Developer Experience - COMPLETE
+- [x] Error response helpers (`src/lib/api/errors.ts`) — unauthorized, forbidden, notFound, validationError, serverError, rateLimited
+- [x] API documentation (`docs/API.md`) covering all 45+ routes
+
+#### 9.6 Growth Features - COMPLETE
+- [x] Usage dashboard (`/usage` page + `/api/dashboard/usage`) — device/agent/member counts vs limits, activity stats
+- [x] Device reports (`/reports` page + `/api/dashboard/reports/devices?format=csv|json&status=all|online|offline`)
+- [x] Usage + Reports added to sidebar navigation (Gauge + FileText icons)
+- [x] Referral tracking (migration 007: referral_code + referred_by columns on organizations)
+- [x] Onboarding POST accepts optional referralCode parameter
+
 ---
 
 ## Part 5: File Reference
@@ -446,10 +484,48 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - `velocitypulse-dashboard/vercel.json` (MODIFIED - lifecycle cron config)
 - `velocitypulse-web/components/layout/Footer.tsx` (MODIFIED - dashboard link)
 
+**Tier 5 - Testing, Observability, Security, Performance, DX & Growth:**
+- `velocitypulse-dashboard/vitest.config.ts` (CREATED - Vitest config with React plugin)
+- `velocitypulse-dashboard/src/test/setup.ts` (CREATED - test mocks for Clerk, Supabase, next/headers)
+- `velocitypulse-dashboard/src/app/api/agent/heartbeat/route.test.ts` (CREATED - 4 tests)
+- `velocitypulse-dashboard/src/app/api/agent/devices/status/route.test.ts` (CREATED - 5 tests)
+- `velocitypulse-dashboard/src/app/api/dashboard/agents/route.test.ts` (CREATED - 6 tests)
+- `velocitypulse-dashboard/src/app/api/billing/subscription/route.test.ts` (CREATED - 4 tests)
+- `velocitypulse-dashboard/src/app/api/onboarding/route.test.ts` (CREATED - 7 tests)
+- `velocitypulse-agent/src/utils/ip-utils.test.ts` (CREATED - 16 tests)
+- `velocitypulse-agent/src/scanner/arp.test.ts` (CREATED - 8 tests)
+- `velocitypulse-agent/src/config.test.ts` (CREATED - 10 tests)
+- `velocitypulse-agent/src/scanner/discover.test.ts` (CREATED - 4 tests)
+- `velocitypulse-web/vitest.config.ts` (CREATED - Vitest config)
+- `velocitypulse-web/lib/env.test.ts` (CREATED - 11 tests)
+- `velocitypulse-dashboard/playwright.config.ts` (CREATED - E2E config)
+- `velocitypulse-dashboard/e2e/smoke.spec.ts` (CREATED - smoke test)
+- `velocitypulse-dashboard/src/lib/logger.ts` (CREATED - structured logger with Sentry)
+- `velocitypulse-dashboard/src/app/api/health/route.ts` (CREATED - health check endpoint)
+- `velocitypulse-web/app/api/health/route.ts` (CREATED - health check endpoint)
+- `velocitypulse-dashboard/src/lib/env.ts` (CREATED - Zod env validation)
+- `velocitypulse-dashboard/src/middleware.ts` (CREATED - replaces proxy.ts with security headers + rate limiting)
+- `velocitypulse-dashboard/src/lib/validations/index.ts` (CREATED - Zod schemas for 7 routes)
+- `velocitypulse-dashboard/src/lib/api/errors.ts` (CREATED - error response helpers)
+- `velocitypulse-dashboard/docs/API.md` (CREATED - API documentation)
+- `velocitypulse-dashboard/src/app/api/dashboard/usage/route.ts` (CREATED - usage stats API)
+- `velocitypulse-dashboard/src/app/(dashboard)/usage/page.tsx` (CREATED - usage dashboard)
+- `velocitypulse-dashboard/src/app/api/dashboard/reports/devices/route.ts` (CREATED - CSV/JSON export)
+- `velocitypulse-dashboard/src/app/(dashboard)/reports/page.tsx` (CREATED - reports page)
+- `velocitypulse-dashboard/src/types/index.ts` (MODIFIED - new AuditAction types, Organization referral fields)
+- `velocitypulse-dashboard/src/components/layout/Sidebar.tsx` (MODIFIED - Usage + Reports nav)
+- `velocitypulse-dashboard/src/app/api/onboarding/route.ts` (MODIFIED - logger, Zod validation, referralCode)
+- `velocitypulse-dashboard/src/proxy.ts` (REMOVED - replaced by middleware.ts)
+- 10 API routes (MODIFIED - console.error → logger.error)
+- 7 API routes (MODIFIED - Zod input validation)
+- 11 API routes (MODIFIED - audit log inserts)
+- 3 GET routes (MODIFIED - Cache-Control headers)
+
 **Migrations:**
 - `supabase/migrations/004_notifications.sql` (CREATED - notification system tables)
 - `supabase/migrations/005_form_submissions.sql` (CREATED - form submissions table)
 - `supabase/migrations/006_org_branding_and_analytics.sql` (CREATED - branding, SSO, analytics)
+- `supabase/migrations/007_usage_and_referrals.sql` (CREATED - referral tracking columns + indexes)
 
 ---
 
@@ -490,4 +566,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-4). Production SaaS infrastructure shipped: route protection, billing self-service, lifecycle automation (trial/grace/cleanup), lifecycle emails, admin panel data wiring, cross-site linking. Remaining: E2E smoke test, Lighthouse check.*
+*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-5). Tier 5 shipped: 75 unit tests across 3 projects (Vitest), Playwright E2E smoke, structured logging with Sentry, health checks, complete audit logging, security headers + CSP + rate limiting (middleware.ts), Zod input validation on 7 routes, Zod env validation, Cache-Control headers, error response helpers, API docs, usage dashboard, device reports (CSV/JSON export), referral tracking. No new production dependencies.*

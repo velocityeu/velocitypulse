@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { authenticateAgent } from '@/lib/api/agent-auth'
 import { createServiceClient } from '@/lib/db/client'
 import { triggerDeviceNotification } from '@/lib/notifications'
-import type { AgentStatusRequest, AgentStatusResponse, DeviceStatus } from '@/types'
+import { logger } from '@/lib/logger'
+import { validateRequest, statusReportSchema } from '@/lib/validations'
+import type { AgentStatusResponse, DeviceStatus } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,10 +19,10 @@ export async function POST(request: Request) {
       )
     }
 
-    // Parse request body
-    let body: AgentStatusRequest
+    // Parse and validate request body
+    let rawBody: unknown
     try {
-      body = await request.json()
+      rawBody = await request.json()
     } catch {
       return NextResponse.json(
         { error: 'Invalid JSON body' },
@@ -28,12 +30,11 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!body.reports || !Array.isArray(body.reports)) {
-      return NextResponse.json(
-        { error: 'reports array is required' },
-        { status: 400 }
-      )
+    const validation = validateRequest(statusReportSchema, rawBody)
+    if (!validation.success) {
+      return NextResponse.json(validation.error, { status: 400 })
     }
+    const body = validation.data
 
     const supabase = createServiceClient()
     const errors: string[] = []
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
           })
           .then(({ error: historyError }) => {
             if (historyError) {
-              console.error('[StatusUpdate] History insert error:', historyError.message)
+              logger.error('[StatusUpdate] History insert error', historyError, { route: 'api/agent/devices/status' })
             }
           })
 
@@ -130,7 +131,7 @@ export async function POST(request: Request) {
                 response_time_ms: report.response_time_ms,
               }
             ).catch((err) => {
-              console.error('[StatusUpdate] Notification error:', err)
+              logger.error('[StatusUpdate] Notification error', err, { route: 'api/agent/devices/status' })
             })
           }
         }
@@ -149,7 +150,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error('Status update error:', error)
+    logger.error('Status update error', error, { route: 'api/agent/devices/status' })
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

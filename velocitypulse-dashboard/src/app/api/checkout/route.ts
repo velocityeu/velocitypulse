@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/db/client'
+import { logger } from '@/lib/logger'
 
 // Force Node.js runtime (not Edge) - required for Stripe
 export const runtime = 'nodejs'
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
       .single()
 
     if (orgError || !org) {
-      console.error('Organization lookup failed:', orgError)
+      logger.error('Organization lookup failed', orgError, { route: 'api/checkout' })
       return NextResponse.json({ error: `Organization not found: ${orgError?.message || 'no org'}` }, { status: 404 })
     }
 
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
       .single()
 
     if (!membership) {
-      console.error('Membership lookup failed for user:', userId, 'org:', organizationId)
+      logger.error('Membership lookup failed', undefined, { route: 'api/checkout', userId, organizationId })
       return NextResponse.json({ error: `Not a member of this organization (user: ${userId})` }, { status: 403 })
     }
 
@@ -135,7 +136,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    console.error('Checkout error:', error)
+    logger.error('Checkout error', error, { route: 'api/checkout' })
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       { error: `Failed to create checkout session: ${errorMessage}` },

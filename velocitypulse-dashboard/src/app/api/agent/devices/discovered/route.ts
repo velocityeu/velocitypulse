@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authenticateAgent } from '@/lib/api/agent-auth'
 import { createServiceClient } from '@/lib/db/client'
+import { logger } from '@/lib/logger'
 import type { AgentDiscoveryRequest, AgentDiscoveryResponse, DiscoveredDevice, DiscoveryMethod } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
         else if (result === 'updated') updated++
         else unchanged++
       } catch (deviceError) {
-        console.error(`Error processing device ${device.ip_address}:`, deviceError)
+        logger.error(`Error processing device ${device.ip_address}`, deviceError, { route: 'api/agent/devices/discovered' })
       }
     }
 
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
       .eq('id', body.segment_id)
 
     if (updateError) {
-      console.error('Error updating segment scan stats:', updateError)
+      logger.error('Error updating segment scan stats', updateError, { route: 'api/agent/devices/discovered' })
     }
 
     const response: AgentDiscoveryResponse = {
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error('Device discovery error:', error)
+    logger.error('Device discovery error', error, { route: 'api/agent/devices/discovered' })
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

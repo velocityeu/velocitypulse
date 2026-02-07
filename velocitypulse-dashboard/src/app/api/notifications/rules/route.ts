@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { getOrganizationForUser } from '@/lib/api/organization'
+import { validateRequest, createNotificationRuleSchema } from '@/lib/validations'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,15 +52,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
 
-    const body = await request.json()
-    const { name, description, event_type, channel_ids, filters, cooldown_minutes } = body
-
-    if (!name || !event_type || !channel_ids || channel_ids.length === 0) {
-      return NextResponse.json(
-        { error: 'name, event_type, and channel_ids are required' },
-        { status: 400 }
-      )
+    let rawBody: unknown
+    try {
+      rawBody = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
+
+    const validation = validateRequest(createNotificationRuleSchema, rawBody)
+    if (!validation.success) {
+      return NextResponse.json(validation.error, { status: 400 })
+    }
+    const data = validation.data
 
     const supabase = createServiceClient()
 
@@ -67,13 +71,13 @@ export async function POST(request: Request) {
       .from('notification_rules')
       .insert({
         organization_id: org.id,
-        name,
-        description,
-        event_type,
-        channel_ids,
-        filters: filters || {},
-        cooldown_minutes: cooldown_minutes || 5,
-        is_enabled: true,
+        name: data.name,
+        description: data.description,
+        event_type: data.event_type,
+        channel_ids: data.channel_ids,
+        filters: data.filters || {},
+        cooldown_minutes: data.cooldown_minutes,
+        is_enabled: data.is_enabled,
       })
       .select()
       .single()
@@ -82,6 +86,19 @@ export async function POST(request: Request) {
       console.error('[NotificationRules] Error creating:', error)
       return NextResponse.json({ error: 'Failed to create rule' }, { status: 500 })
     }
+
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: org.id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'notification_rule.created',
+      resource_type: 'notification_rule',
+      resource_id: rule.id,
+      metadata: { name: rule.name, event_type: rule.event_type },
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] notification_rule.created failed:', auditError)
+    })
 
     return NextResponse.json({ rule }, { status: 201 })
   } catch (error) {

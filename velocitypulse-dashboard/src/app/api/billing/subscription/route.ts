@@ -34,10 +34,14 @@ export async function GET() {
       .single()
 
     if (!subscription) {
-      return NextResponse.json({ subscription: null })
+      const response = NextResponse.json({ subscription: null })
+      response.headers.set('Cache-Control', 'private, max-age=300')
+      return response
     }
 
-    return NextResponse.json({ subscription })
+    const response = NextResponse.json({ subscription })
+    response.headers.set('Cache-Control', 'private, max-age=300')
+    return response
   } catch (error) {
     console.error('Subscription fetch error:', error)
     return NextResponse.json(

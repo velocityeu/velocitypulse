@@ -140,6 +140,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Failed to update category' }, { status: 500 })
     }
 
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: membership.organization_id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'category.updated',
+      resource_type: 'category',
+      resource_id: id,
+      metadata: { name: category.name },
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] category.updated failed:', auditError)
+    })
+
     // Get device count
     const { count } = await supabase
       .from('devices')
@@ -213,6 +226,19 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       console.error('Delete category error:', deleteError)
       return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 })
     }
+
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: membership.organization_id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'category.deleted',
+      resource_type: 'category',
+      resource_id: id,
+      metadata: { name: category.name },
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] category.deleted failed:', auditError)
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

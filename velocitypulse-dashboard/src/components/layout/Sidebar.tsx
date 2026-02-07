@@ -15,6 +15,8 @@ import {
   Menu,
   ExternalLink,
   Shield,
+  Gauge,
+  FileText,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -29,6 +31,8 @@ const navItems = [
   { label: 'Agents', href: '/agents', icon: Server },
   { label: 'Users', href: '/users', icon: Users },
   { label: 'Notifications', href: '/notifications', icon: Bell },
+  { label: 'Usage', href: '/usage', icon: Gauge },
+  { label: 'Reports', href: '/reports', icon: FileText },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 

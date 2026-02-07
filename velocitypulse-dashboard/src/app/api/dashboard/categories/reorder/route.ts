@@ -89,6 +89,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: organizationId,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'category.reordered',
+      resource_type: 'category',
+      resource_id: organizationId,
+      metadata: { ordered_ids: body.orderedIds },
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] category.reordered failed:', auditError)
+    })
+
     // Return updated categories
     const { data: categories, error: fetchError } = await supabase
       .from('categories')

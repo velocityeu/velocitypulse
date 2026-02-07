@@ -80,6 +80,19 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Failed to update channel' }, { status: 500 })
     }
 
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: org.id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'notification_channel.updated',
+      resource_type: 'notification_channel',
+      resource_id: channelId,
+      metadata: { name: channel.name },
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] notification_channel.updated failed:', auditError)
+    })
+
     return NextResponse.json({ channel })
   } catch (error) {
     console.error('[NotificationChannel] Error:', error)
@@ -113,6 +126,18 @@ export async function DELETE(request: Request, { params }: RouteParams) {
       console.error('[NotificationChannel] Error deleting:', error)
       return NextResponse.json({ error: 'Failed to delete channel' }, { status: 500 })
     }
+
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: org.id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'notification_channel.deleted',
+      resource_type: 'notification_channel',
+      resource_id: channelId,
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] notification_channel.deleted failed:', auditError)
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

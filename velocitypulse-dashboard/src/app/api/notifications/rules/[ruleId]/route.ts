@@ -84,6 +84,19 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Failed to update rule' }, { status: 500 })
     }
 
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: org.id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'notification_rule.updated',
+      resource_type: 'notification_rule',
+      resource_id: ruleId,
+      metadata: { name: rule.name },
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] notification_rule.updated failed:', auditError)
+    })
+
     return NextResponse.json({ rule })
   } catch (error) {
     console.error('[NotificationRule] Error:', error)
@@ -117,6 +130,18 @@ export async function DELETE(request: Request, { params }: RouteParams) {
       console.error('[NotificationRule] Error deleting:', error)
       return NextResponse.json({ error: 'Failed to delete rule' }, { status: 500 })
     }
+
+    // Audit log (fire-and-forget)
+    supabase.from('audit_logs').insert({
+      organization_id: org.id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'notification_rule.deleted',
+      resource_type: 'notification_rule',
+      resource_id: ruleId,
+    }).then(({ error: auditError }) => {
+      if (auditError) console.error('[Audit] notification_rule.deleted failed:', auditError)
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/db/client'
+import { logger } from '@/lib/logger'
 
 export const runtime = 'nodejs'
 
@@ -72,7 +73,7 @@ export async function POST() {
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    console.error('Billing portal error:', error)
+    logger.error('Billing portal error', error, { route: 'api/billing/portal' })
     return NextResponse.json(
       { error: 'Failed to create billing portal session' },
       { status: 500 }

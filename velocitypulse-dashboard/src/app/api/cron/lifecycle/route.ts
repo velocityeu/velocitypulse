@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/db/client'
 import { GRACE_PERIODS } from '@/lib/constants'
+import { logger } from '@/lib/logger'
 import {
   sendTrialExpiringEmail,
   sendTrialExpiredEmail,
@@ -194,7 +195,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(results)
   } catch (error) {
-    console.error('[Lifecycle] Cron error:', error)
+    logger.error('[Lifecycle] Cron error', error, { route: 'api/cron/lifecycle' })
     return NextResponse.json(
       { error: 'Lifecycle cron failed', partial_results: results },
       { status: 500 }

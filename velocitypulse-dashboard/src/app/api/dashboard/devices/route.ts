@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { PLAN_LIMITS } from '@/lib/constants'
+import { logger } from '@/lib/logger'
+import { validateRequest, createDeviceSchema } from '@/lib/validations'
 
 export async function GET() {
   try {
@@ -39,13 +41,13 @@ export async function GET() {
       .order('sort_order')
 
     if (devicesError) {
-      console.error('Failed to fetch devices:', devicesError)
+      logger.error('Failed to fetch devices', devicesError, { route: 'api/dashboard/devices' })
       return NextResponse.json({ error: 'Failed to fetch devices' }, { status: 500 })
     }
 
     return NextResponse.json({ devices: devices || [] })
   } catch (error) {
-    console.error('Dashboard devices error:', error)
+    logger.error('Dashboard devices error', error, { route: 'api/dashboard/devices' })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -109,28 +111,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Parse request body
-    let body: {
-      name: string
-      ip_address?: string
-      mac_address?: string
-      hostname?: string
-      category_id?: string
-      network_segment_id?: string
-      description?: string
-      check_type?: 'ping' | 'http' | 'tcp'
-      url?: string
-      port?: number
-    }
+    // Parse and validate request body
+    let rawBody: Record<string, unknown>
     try {
-      body = await request.json()
+      rawBody = await request.json()
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    if (!body.name || body.name.trim().length < 1) {
-      return NextResponse.json({ error: 'Device name is required' }, { status: 400 })
+    const validation = validateRequest(createDeviceSchema, rawBody)
+    if (!validation.success) {
+      return NextResponse.json(validation.error, { status: 400 })
     }
+    const body = validation.data
 
     // Get max sort_order
     const { data: maxDevice } = await supabase
@@ -150,10 +143,10 @@ export async function POST(request: NextRequest) {
         organization_id: organizationId,
         name: body.name.trim(),
         ip_address: body.ip_address || null,
-        mac_address: body.mac_address || null,
-        hostname: body.hostname || null,
+        mac_address: (rawBody.mac_address as string) || null,
+        hostname: (rawBody.hostname as string) || null,
         category_id: body.category_id || null,
-        network_segment_id: body.network_segment_id || null,
+        network_segment_id: (rawBody.network_segment_id as string) || null,
         description: body.description || null,
         check_type: body.check_type || 'ping',
         url: body.url || null,
@@ -172,7 +165,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (createError) {
-      console.error('Create device error:', createError)
+      logger.error('Create device error', createError, { route: 'api/dashboard/devices' })
       return NextResponse.json({ error: 'Failed to create device' }, { status: 500 })
     }
 
@@ -189,7 +182,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ device }, { status: 201 })
   } catch (error) {
-    console.error('Create device error:', error)
+    logger.error('Create device error', error, { route: 'api/dashboard/devices' })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

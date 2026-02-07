@@ -37,7 +37,9 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch segments' }, { status: 500 })
     }
 
-    return NextResponse.json({ segments: segments || [] })
+    const response = NextResponse.json({ segments: segments || [] })
+    response.headers.set('Cache-Control', 'private, max-age=30')
+    return response
   } catch (error) {
     console.error('Dashboard segments error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

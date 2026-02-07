@@ -3,6 +3,8 @@ import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { AGENT_ONLINE_THRESHOLD_MS, PLAN_LIMITS } from '@/lib/constants'
 import { generateApiKey } from '@/lib/api/agent-auth'
+import { logger } from '@/lib/logger'
+import { validateRequest, createAgentSchema } from '@/lib/validations'
 
 export async function GET() {
   try {
@@ -38,7 +40,7 @@ export async function GET() {
       .order('name')
 
     if (agentsError) {
-      console.error('Failed to fetch agents:', agentsError)
+      logger.error('Failed to fetch agents', agentsError, { route: 'api/dashboard/agents' })
       return NextResponse.json({ error: 'Failed to fetch agents' }, { status: 500 })
     }
 
@@ -53,7 +55,7 @@ export async function GET() {
 
     return NextResponse.json({ agents: agentsWithStatus })
   } catch (error) {
-    console.error('Dashboard agents error:', error)
+    logger.error('Dashboard agents error', error, { route: 'api/dashboard/agents' })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -117,17 +119,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Parse request body
-    let body: { name: string; description?: string }
+    // Parse and validate request body
+    let rawBody: unknown
     try {
-      body = await request.json()
+      rawBody = await request.json()
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    if (!body.name || body.name.trim().length < 1) {
-      return NextResponse.json({ error: 'Agent name is required' }, { status: 400 })
+    const validation = validateRequest(createAgentSchema, rawBody)
+    if (!validation.success) {
+      return NextResponse.json(validation.error, { status: 400 })
     }
+    const body = validation.data
 
     // Generate API key with hash for secure storage
     const { apiKey, apiKeyHash, apiKeyPrefix } = generateApiKey(org.slug)
@@ -147,7 +151,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (createError) {
-      console.error('Create agent error:', createError)
+      logger.error('Create agent error', createError, { route: 'api/dashboard/agents' })
       return NextResponse.json({ error: 'Failed to create agent' }, { status: 500 })
     }
 
@@ -170,7 +174,7 @@ export async function POST(request: NextRequest) {
       },
     }, { status: 201 })
   } catch (error) {
-    console.error('Create agent error:', error)
+    logger.error('Create agent error', error, { route: 'api/dashboard/agents' })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

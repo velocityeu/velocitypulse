@@ -2,43 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { PLAN_LIMITS } from '@/lib/constants'
+import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
+import { generateInvitationToken, getInvitationExpiry } from '@/lib/invitations'
+import {
+  sendMemberInvitationEmail,
+  sendMemberAddedNotificationEmail,
+} from '@/lib/emails/lifecycle'
 import type { MemberRole, MemberPermissions } from '@/types'
 
-// Default permissions by role
-const DEFAULT_PERMISSIONS: Record<MemberRole, MemberPermissions> = {
-  owner: {
-    can_manage_billing: true,
-    can_manage_agents: true,
-    can_manage_devices: true,
-    can_manage_members: true,
-    can_view_audit_logs: true,
-  },
-  admin: {
-    can_manage_billing: false,
-    can_manage_agents: true,
-    can_manage_devices: true,
-    can_manage_members: true,
-    can_view_audit_logs: true,
-  },
-  editor: {
-    can_manage_billing: false,
-    can_manage_agents: false,
-    can_manage_devices: true,
-    can_manage_members: false,
-    can_view_audit_logs: false,
-  },
-  viewer: {
-    can_manage_billing: false,
-    can_manage_agents: false,
-    can_manage_devices: false,
-    can_manage_members: false,
-    can_view_audit_logs: false,
-  },
-}
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.velocitypulse.io'
 
 /**
  * GET /api/dashboard/members
- * Get all members of the organization
+ * Get all members + pending invitations of the organization
  */
 export async function GET() {
   try {
@@ -110,7 +86,19 @@ export async function GET() {
       }
     })
 
-    return NextResponse.json({ members: membersWithUserData })
+    // Also fetch pending invitations for this org
+    const { data: invitations } = await supabase
+      .from('invitations')
+      .select('id, email, role, status, invited_by, expires_at, created_at')
+      .eq('organization_id', membership.organization_id)
+      .eq('invitation_type', 'member')
+      .eq('status', 'pending')
+      .order('created_at')
+
+    return NextResponse.json({
+      members: membersWithUserData,
+      invitations: invitations || [],
+    })
   } catch (error) {
     console.error('Get members error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -119,7 +107,9 @@ export async function GET() {
 
 /**
  * POST /api/dashboard/members
- * Invite a new member to the organization
+ * Invite a new member to the organization.
+ * Path A: User exists in Clerk → add directly
+ * Path B: User not found → create invitation + send email
  */
 export async function POST(request: NextRequest) {
   try {
@@ -154,7 +144,7 @@ export async function POST(request: NextRequest) {
     // Get organization to check limits
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('plan, user_limit')
+      .select('id, name, plan, user_limit')
       .eq('id', organizationId)
       .single()
 
@@ -162,14 +152,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
 
-    // Count existing members
+    // Count existing members + pending invitations against limit
     const { count: memberCount } = await supabase
       .from('organization_members')
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', organizationId)
 
+    const { count: pendingInviteCount } = await supabase
+      .from('invitations')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('invitation_type', 'member')
+      .eq('status', 'pending')
+
     const limit = org.user_limit || PLAN_LIMITS[org.plan as keyof typeof PLAN_LIMITS]?.users || 5
-    if ((memberCount || 0) >= limit) {
+    if (((memberCount || 0) + (pendingInviteCount || 0)) >= limit) {
       return NextResponse.json(
         { error: `User limit reached (${limit}). Upgrade your plan to add more users.` },
         { status: 403 }
@@ -191,80 +188,153 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Valid email is required' }, { status: 400 })
     }
 
+    const email = body.email.trim().toLowerCase()
     const role: MemberRole = body.role || 'viewer'
     if (!['admin', 'editor', 'viewer'].includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }
 
+    // Check for existing pending invitation
+    const { data: existingInvite } = await supabase
+      .from('invitations')
+      .select('id')
+      .eq('email', email)
+      .eq('organization_id', organizationId)
+      .eq('invitation_type', 'member')
+      .eq('status', 'pending')
+      .limit(1)
+      .single()
+
+    if (existingInvite) {
+      return NextResponse.json({ error: 'An invitation has already been sent to this email' }, { status: 409 })
+    }
+
     // Check if user exists in Clerk
     const clerk = await clerkClient()
-    const users = await clerk.users.getUserList({ emailAddress: [body.email.toLowerCase()] })
+    const clerkUsers = await clerk.users.getUserList({ emailAddress: [email] })
 
-    if (users.data.length === 0) {
-      // User doesn't exist - would need to create invitation
-      // For now, return error suggesting they sign up first
-      return NextResponse.json(
-        { error: 'User not found. They must create an account first.' },
-        { status: 404 }
-      )
-    }
+    if (clerkUsers.data.length > 0) {
+      // ===== Path A: User exists → add directly =====
+      const invitedUser = clerkUsers.data[0]
 
-    const invitedUser = users.data[0]
+      // Check if already a member
+      const { data: existingMember } = await supabase
+        .from('organization_members')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('user_id', invitedUser.id)
+        .single()
 
-    // Check if already a member
-    const { data: existingMember } = await supabase
-      .from('organization_members')
-      .select('id')
-      .eq('organization_id', organizationId)
-      .eq('user_id', invitedUser.id)
-      .single()
+      if (existingMember) {
+        return NextResponse.json({ error: 'User is already a member of this organization' }, { status: 409 })
+      }
 
-    if (existingMember) {
-      return NextResponse.json({ error: 'User is already a member of this organization' }, { status: 409 })
-    }
+      // Create member
+      const { data: member, error: createError } = await supabase
+        .from('organization_members')
+        .insert({
+          organization_id: organizationId,
+          user_id: invitedUser.id,
+          role,
+          permissions: DEFAULT_PERMISSIONS[role],
+        })
+        .select()
+        .single()
 
-    // Create member
-    const { data: member, error: createError } = await supabase
-      .from('organization_members')
-      .insert({
+      if (createError) {
+        console.error('Create member error:', createError)
+        return NextResponse.json({ error: 'Failed to add member' }, { status: 500 })
+      }
+
+      // Send notification email
+      const userEmail = invitedUser.emailAddresses[0]?.emailAddress || email
+      await sendMemberAddedNotificationEmail(org.name, role, userEmail)
+
+      // Audit log
+      await supabase.from('audit_logs').insert({
         organization_id: organizationId,
-        user_id: invitedUser.id,
-        role,
-        permissions: DEFAULT_PERMISSIONS[role],
+        actor_type: 'user',
+        actor_id: userId,
+        action: 'member.added_directly',
+        resource_type: 'organization_member',
+        resource_id: member.id,
+        metadata: { email, role },
       })
-      .select()
-      .single()
 
-    if (createError) {
-      console.error('Create member error:', createError)
-      return NextResponse.json({ error: 'Failed to add member' }, { status: 500 })
-    }
-
-    // Audit log
-    await supabase.from('audit_logs').insert({
-      organization_id: organizationId,
-      actor_type: 'user',
-      actor_id: userId,
-      action: 'member.invited',
-      resource_type: 'organization_member',
-      resource_id: member.id,
-      metadata: { email: body.email, role },
-    })
-
-    // Return member with user data
-    return NextResponse.json({
-      member: {
-        ...member,
-        user: {
-          id: invitedUser.id,
-          email: invitedUser.emailAddresses[0]?.emailAddress || '',
-          firstName: invitedUser.firstName,
-          lastName: invitedUser.lastName,
-          fullName: [invitedUser.firstName, invitedUser.lastName].filter(Boolean).join(' ') || 'Unknown',
-          imageUrl: invitedUser.imageUrl,
+      return NextResponse.json({
+        member: {
+          ...member,
+          user: {
+            id: invitedUser.id,
+            email: userEmail,
+            firstName: invitedUser.firstName,
+            lastName: invitedUser.lastName,
+            fullName: [invitedUser.firstName, invitedUser.lastName].filter(Boolean).join(' ') || 'Unknown',
+            imageUrl: invitedUser.imageUrl,
+          },
         },
-      },
-    }, { status: 201 })
+      }, { status: 201 })
+    } else {
+      // ===== Path B: User not found → create invitation =====
+      const token = generateInvitationToken()
+      const expiresAt = getInvitationExpiry()
+
+      const { data: invitation, error: inviteError } = await supabase
+        .from('invitations')
+        .insert({
+          token,
+          email,
+          invitation_type: 'member',
+          organization_id: organizationId,
+          role,
+          status: 'pending',
+          invited_by: userId,
+          expires_at: expiresAt.toISOString(),
+        })
+        .select()
+        .single()
+
+      if (inviteError) {
+        console.error('Create invitation error:', inviteError)
+        return NextResponse.json({ error: 'Failed to create invitation' }, { status: 500 })
+      }
+
+      // Get inviter name for the email
+      const { data: inviter } = await supabase
+        .from('users')
+        .select('first_name, last_name, email')
+        .eq('id', userId)
+        .single()
+
+      const inviterName = inviter
+        ? [inviter.first_name, inviter.last_name].filter(Boolean).join(' ') || inviter.email
+        : 'A team member'
+
+      const acceptUrl = `${APP_URL}/accept-invite?token=${token}`
+      await sendMemberInvitationEmail(inviterName, org.name, role, acceptUrl, email)
+
+      // Audit log
+      await supabase.from('audit_logs').insert({
+        organization_id: organizationId,
+        actor_type: 'user',
+        actor_id: userId,
+        action: 'member.invitation_sent',
+        resource_type: 'invitation',
+        resource_id: invitation.id,
+        metadata: { email, role },
+      })
+
+      return NextResponse.json({
+        invitation: {
+          id: invitation.id,
+          email: invitation.email,
+          role: invitation.role,
+          status: invitation.status,
+          expires_at: invitation.expires_at,
+          created_at: invitation.created_at,
+        },
+      }, { status: 201 })
+    }
   } catch (error) {
     console.error('Invite member error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

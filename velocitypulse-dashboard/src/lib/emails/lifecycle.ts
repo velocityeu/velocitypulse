@@ -183,3 +183,62 @@ export async function sendPaymentFailedEmail(
     `)
   )
 }
+
+// ===== Invitation Email Functions =====
+
+export async function sendMemberInvitationEmail(
+  inviterName: string,
+  orgName: string,
+  role: string,
+  acceptUrl: string,
+  recipientEmail: string
+): Promise<boolean> {
+  return sendEmail(
+    [recipientEmail],
+    `You've been invited to join ${orgName} on VelocityPulse`,
+    emailTemplate(`Invitation to ${orgName}`, '#2563eb', `
+      <p>Hi there,</p>
+      <p><strong>${inviterName}</strong> has invited you to join <strong>${orgName}</strong> on VelocityPulse as a <strong>${role}</strong>.</p>
+      <p>Click the button below to accept the invitation. If you don't have an account yet, you'll be able to create one.</p>
+      ${actionButton(acceptUrl, 'Accept Invitation')}
+      <p style="color: #666; font-size: 14px; margin-top: 24px;">This invitation expires in 7 days. If you weren't expecting this invitation, you can safely ignore this email.</p>
+    `)
+  )
+}
+
+export async function sendAdminInvitationEmail(
+  inviterName: string,
+  role: string,
+  acceptUrl: string,
+  recipientEmail: string
+): Promise<boolean> {
+  return sendEmail(
+    [recipientEmail],
+    `You've been invited as a VelocityPulse admin`,
+    emailTemplate('Admin Access Invitation', '#dc2626', `
+      <p>Hi there,</p>
+      <p><strong>${inviterName}</strong> has invited you to become a VelocityPulse admin with the role of <strong>${role}</strong>.</p>
+      <p>Click the button below to accept the invitation. If you don't have an account yet, you'll be able to create one.</p>
+      ${actionButton(acceptUrl, 'Accept Admin Access')}
+      <p style="color: #666; font-size: 14px; margin-top: 24px;">This invitation expires in 7 days. If you weren't expecting this invitation, you can safely ignore this email.</p>
+    `)
+  )
+}
+
+export async function sendMemberAddedNotificationEmail(
+  orgName: string,
+  role: string,
+  recipientEmail: string
+): Promise<boolean> {
+  return sendEmail(
+    [recipientEmail],
+    `You've been added to ${orgName} on VelocityPulse`,
+    emailTemplate(`Welcome to ${orgName}`, '#16a34a', `
+      <p>Hi there,</p>
+      <p>You've been added to <strong>${orgName}</strong> on VelocityPulse as a <strong>${role}</strong>.</p>
+      <p>You can now access the dashboard and start collaborating with your team.</p>
+      ${actionButton(`${APP_URL}/dashboard`, 'Go to Dashboard')}
+      <p style="color: #666; font-size: 14px; margin-top: 24px;">If you have any questions, contact us at <a href="mailto:support@velocitypulse.io" style="color: #2563eb;">support@velocitypulse.io</a>.</p>
+    `)
+  )
+}

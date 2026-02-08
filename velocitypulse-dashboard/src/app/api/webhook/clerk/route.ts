@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { Webhook } from 'svix'
 import { createServiceClient } from '@/lib/db/client'
 import { logger } from '@/lib/logger'
+import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
+import { isInvitationExpired } from '@/lib/invitations'
+import type { MemberRole } from '@/types'
 
 export const runtime = 'nodejs'
 
@@ -86,6 +89,11 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Failed to upsert user' }, { status: 500 })
         }
 
+        // Auto-fulfill pending invitations for this email (on user.created)
+        if (event.type === 'user.created') {
+          await autoFulfillInvitations(supabase, id, primaryEmail)
+        }
+
         break
       }
 
@@ -117,5 +125,115 @@ export async function POST(request: Request) {
   } catch (error) {
     logger.error('Clerk webhook handler error', error, { route: 'api/webhook/clerk' })
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
+  }
+}
+
+/**
+ * Auto-fulfill pending invitations when a new user signs up.
+ * This handles the case where someone was invited before they had an account.
+ */
+async function autoFulfillInvitations(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  email: string
+) {
+  try {
+    const { data: pendingInvitations } = await supabase
+      .from('invitations')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .eq('status', 'pending')
+
+    if (!pendingInvitations || pendingInvitations.length === 0) return
+
+    for (const invitation of pendingInvitations) {
+      // Skip expired invitations
+      if (isInvitationExpired(invitation.expires_at)) {
+        await supabase
+          .from('invitations')
+          .update({ status: 'expired' })
+          .eq('id', invitation.id)
+        continue
+      }
+
+      if (invitation.invitation_type === 'member' && invitation.organization_id) {
+        // Check if already a member (shouldn't happen for new user, but be safe)
+        const { data: existing } = await supabase
+          .from('organization_members')
+          .select('id')
+          .eq('organization_id', invitation.organization_id)
+          .eq('user_id', userId)
+          .single()
+
+        if (!existing) {
+          const role = invitation.role as MemberRole
+          await supabase.from('organization_members').insert({
+            organization_id: invitation.organization_id,
+            user_id: userId,
+            role,
+            permissions: DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.viewer,
+          })
+
+          // Audit log
+          await supabase.from('audit_logs').insert({
+            organization_id: invitation.organization_id,
+            actor_type: 'system',
+            actor_id: 'clerk-webhook',
+            action: 'member.invitation_accepted',
+            resource_type: 'invitation',
+            resource_id: invitation.id,
+            metadata: { email, role: invitation.role, auto_fulfilled: true },
+          })
+        }
+      } else if (invitation.invitation_type === 'admin') {
+        // Grant staff access
+        await supabase
+          .from('users')
+          .update({ is_staff: true })
+          .eq('id', userId)
+
+        // Create admin_roles row
+        const { data: existingRole } = await supabase
+          .from('admin_roles')
+          .select('user_id')
+          .eq('user_id', userId)
+          .single()
+
+        if (!existingRole) {
+          await supabase.from('admin_roles').insert({
+            user_id: userId,
+            role: invitation.role,
+            is_active: true,
+            invited_by: invitation.invited_by,
+          })
+        }
+
+        // Admin audit log
+        await supabase.from('admin_audit_logs').insert({
+          actor_id: userId,
+          action: 'admin.invitation_accepted',
+          resource_type: 'invitation',
+          resource_id: invitation.id,
+          metadata: { email, role: invitation.role, auto_fulfilled: true },
+        })
+      }
+
+      // Mark invitation as accepted
+      await supabase
+        .from('invitations')
+        .update({
+          status: 'accepted',
+          accepted_by: userId,
+          accepted_at: new Date().toISOString(),
+        })
+        .eq('id', invitation.id)
+    }
+  } catch (err) {
+    // Non-fatal — log but don't fail the webhook
+    logger.error('Failed to auto-fulfill invitations', err, {
+      userId,
+      email,
+      route: 'api/webhook/clerk',
+    })
   }
 }

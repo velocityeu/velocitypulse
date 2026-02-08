@@ -51,18 +51,49 @@ $ProgressPreference = "SilentlyContinue"
 
 $ServiceName = "VelocityPulseAgent"
 $ServiceDisplay = "VelocityPulse Agent"
-$InstallerVersion = "2.0.0"
+$InstallerVersion = "3.0.0"
 
 # ============================================
-# Admin check (works with irm | iex)
+# Self-elevation (replaces "run as admin" error)
 # ============================================
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host ""
-    Write-Host "  ERROR: This installer must be run as Administrator." -ForegroundColor Red
-    Write-Host "  Right-click PowerShell and select 'Run as Administrator'." -ForegroundColor Red
-    Write-Host ""
-    exit 1
+    Write-Host "  Requesting administrator privileges..." -ForegroundColor Yellow
+
+    # Build argument list forwarding all params
+    $paramArgs = @()
+    if ($ApiKey)       { $paramArgs += "-ApiKey '$ApiKey'" }
+    if ($DashboardUrl -ne "https://app.velocitypulse.io") { $paramArgs += "-DashboardUrl '$DashboardUrl'" }
+    if ($InstallDir -ne "C:\\Program Files\\VelocityPulse Agent") { $paramArgs += "-InstallDir '$InstallDir'" }
+    if ($AgentName -ne $env:COMPUTERNAME) { $paramArgs += "-AgentName '$AgentName'" }
+    if ($CleanInstall) { $paramArgs += "-CleanInstall" }
+    if ($Uninstall)    { $paramArgs += "-Uninstall" }
+    if ($Upgrade)      { $paramArgs += "-Upgrade" }
+    if ($Force)        { $paramArgs += "-Force" }
+    $argString = $paramArgs -join " "
+
+    try {
+        if ($MyInvocation.PSCommandPath) {
+            # Running from a saved script file
+            $scriptPath = $MyInvocation.PSCommandPath
+            Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File \`"$scriptPath\`" $argString"
+        } else {
+            # Running via irm | iex — save to temp file first
+            $tempScript = Join-Path $env:TEMP "install-vp-agent.ps1"
+            $scriptUrl = "https://get.velocitypulse.io/agent"
+            Invoke-WebRequest -Uri $scriptUrl -OutFile $tempScript -UseBasicParsing
+            Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File \`"$tempScript\`" $argString"
+        }
+        Write-Host "  Elevated process launched. This window can be closed." -ForegroundColor Green
+        exit 0
+    } catch {
+        Write-Host ""
+        Write-Host "  ERROR: Could not elevate to Administrator." -ForegroundColor Red
+        Write-Host "  Right-click PowerShell and select 'Run as Administrator'." -ForegroundColor Red
+        Write-Host ""
+        exit 1
+    }
 }
 
 # ============================================
@@ -164,7 +195,14 @@ function Stop-AgentService {
 
     if ($status -eq "Running") {
         Write-Host "  Stopping service..." -ForegroundColor Yellow
-        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+
+        # Try NSSM stop first if available
+        $nssmPath = Join-Path $InstallDir "nssm.exe"
+        if (Test-Path $nssmPath) {
+            & $nssmPath stop $ServiceName 2>&1 | Out-Null
+        } else {
+            Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+        }
 
         # Wait for it to stop
         $elapsed = 0
@@ -207,7 +245,16 @@ function Remove-AgentService {
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if (-not $svc) { return }
 
-    # Try sc.exe delete
+    # Try NSSM remove first
+    $nssmPath = Join-Path $InstallDir "nssm.exe"
+    if (Test-Path $nssmPath) {
+        & $nssmPath remove $ServiceName confirm 2>&1 | Out-Null
+        Start-Sleep -Seconds 2
+        $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if (-not $svc) { return }
+    }
+
+    # Fallback: sc.exe delete
     $scResult = sc.exe delete $ServiceName 2>&1
     Start-Sleep -Seconds 2
 
@@ -313,6 +360,243 @@ function Show-InstallStatus {
     Write-Host ""
 }
 
+function Install-NodeJS {
+    Write-Host "  Node.js not found. Attempting auto-install..." -ForegroundColor Yellow
+
+    # Try WinGet first
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Host "  Installing Node.js LTS via WinGet..." -ForegroundColor Yellow
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $wingetOutput = winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements --silent 2>&1
+        $wingetExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEAP
+
+        # Refresh PATH
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+
+        $nodeCheck = $null
+        try { $nodeCheck = (node --version 2>$null) } catch {}
+        if ($nodeCheck) {
+            Write-Host "  Node.js $nodeCheck installed via WinGet" -ForegroundColor Green
+            return $true
+        }
+    }
+
+    # Fallback: direct MSI download
+    Write-Host "  WinGet unavailable or failed. Downloading Node.js MSI..." -ForegroundColor Yellow
+    $arch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
+    $nodeUrl = "https://nodejs.org/dist/v22.15.0/node-v22.15.0-$arch.msi"
+    $nodeMsi = Join-Path $env:TEMP "node-lts-install.msi"
+
+    try {
+        Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeMsi -UseBasicParsing
+        Write-Host "  Running Node.js installer..." -ForegroundColor Yellow
+        $msiResult = Start-Process msiexec.exe -ArgumentList "/i \`"$nodeMsi\`" /qn /norestart" -Wait -PassThru
+        Remove-Item $nodeMsi -Force -ErrorAction SilentlyContinue
+
+        if ($msiResult.ExitCode -ne 0) {
+            Write-Host "  MSI installer exited with code $($msiResult.ExitCode)" -ForegroundColor Yellow
+        }
+
+        # Refresh PATH
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+
+        $nodeCheck = $null
+        try { $nodeCheck = (node --version 2>$null) } catch {}
+        if ($nodeCheck) {
+            Write-Host "  Node.js $nodeCheck installed via MSI" -ForegroundColor Green
+            return $true
+        }
+    } catch {
+        Write-Host "  MSI download failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    # Both methods failed
+    Write-Host "  ERROR: Could not auto-install Node.js." -ForegroundColor Red
+    Write-Host "  Please install Node.js 18+ manually from https://nodejs.org" -ForegroundColor Red
+    return $false
+}
+
+function Install-NSSM {
+    $nssmPath = Join-Path $InstallDir "nssm.exe"
+
+    # Already present
+    if (Test-Path $nssmPath) {
+        Write-Host "  NSSM already present" -ForegroundColor Green
+        return $true
+    }
+
+    # Create install dir if needed
+    if (-not (Test-Path $InstallDir)) {
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+
+    $nssmUrls = @(
+        "https://nssm.cc/release/nssm-2.24.zip",
+        "https://nssm.cc/ci/nssm-2.24-101-g897c7ad.zip",
+        "https://web.archive.org/web/2024/https://nssm.cc/release/nssm-2.24.zip"
+    )
+
+    $nssmZip = Join-Path $env:TEMP "nssm-download.zip"
+    $nssmExtract = Join-Path $env:TEMP "nssm-extract"
+    $downloaded = $false
+
+    foreach ($url in $nssmUrls) {
+        try {
+            Write-Host "  Downloading NSSM from $url..." -ForegroundColor Yellow
+            Invoke-WebRequest -Uri $url -OutFile $nssmZip -UseBasicParsing -TimeoutSec 30
+            $zipSize = (Get-Item $nssmZip).Length
+            if ($zipSize -gt 10240) {
+                $downloaded = $true
+                break
+            }
+            Write-Host "  Download too small ($zipSize bytes), trying next mirror..." -ForegroundColor Yellow
+            Remove-Item $nssmZip -Force -ErrorAction SilentlyContinue
+        } catch {
+            Write-Host "  Mirror failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    if (-not $downloaded) {
+        Write-Host "  ERROR: Could not download NSSM from any mirror." -ForegroundColor Red
+        Write-Host "  Please download manually from https://nssm.cc/release/nssm-2.24.zip" -ForegroundColor Red
+        Write-Host "  Extract nssm.exe to: $InstallDir" -ForegroundColor Red
+        return $false
+    }
+
+    # Extract
+    if (Test-Path $nssmExtract) { Remove-Item $nssmExtract -Recurse -Force }
+    Expand-Archive -Path $nssmZip -DestinationPath $nssmExtract -Force
+
+    # Find the right binary (prefer 64-bit)
+    $arch = if ([Environment]::Is64BitOperatingSystem) { "win64" } else { "win32" }
+    $nssmExe = Get-ChildItem -Path $nssmExtract -Filter "nssm.exe" -Recurse | Where-Object {
+        $_.DirectoryName -like "*$arch*"
+    } | Select-Object -First 1
+
+    if (-not $nssmExe) {
+        # Fallback: any nssm.exe
+        $nssmExe = Get-ChildItem -Path $nssmExtract -Filter "nssm.exe" -Recurse | Select-Object -First 1
+    }
+
+    if (-not $nssmExe) {
+        Write-Host "  ERROR: nssm.exe not found in downloaded archive." -ForegroundColor Red
+        Remove-Item $nssmZip -Force -ErrorAction SilentlyContinue
+        Remove-Item $nssmExtract -Recurse -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+
+    Copy-Item -Path $nssmExe.FullName -Destination $nssmPath -Force
+
+    # Cleanup
+    Remove-Item $nssmZip -Force -ErrorAction SilentlyContinue
+    Remove-Item $nssmExtract -Recurse -Force -ErrorAction SilentlyContinue
+
+    Write-Host "  NSSM installed" -ForegroundColor Green
+    return $true
+}
+
+function Protect-EnvFile {
+    $envFile = Join-Path $InstallDir ".env"
+    if (-not (Test-Path $envFile)) { return }
+
+    try {
+        $acl = Get-Acl $envFile
+        $acl.SetAccessRuleProtection($true, $false)  # Disable inheritance, remove inherited rules
+        # Clear existing access rules
+        $acl.Access | ForEach-Object { $acl.RemoveAccessRule($_) } | Out-Null
+        # Add SYSTEM FullControl
+        $systemRule = New-Object System.Security.AccessControl.FileSystemAccessRule("NT AUTHORITY\\SYSTEM", "FullControl", "Allow")
+        $acl.AddAccessRule($systemRule)
+        # Add Administrators FullControl
+        $adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule("BUILTIN\\Administrators", "FullControl", "Allow")
+        $acl.AddAccessRule($adminRule)
+        Set-Acl -Path $envFile -AclObject $acl
+        Write-Host "  .env file permissions locked (SYSTEM + Administrators only)" -ForegroundColor Green
+    } catch {
+        Write-Host "  WARNING: Could not restrict .env permissions: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
+function New-UpgradeBackup {
+    if (-not (Test-Path $InstallDir)) { return $null }
+
+    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $backupDir = Join-Path (Split-Path $InstallDir -Parent) "VelocityPulse-backup-$timestamp"
+    New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+
+    # Backup key files
+    $distDir = Join-Path $InstallDir "dist"
+    if (Test-Path $distDir) {
+        Copy-Item -Path $distDir -Destination (Join-Path $backupDir "dist") -Recurse -Force
+    }
+    foreach ($file in @("package.json", "package-lock.json", ".env")) {
+        $src = Join-Path $InstallDir $file
+        if (Test-Path $src) {
+            Copy-Item -Path $src -Destination (Join-Path $backupDir $file) -Force
+        }
+    }
+    $nssmSrc = Join-Path $InstallDir "nssm.exe"
+    if (Test-Path $nssmSrc) {
+        Copy-Item -Path $nssmSrc -Destination (Join-Path $backupDir "nssm.exe") -Force
+    }
+
+    Write-Host "  Backup created at $backupDir" -ForegroundColor Green
+    return $backupDir
+}
+
+function Restore-UpgradeBackup {
+    param([string]$BackupDir)
+    if (-not $BackupDir -or -not (Test-Path $BackupDir)) { return $false }
+
+    Write-Host "  Rolling back from backup..." -ForegroundColor Yellow
+
+    if (-not (Test-Path $InstallDir)) {
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+
+    # Restore dist/
+    $backupDist = Join-Path $BackupDir "dist"
+    if (Test-Path $backupDist) {
+        $destDist = Join-Path $InstallDir "dist"
+        if (Test-Path $destDist) { Remove-Item $destDist -Recurse -Force -ErrorAction SilentlyContinue }
+        Copy-Item -Path $backupDist -Destination $destDist -Recurse -Force
+    }
+
+    # Restore individual files
+    foreach ($file in @("package.json", "package-lock.json", ".env", "nssm.exe")) {
+        $src = Join-Path $BackupDir $file
+        if (Test-Path $src) {
+            Copy-Item -Path $src -Destination (Join-Path $InstallDir $file) -Force
+        }
+    }
+
+    # Re-register and start service
+    $nssmPath = Join-Path $InstallDir "nssm.exe"
+    $nodeExe = $null
+    try { $nodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source } catch {}
+
+    if ($nodeExe -and (Test-Path $nssmPath)) {
+        $entryPoint = Join-Path $InstallDir "dist\\index.js"
+        & $nssmPath install $ServiceName $nodeExe $entryPoint 2>&1 | Out-Null
+        & $nssmPath set $ServiceName AppDirectory $InstallDir 2>&1 | Out-Null
+        & $nssmPath set $ServiceName Start SERVICE_AUTO_START 2>&1 | Out-Null
+        & $nssmPath start $ServiceName 2>&1 | Out-Null
+    }
+
+    Write-Host "  Rollback complete. Old version restored and service restarted." -ForegroundColor Green
+    return $true
+}
+
+function Remove-UpgradeBackup {
+    param([string]$BackupDir)
+    if ($BackupDir -and (Test-Path $BackupDir)) {
+        Remove-Item $BackupDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # ============================================
 # Detect existing installation
 # ============================================
@@ -379,17 +663,18 @@ if ($mode -eq "uninstall") {
 }
 
 # ============================================
-# [1/8] Check prerequisites
+# [1/9] Check prerequisites
 # ============================================
-Write-Host "[1/8] Checking prerequisites..." -ForegroundColor Yellow
+Write-Host "[1/9] Checking prerequisites..." -ForegroundColor Yellow
 
+# Node.js check with auto-install
 $nodeVersion = $null
 try { $nodeVersion = (node --version 2>$null) } catch {}
 
 if (-not $nodeVersion) {
-    Write-Host "  ERROR: Node.js is not installed." -ForegroundColor Red
-    Write-Host "  Please install Node.js 18+ from https://nodejs.org" -ForegroundColor Red
-    exit 1
+    $installed = Install-NodeJS
+    if (-not $installed) { exit 1 }
+    $nodeVersion = (node --version 2>$null)
 }
 
 $major = [int]($nodeVersion -replace '^v(\\d+)\\..*', '$1')
@@ -399,10 +684,57 @@ if ($major -lt 18) {
 }
 Write-Host "  Node.js $nodeVersion" -ForegroundColor Green
 
+# Disk space check (require 500MB)
+$installDrive = Split-Path $InstallDir -Qualifier
+if (-not $installDrive) { $installDrive = "C:" }
+try {
+    $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$installDrive'" -ErrorAction SilentlyContinue
+    if ($disk) {
+        $freeGB = [math]::Round($disk.FreeSpace / 1GB, 1)
+        $freeMB = [math]::Round($disk.FreeSpace / 1MB, 0)
+        if ($disk.FreeSpace -lt 524288000) {  # 500MB
+            Write-Host "  ERROR: Insufficient disk space on $installDrive" -ForegroundColor Red
+            Write-Host "  Required: 500 MB  |  Available: $freeMB MB" -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "  Disk space: \${freeGB} GB free on $installDrive" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "  Disk space check skipped" -ForegroundColor Yellow
+}
+
+# Port 3001 check (skip in upgrade mode - service already stopped)
+if ($mode -ne "upgrade") {
+    try {
+        $portInUse = Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($portInUse) {
+            $proc = Get-Process -Id $portInUse.OwningProcess -ErrorAction SilentlyContinue
+            $procName = if ($proc) { $proc.ProcessName } else { "unknown" }
+            $procPid = $portInUse.OwningProcess
+
+            # Check if it's our own agent
+            $isOurAgent = $false
+            if ($procName -eq "node") {
+                try {
+                    $cimProc = Get-CimInstance Win32_Process -Filter "ProcessId = $procPid" -ErrorAction SilentlyContinue
+                    if ($cimProc.CommandLine -like "*VelocityPulse*") { $isOurAgent = $true }
+                } catch {}
+            }
+
+            if (-not $isOurAgent) {
+                Write-Host "  WARNING: Port 3001 is in use by $procName (PID $procPid)" -ForegroundColor Yellow
+                Write-Host "  The agent may not start correctly. Consider stopping that process first." -ForegroundColor Yellow
+            }
+        }
+    } catch {
+        # Get-NetTCPConnection may not be available on all systems
+    }
+}
+
 # ============================================
-# [2/8] Configuration
+# [2/9] Configuration
 # ============================================
-Write-Host "[2/8] Configuration..." -ForegroundColor Yellow
+Write-Host "[2/9] Configuration..." -ForegroundColor Yellow
 
 $envBackupPath = $null
 
@@ -435,9 +767,11 @@ if ($mode -eq "upgrade" -and $existingState.EnvExists) {
 }
 
 # ============================================
-# [3/8] Cleanup
+# [3/9] Cleanup + backup
 # ============================================
-Write-Host "[3/8] Cleanup..." -ForegroundColor Yellow
+Write-Host "[3/9] Cleanup..." -ForegroundColor Yellow
+
+$upgradeBackupDir = $null
 
 if ($mode -eq "clean" -or $mode -eq "upgrade") {
     Stop-AgentService
@@ -445,6 +779,8 @@ if ($mode -eq "clean" -or $mode -eq "upgrade") {
     if ($mode -eq "clean") {
         Remove-InstallDirectory
     } elseif ($mode -eq "upgrade") {
+        # Create backup for rollback before removing files
+        $upgradeBackupDir = New-UpgradeBackup
         # Remove everything except .env (already backed up)
         if (Test-Path $InstallDir) {
             Get-ChildItem -Path $InstallDir -Exclude ".env" -ErrorAction SilentlyContinue | ForEach-Object {
@@ -469,9 +805,26 @@ if ($mode -eq "clean" -or $mode -eq "upgrade") {
 }
 
 # ============================================
-# [4/8] Download from GitHub
+# Steps 4-8 wrapped in try/catch for upgrade rollback
 # ============================================
-Write-Host "[4/8] Downloading latest agent release..." -ForegroundColor Yellow
+$installFailed = $false
+
+try {
+
+# ============================================
+# [4/9] Download NSSM
+# ============================================
+Write-Host "[4/9] Installing NSSM service manager..." -ForegroundColor Yellow
+
+$nssmReady = Install-NSSM
+if (-not $nssmReady) {
+    throw "NSSM installation failed"
+}
+
+# ============================================
+# [5/9] Download from GitHub
+# ============================================
+Write-Host "[5/9] Downloading latest agent release..." -ForegroundColor Yellow
 
 $releasesUrl = "https://api.github.com/repos/velocityeu/velocitypulse-agent/releases/latest"
 try {
@@ -502,9 +855,9 @@ Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip
 Write-Host "  Downloaded OK" -ForegroundColor Green
 
 # ============================================
-# [5/8] Extract + npm install + verify
+# [6/9] Extract + npm install + verify
 # ============================================
-Write-Host "[5/8] Installing files..." -ForegroundColor Yellow
+Write-Host "[6/9] Installing files..." -ForegroundColor Yellow
 
 if (Test-Path $tempExtract) { Remove-Item $tempExtract -Recurse -Force }
 Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
@@ -512,8 +865,7 @@ Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
 # Find extracted directory (GitHub adds a prefix)
 $sourceDir = Get-ChildItem -Path $tempExtract -Directory | Select-Object -First 1
 if (-not $sourceDir) {
-    Write-Host "  ERROR: Could not find extracted directory." -ForegroundColor Red
-    exit 1
+    throw "Could not find extracted directory."
 }
 
 # Create install directory
@@ -528,8 +880,7 @@ Write-Host "  Files extracted" -ForegroundColor Green
 # Verify entry point
 $entryPoint = Join-Path $InstallDir "dist\\index.js"
 if (-not (Test-Path $entryPoint)) {
-    Write-Host "  ERROR: dist\\index.js not found. Release may be missing pre-built files." -ForegroundColor Red
-    exit 1
+    throw "dist\\index.js not found. Release may be missing pre-built files."
 }
 
 # Install npm dependencies
@@ -546,25 +897,21 @@ try {
 }
 
 if ($npmExit -ne 0) {
-    Write-Host "  ERROR: npm install failed (exit code $npmExit)." -ForegroundColor Red
-    Write-Host "  Output: $npmOutput" -ForegroundColor Red
-    Write-Host "  Try: cd '$InstallDir' && npm install --omit=dev" -ForegroundColor Yellow
-    exit 1
+    throw "npm install failed (exit code $npmExit). Output: $npmOutput"
 }
 
 # Verify node_modules
 $nmDir = Join-Path $InstallDir "node_modules"
 if (-not (Test-Path (Join-Path $nmDir "express")) -or -not (Test-Path (Join-Path $nmDir "dotenv"))) {
-    Write-Host "  ERROR: node_modules is incomplete. Key packages missing." -ForegroundColor Red
-    exit 1
+    throw "node_modules is incomplete. Key packages missing."
 }
 
 Write-Host "  Dependencies installed" -ForegroundColor Green
 
 # ============================================
-# [6/8] Write .env config
+# [7/9] Write .env config + ACL
 # ============================================
-Write-Host "[6/8] Configuring agent..." -ForegroundColor Yellow
+Write-Host "[7/9] Configuring agent..." -ForegroundColor Yellow
 
 if ($mode -eq "upgrade" -and $envBackupPath) {
     $restored = Restore-EnvFile $envBackupPath
@@ -590,32 +937,40 @@ ENABLE_REALTIME=true
     Write-Host "  Configuration written to .env" -ForegroundColor Green
 }
 
+# Lock down .env permissions
+Protect-EnvFile
+
 # ============================================
-# [7/8] Register and start Windows service
+# [8/9] Register and start Windows service via NSSM
 # ============================================
-Write-Host "[7/8] Registering Windows service..." -ForegroundColor Yellow
+Write-Host "[8/9] Registering Windows service..." -ForegroundColor Yellow
 
 $nodeExe = (Get-Command node).Source
+$nssmPath = Join-Path $InstallDir "nssm.exe"
 
-# Create service using New-Service (handles path quoting correctly)
-$binPath = "\`"$nodeExe\`" \`"$entryPoint\`""
-New-Service -Name $ServiceName -BinaryPathName $binPath -DisplayName $ServiceDisplay -StartupType Automatic -Description "VelocityPulse network monitoring agent" | Out-Null
-
-# Set working directory via registry (wrap in cmd.exe /c cd)
-$regPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\$ServiceName"
-if (Test-Path $regPath) {
-    $wrappedBinPath = "cmd.exe /c \`"cd /d \`"$InstallDir\`" && \`"$nodeExe\`" \`"$entryPoint\`"\`""
-    Set-ItemProperty -Path $regPath -Name ImagePath -Value $wrappedBinPath
+# Create logs directory
+$logsDir = Join-Path $InstallDir "logs"
+if (-not (Test-Path $logsDir)) {
+    New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 }
+
+# Register service via NSSM
+& $nssmPath install $ServiceName $nodeExe $entryPoint 2>&1 | Out-Null
+& $nssmPath set $ServiceName AppDirectory $InstallDir 2>&1 | Out-Null
+& $nssmPath set $ServiceName DisplayName $ServiceDisplay 2>&1 | Out-Null
+& $nssmPath set $ServiceName Description "VelocityPulse network monitoring agent" 2>&1 | Out-Null
+& $nssmPath set $ServiceName Start SERVICE_AUTO_START 2>&1 | Out-Null
+& $nssmPath set $ServiceName AppStdout (Join-Path $logsDir "service.log") 2>&1 | Out-Null
+& $nssmPath set $ServiceName AppStderr (Join-Path $logsDir "service-error.log") 2>&1 | Out-Null
+& $nssmPath set $ServiceName AppRotateFiles 1 2>&1 | Out-Null
+& $nssmPath set $ServiceName AppRotateBytes 1048576 2>&1 | Out-Null
 
 # Verify service was created
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if (-not $svc) {
-    Write-Host "  ERROR: Service registration failed." -ForegroundColor Red
-    Write-Host "  Try: New-Service -Name $ServiceName -BinaryPathName '$binPath' -StartupType Automatic" -ForegroundColor Yellow
-    exit 1
+    throw "Service registration failed."
 }
-Write-Host "  Service registered" -ForegroundColor Green
+Write-Host "  Service registered (NSSM)" -ForegroundColor Green
 
 # Start service
 try {
@@ -650,39 +1005,75 @@ try {
     Write-Host "  Start:       Start-Service $ServiceName" -ForegroundColor Yellow
 }
 
-# ============================================
-# [8/8] Post-install verification
-# ============================================
-Write-Host "[8/8] Verifying installation..." -ForegroundColor Yellow
+} catch {
+    # ============================================
+    # Upgrade rollback on failure
+    # ============================================
+    $installFailed = $true
+    Write-Host ""
+    Write-Host "  ERROR: Installation failed: $($_.Exception.Message)" -ForegroundColor Red
 
-$finalState = Test-ExistingInstall
-
-$allGood = $true
-if (-not $finalState.ServiceExists) {
-    Write-Host "  FAIL: Service not found" -ForegroundColor Red; $allGood = $false
-}
-if (-not $finalState.HasEntryPoint) {
-    Write-Host "  FAIL: dist\\index.js missing" -ForegroundColor Red; $allGood = $false
-}
-if (-not $finalState.NodeModulesHealthy) {
-    Write-Host "  FAIL: node_modules incomplete" -ForegroundColor Red; $allGood = $false
-}
-if (-not $finalState.EnvExists) {
-    Write-Host "  FAIL: .env missing" -ForegroundColor Red; $allGood = $false
-}
-if ($allGood) {
-    Write-Host "  All checks passed" -ForegroundColor Green
+    if ($mode -eq "upgrade" -and $upgradeBackupDir) {
+        Write-Host ""
+        $rolledBack = Restore-UpgradeBackup $upgradeBackupDir
+        if ($rolledBack) {
+            Write-Host "  Previous version has been restored." -ForegroundColor Yellow
+        } else {
+            Write-Host "  WARNING: Rollback also failed. Manual recovery may be needed." -ForegroundColor Red
+            Write-Host "  Backup dir: $upgradeBackupDir" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host ""
+        Write-Host "  Installation aborted." -ForegroundColor Red
+    }
 }
 
 # ============================================
-# Cleanup temp files
+# [9/9] Post-install verification
 # ============================================
-Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
-Remove-Item $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
+if (-not $installFailed) {
+    Write-Host "[9/9] Verifying installation..." -ForegroundColor Yellow
+
+    $finalState = Test-ExistingInstall
+
+    $allGood = $true
+    if (-not $finalState.ServiceExists) {
+        Write-Host "  FAIL: Service not found" -ForegroundColor Red; $allGood = $false
+    }
+    if (-not $finalState.HasEntryPoint) {
+        Write-Host "  FAIL: dist\\index.js missing" -ForegroundColor Red; $allGood = $false
+    }
+    if (-not $finalState.NodeModulesHealthy) {
+        Write-Host "  FAIL: node_modules incomplete" -ForegroundColor Red; $allGood = $false
+    }
+    if (-not $finalState.EnvExists) {
+        Write-Host "  FAIL: .env missing" -ForegroundColor Red; $allGood = $false
+    }
+    if ($allGood) {
+        Write-Host "  All checks passed" -ForegroundColor Green
+    }
+}
+
+# ============================================
+# Cleanup temp files + upgrade backup
+# ============================================
+if (Test-Path variable:tempZip) {
+    Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
+}
+if (Test-Path variable:tempExtract) {
+    Remove-Item $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
+}
+if (-not $installFailed -and $upgradeBackupDir) {
+    Remove-UpgradeBackup $upgradeBackupDir
+}
 
 # ============================================
 # Done
 # ============================================
+if ($installFailed) {
+    exit 1
+}
+
 Write-Host ""
 Write-Host "  ============================================" -ForegroundColor Green
 if ($mode -eq "upgrade") {
@@ -700,7 +1091,8 @@ Write-Host "  Commands:" -ForegroundColor Yellow
 Write-Host "    Start:     Start-Service $ServiceName" -ForegroundColor White
 Write-Host "    Stop:      Stop-Service $ServiceName" -ForegroundColor White
 Write-Host "    Status:    Get-Service $ServiceName" -ForegroundColor White
-Write-Host "    Logs:      Get-Content '$InstallDir\\logs\\agent.log' -Tail 50" -ForegroundColor White
+Write-Host "    Logs:      Get-Content '$InstallDir\\logs\\service.log' -Tail 50" -ForegroundColor White
+Write-Host "    Errors:    Get-Content '$InstallDir\\logs\\service-error.log' -Tail 50" -ForegroundColor White
 Write-Host "    Uninstall: .\\install-windows.ps1 -Uninstall" -ForegroundColor White
 Write-Host ""
 `

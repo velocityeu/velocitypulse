@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     orgs_purged: 0,
     audit_logs_pruned: 0,
     usage_records_pruned: 0,
+    invitations_expired: 0,
   }
 
   try {
@@ -183,6 +184,7 @@ export async function GET(request: NextRequest) {
       console.log(`[Lifecycle] Purging data for org ${org.id} (${org.name})`)
 
       // Cascade delete (same order as admin delete action)
+      await supabase.from('invitations').delete().eq('organization_id', org.id)
       await supabase.from('audit_logs').delete().eq('organization_id', org.id)
       await supabase.from('agent_commands').delete().eq('organization_id', org.id)
       await supabase.from('devices').delete().eq('organization_id', org.id)
@@ -203,7 +205,19 @@ export async function GET(request: NextRequest) {
       logger.error('[Lifecycle] Audit log pruning failed', pruneError, { route: 'api/cron/lifecycle' })
     }
 
-    // ===== Job 6: Prune Old Hourly API Usage Records (7 days) =====
+    // ===== Job 6: Expire Pending Invitations =====
+    try {
+      const { count: expiredCount } = await supabase
+        .from('invitations')
+        .update({ status: 'expired' })
+        .eq('status', 'pending')
+        .lt('expires_at', new Date().toISOString())
+      results.invitations_expired = expiredCount ?? 0
+    } catch (expireError) {
+      logger.error('[Lifecycle] Invitation expiry failed', expireError, { route: 'api/cron/lifecycle' })
+    }
+
+    // ===== Job 7: Prune Old Hourly API Usage Records (7 days) =====
     try {
       const { data: usagePruneCount } = await supabase.rpc('prune_api_usage')
       results.usage_records_pruned = usagePruneCount ?? 0

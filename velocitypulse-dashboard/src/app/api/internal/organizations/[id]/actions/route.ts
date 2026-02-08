@@ -231,7 +231,10 @@ export async function POST(
           .update({ organization_id: null })
           .eq('organization_id', id)
 
-        // 6. Original tables (existing cleanup)
+        // 6. Invitations
+        await supabase.from('invitations').delete().eq('organization_id', id)
+
+        // 7. Original tables (existing cleanup)
         await supabase.from('audit_logs').delete().eq('organization_id', id)
         await supabase.from('agent_commands').delete().eq('organization_id', id)
         await supabase.from('devices').delete().eq('organization_id', id)

@@ -69,7 +69,7 @@ export function InviteUserDialog({ open, onOpenChange, onInvite }: InviteUserDia
         <DialogHeader>
           <DialogTitle>Invite User</DialogTitle>
           <DialogDescription>
-            Add a team member to your organization. They must have an existing account.
+            Add a team member to your organization. If they don't have an account yet, they'll receive an email invitation to sign up.
           </DialogDescription>
         </DialogHeader>
 

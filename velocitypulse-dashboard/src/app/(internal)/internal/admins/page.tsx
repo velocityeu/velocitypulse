@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Loader2, AlertCircle, RefreshCw, Shield,
-  UserPlus, MoreVertical, Trash2, Ban, CheckCircle2
+  UserPlus, MoreVertical, Trash2, Ban, CheckCircle2,
+  Clock, Mail, X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -37,8 +38,19 @@ const ADMIN_ROLE_CONFIG: Record<AdminRole, { label: string; color: string; bgCol
   viewer: { label: 'Viewer', color: 'text-gray-600', bgColor: 'bg-gray-500/10' },
 }
 
+interface PendingAdminInvitation {
+  id: string
+  email: string
+  role: string
+  status: string
+  invited_by: string
+  expires_at: string
+  created_at: string
+}
+
 export default function AdminsPage() {
   const [admins, setAdmins] = useState<AdminUser[]>([])
+  const [invitations, setInvitations] = useState<PendingAdminInvitation[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -66,6 +78,7 @@ export default function AdminsPage() {
       if (!res.ok) throw new Error('Failed to load admins')
       const data = await res.json()
       setAdmins(data.admins || [])
+      setInvitations(data.invitations || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load admins')
     } finally {
@@ -88,7 +101,11 @@ export default function AdminsPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to invite admin')
-      setAdmins(prev => [...prev, data.admin])
+      if (data.admin) {
+        setAdmins(prev => [...prev, data.admin])
+      } else if (data.invitation) {
+        setInvitations(prev => [...prev, data.invitation])
+      }
       setInviteOpen(false)
       setInviteEmail('')
       setInviteRole('support_admin')
@@ -160,6 +177,19 @@ export default function AdminsPage() {
     }
   }
 
+  const handleRevokeInvitation = async (invitationId: string) => {
+    try {
+      const res = await fetch(`/api/internal/invitations/${invitationId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to revoke invitation')
+      }
+      setInvitations(prev => prev.filter(i => i.id !== invitationId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke invitation')
+    }
+  }
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Never'
     return new Date(dateStr).toLocaleDateString('en-GB', {
@@ -201,6 +231,51 @@ export default function AdminsPage() {
             Dismiss
           </Button>
         </div>
+      )}
+
+      {/* Pending Admin Invitations */}
+      {!isLoading && invitations.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="px-4 py-3 border-b bg-amber-50/50 dark:bg-amber-950/20">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-500" />
+                <span className="text-sm font-medium">Pending Invitations</span>
+                <Badge variant="secondary" className="ml-1">{invitations.length}</Badge>
+              </div>
+            </div>
+            <div className="divide-y">
+              {invitations.map(inv => {
+                const roleConfig = ADMIN_ROLE_CONFIG[inv.role as AdminRole]
+                return (
+                  <div key={inv.id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                        <Mail className="h-4 w-4 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{inv.email}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Invited as{' '}
+                          <span className={roleConfig?.color}>{roleConfig?.label || inv.role}</span>
+                          {' '}&middot; Expires {formatDate(inv.expires_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleRevokeInvitation(inv.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Loading */}
@@ -337,7 +412,7 @@ export default function AdminsPage() {
           <DialogHeader>
             <DialogTitle>Add Admin User</DialogTitle>
             <DialogDescription>
-              Grant admin access to a VelocityPulse user. They must have an existing account.
+              Grant admin access to a VelocityPulse user. If they don't have an account yet, they'll receive an email invitation to sign up.
             </DialogDescription>
           </DialogHeader>
 

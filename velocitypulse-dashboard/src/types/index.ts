@@ -268,6 +268,31 @@ export interface Subscription {
 }
 
 // ==============================================
+// Invitation Types
+// ==============================================
+
+export type InvitationType = 'member' | 'admin'
+export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
+
+export interface Invitation {
+  id: string
+  token: string
+  email: string
+  invitation_type: InvitationType
+  organization_id: string | null
+  role: string
+  status: InvitationStatus
+  invited_by: string
+  accepted_by: string | null
+  accepted_at: string | null
+  expires_at: string
+  created_at: string
+  updated_at: string
+  // Joined
+  organization?: { name: string }
+}
+
+// ==============================================
 // Audit Log Types
 // ==============================================
 
@@ -281,6 +306,11 @@ export type AuditAction =
   | 'organization.trial_warning_sent'
   | 'organization.data_purged'
   | 'member.invited'
+  | 'member.added_directly'
+  | 'member.invitation_sent'
+  | 'member.invitation_accepted'
+  | 'member.invitation_revoked'
+  | 'member.invitation_resent'
   | 'member.removed'
   | 'member.role_changed'
   | 'agent.created'

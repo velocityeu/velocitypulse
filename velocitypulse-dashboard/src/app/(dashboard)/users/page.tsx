@@ -5,7 +5,7 @@ import { authFetch } from '@/lib/auth-fetch'
 import {
   Plus, Trash2, RefreshCw, Loader2, AlertCircle,
   Users, Crown, Shield, Edit3, Eye, Search,
-  MoreVertical, UserCog, ChevronDown
+  MoreVertical, UserCog, ChevronDown, Clock, Mail, RotateCw, X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -30,6 +30,16 @@ interface MemberWithUser extends OrganizationMember {
     imageUrl: string | null
     lastSignInAt: string | null
   }
+}
+
+interface PendingInvitation {
+  id: string
+  email: string
+  role: string
+  status: string
+  invited_by: string
+  expires_at: string
+  created_at: string
 }
 
 // Role configuration with tooltips
@@ -72,6 +82,7 @@ const ROLE_CONFIG: Record<MemberRole, {
 
 export default function UsersPage() {
   const [members, setMembers] = useState<MemberWithUser[]>([])
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -124,6 +135,7 @@ export default function UsersPage() {
       if (!res.ok) throw new Error('Failed to load members')
       const data = await res.json()
       setMembers(data.members || [])
+      setInvitations(data.invitations || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load members')
     } finally {
@@ -140,7 +152,7 @@ export default function UsersPage() {
     setSelectedIds(new Set())
   }, [searchQuery])
 
-  // Invite user
+  // Invite user — handles both member and invitation responses
   const handleInvite = async (email: string, role: MemberRole) => {
     const res = await authFetch('/api/dashboard/members', {
       method: 'POST',
@@ -149,7 +161,11 @@ export default function UsersPage() {
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Failed to invite user')
-    setMembers(prev => [...prev, data.member])
+    if (data.member) {
+      setMembers(prev => [...prev, data.member])
+    } else if (data.invitation) {
+      setInvitations(prev => [...prev, data.invitation])
+    }
   }
 
   // Change role
@@ -189,6 +205,38 @@ export default function UsersPage() {
       setError(err instanceof Error ? err.message : 'Failed to remove member')
     } finally {
       setRemovingMember(false)
+    }
+  }
+
+  // Revoke invitation
+  const handleRevokeInvitation = async (invitationId: string) => {
+    try {
+      const res = await authFetch(`/api/dashboard/invitations/${invitationId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to revoke invitation')
+      }
+      setInvitations(prev => prev.filter(i => i.id !== invitationId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke invitation')
+    }
+  }
+
+  // Resend invitation
+  const handleResendInvitation = async (invitationId: string) => {
+    try {
+      const res = await authFetch(`/api/dashboard/invitations/${invitationId}/resend`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to resend invitation')
+      // Update the invitation in state with new expiry
+      if (data.invitation) {
+        setInvitations(prev => prev.map(i =>
+          i.id === invitationId ? { ...i, ...data.invitation } : i
+        ))
+      }
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resend invitation')
     }
   }
 
@@ -371,6 +419,66 @@ export default function UsersPage() {
           </div>
         )}
 
+        {/* Pending Invitations */}
+        {!isLoading && invitations.length > 0 && (
+          <Card>
+            <CardContent className="p-0">
+              <div className="px-4 py-3 border-b bg-amber-50/50 dark:bg-amber-950/20">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-amber-500" />
+                  <span className="text-sm font-medium">Pending Invitations</span>
+                  <Badge variant="secondary" className="ml-1">{invitations.length}</Badge>
+                </div>
+              </div>
+              <div className="divide-y">
+                {invitations.map(inv => (
+                  <div key={inv.id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                        <Mail className="h-4 w-4 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{inv.email}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Invited as {inv.role} &middot; Expires {formatDate(inv.expires_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleResendInvitation(inv.id)}
+                          >
+                            <RotateCw className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Resend invitation</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleRevokeInvitation(inv.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Revoke invitation</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Loading state */}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -538,6 +646,7 @@ export default function UsersPage() {
             {filteredMembers.length === members.length
               ? `${members.length} user${members.length !== 1 ? 's' : ''}`
               : `${filteredMembers.length} of ${members.length} users`}
+            {invitations.length > 0 && ` + ${invitations.length} pending`}
           </p>
         )}
 

@@ -1,6 +1,6 @@
 -- ==============================================
--- Migration 010: Admin Roles, Admin Audit Logs, User Enhancements
--- Phase 1: User Management improvements
+-- Migration 010: Admin Roles, Admin Audit Logs, Support Tickets, User Enhancements
+-- Phases 1-6: User management, remote monitoring, support helpdesk
 -- ==============================================
 
 -- ==============================================

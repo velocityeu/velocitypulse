@@ -1,336 +1,180 @@
 # VelocityPulse - Product Specification
 
 **Website:** [velocitypulse.io](https://velocitypulse.io)
+**Dashboard:** [app.velocitypulse.io](https://app.velocitypulse.io)
 
-Technical requirements for transforming IT Dashboard into a commercial SaaS product.
+Multi-tenant SaaS network monitoring platform.
 
 ## Overview
 
 VelocityPulse is a multi-tenant SaaS network monitoring platform built on:
-- **Frontend:** Next.js 14, TypeScript, Supabase, Tailwind CSS
+- **Dashboard:** Next.js 16, React 19, TypeScript, Tailwind CSS
+- **Auth:** Clerk (identity-only — sessions, social login, sign-in)
+- **Database:** Supabase (PostgreSQL + RLS for multi-tenancy)
+- **Billing:** Stripe (subscriptions, Checkout, Apple Pay, Google Pay)
 - **Agent:** Node.js, TypeScript, Express, Socket.IO
-- **Infrastructure:** Vercel (frontend), Supabase (database + realtime)
+- **Infrastructure:** Vercel (dashboard), Supabase (database + realtime)
+- **Observability:** Sentry, structured logger
 
-## Architecture Changes Required
+## Architecture
 
-### Current State (Single-Tenant)
-- One Supabase project, one organization
-- Direct agent-to-dashboard connection
-- No billing or usage metering
+### Auth & Identity
+- **Clerk** handles authentication, sessions, and social login (Google, Microsoft, Apple)
+- **Supabase `users` table** (migration 009) caches Clerk profile data (email, name, avatar, is_staff)
+- Clerk webhook (`/api/webhook/clerk`) syncs `user.created`, `user.updated`, `user.deleted` events via svix
+- Staff/admin role stored in `users.is_staff` column (synced from Clerk `publicMetadata.role`)
+- Clerk is treated as an identity provider only — all app data lives in Supabase
 
-### Target State (Multi-Tenant SaaS)
+### Multi-Tenancy
 - Tenant isolation via Supabase Row Level Security (RLS)
-- Organization/workspace model
-- Usage-based billing via Stripe
-- OAuth authentication (Microsoft, Google, Apple)
+- Organization/workspace model with role-based permissions (owner/admin/editor/viewer)
+- Agent auth independent of Clerk (API key-based)
+- Billing tied to Supabase orgs (not Clerk orgs)
 
-## Must-Have Features for Launch
+## Implemented Features
 
-### 1. Multi-Tenant Data Isolation
+### Core (Tier 1-2)
+- Multi-tenant data isolation (RLS on all tables)
+- Organization/workspace model with 4 roles (owner/admin/editor/viewer)
+- Clerk auth with social login (Google, Microsoft, Apple)
+- Stripe billing (subscriptions, Checkout, Apple Pay, Google Pay)
+- Agent provisioning with API key auth
+- Network discovery (ARP, mDNS, SSDP)
+- Notification channels (email, Slack, Teams, webhook)
+- Form delivery (Resend + Supabase + Zoho)
 
-**Priority:** Critical
+### Advanced (Tier 3-4)
+- White-label branding (custom name, logo, color — unlimited tier)
+- SSO/SAML support (unlimited tier)
+- Analytics & uptime reporting
+- Admin backend (`/internal/*` routes)
+- Billing self-service (change plan, cancel, reactivate, update payment)
+- Lifecycle automation (trial warnings, expiry, suspension, data purge)
 
-```
-Organizations
-├── Workspaces (sites/locations)
-│   ├── Agents
-│   │   └── Devices
-│   └── Users (with roles)
-└── Billing (Stripe customer)
-```
+### Operational (Tier 5+)
+- 26 Vitest tests
+- Sentry + structured logger
+- Security middleware (CSP, rate limiting, security headers)
+- Zod input validation
+- DB-backed rate limiting & API usage tracking
+- Device export/import
+- User-facing audit log
+- API key rotation with usage quota warnings
+- Cron pruning (audit logs 365d, API usage 7d)
+- Referral tracking
+- Users table in Supabase with Clerk webhook sync (migration 009)
 
-**Implementation:**
-- Add `organization_id` column to all tables
-- Implement Supabase RLS policies
-- Ensure agent data stays within organization boundary
+## Database Schema
 
-### 2. Authentication & Authorization
+### Supabase Migrations (001-009)
 
-**Priority:** Critical
+| Migration | Description |
+|-----------|-------------|
+| 001 | Multi-tenant schema (organizations, members, agents, segments, devices, categories, subscriptions, audit_logs) |
+| 002 | RLS policies for all tables |
+| 003 | Agent cascade delete |
+| 004 | Notification channels, rules, history |
+| 005 | Form submissions |
+| 006 | Org branding, SSO fields, analytics (device_status_history) |
+| 007 | Usage tracking, referrals, API usage |
+| 008 | Operational hardening (rate limits, export/import, cron pruning functions) |
+| 009 | Users table (Clerk profile cache: email, name, avatar, is_staff) |
 
-| Provider | Justification |
-|----------|---------------|
-| Microsoft | Enterprise customers, schools (M365) |
-| Google | SMB customers, general users |
-| Apple | Premium feel, privacy-focused users |
-| Email/Password | Fallback for all others |
+### Key Tables
 
-**Roles:**
-- **Owner:** Full access, billing management
-- **Admin:** Manage users, agents, settings
-- **Viewer:** Read-only dashboard access
+- `organizations` — tenants with plan, limits, branding, SSO config
+- `organization_members` — user-org mapping with role + granular permissions
+- `users` — Clerk profile cache (synced via webhook), staff flag
+- `agents` — network scanning agents with API key auth
+- `devices` — monitored devices with status, discovery metadata
+- `categories` — device groupings per org
+- `network_segments` — CIDR ranges assigned to agents
+- `subscriptions` — Stripe subscription records
+- `audit_logs` — all user/system/webhook actions
+- `notification_channels` + `notification_rules` — alerting config
 
-### 3. Billing Integration (Stripe)
+### Row Level Security
 
-**Priority:** Critical
-
-**Requirements:**
-- Stripe Checkout for subscriptions
-- Apple Pay support (via Stripe)
-- Usage metering (device count, agent count)
-- Webhook handling for subscription events
-- Customer portal for self-service
-
-**Billing Events to Handle:**
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-- `invoice.payment_succeeded`
-- `invoice.payment_failed`
-
-### 4. Automated Agent Provisioning
-
-**Priority:** High
-
-**Current Flow:**
-1. Manual agent download
-2. Manual API key configuration
-3. Manual .env setup
-
-**Target Flow:**
-1. User clicks "Add Agent" in dashboard
-2. System generates unique agent key
-3. User downloads pre-configured installer
-4. Agent auto-registers on first run
-
-**Installer Options:**
-- Windows: MSI or PowerShell one-liner
-- macOS: PKG or Homebrew
-- Linux: DEB/RPM or curl | bash
-
-### 5. Usage Metering
-
-**Priority:** High
-
-**Metrics to Track:**
-- Device count per organization
-- Agent count per organization
-- API calls (for future rate limiting)
-- Data retention period used
-
-**Enforcement:**
-- Soft limits: Warning at 80%, 90%
-- Hard limits: Block new devices/agents at limit
-- Grace period: 7 days over limit before enforcement
-
-### 6. Onboarding Wizard
-
-**Priority:** High
-
-**Steps:**
-1. Welcome + organization name
-2. Choose plan (or start trial)
-3. Download first agent
-4. Wait for agent connection (live feedback)
-5. View discovered devices
-6. Invite team members (optional)
-7. Done - explore dashboard
-
-**Goal:** < 10 minutes from signup to seeing devices
-
-## Nice-to-Have Features
-
-### 7. White-Label for MSPs
-
-**Priority:** Medium (post-launch)
-
-- Custom domain support (CNAME)
-- Custom logo and branding
-- Hide "Powered by VelocityPulse"
-- Custom email templates
-
-### 8. API for Integrations
-
-**Priority:** Medium (post-launch)
-
-- RESTful API with versioning
-- API key authentication
-- Rate limiting per plan
-- Webhooks for events (device down, alert triggered)
-
-### 9. Mobile App
-
-**Priority:** Low (post-launch)
-
-- React Native (Expo)
-- Push notifications for alerts
-- Quick status overview
-- Basic device details
-
-### 10. Custom Alerting Rules
-
-**Priority:** Medium (post-launch)
-
-- Create custom conditions (CPU > 90% for 5 min)
-- Multiple notification channels per rule
-- Escalation paths
-- Maintenance windows
-
-### 11. Scheduled Reports
-
-**Priority:** Low (post-launch)
-
-- Daily/weekly/monthly summaries
-- PDF export
-- Email delivery
-- Custom report builder
-
-## Database Schema Changes
-
-### New Tables
-
-```sql
--- Organizations (tenants)
-CREATE TABLE organizations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  stripe_customer_id TEXT,
-  plan TEXT DEFAULT 'free',
-  device_limit INTEGER DEFAULT 50,
-  agent_limit INTEGER DEFAULT 1,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Organization members
-CREATE TABLE organization_members (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID REFERENCES organizations(id),
-  user_id UUID REFERENCES auth.users(id),
-  role TEXT DEFAULT 'viewer', -- owner, admin, viewer
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(organization_id, user_id)
-);
-
--- Invitations
-CREATE TABLE invitations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID REFERENCES organizations(id),
-  email TEXT NOT NULL,
-  role TEXT DEFAULT 'viewer',
-  token TEXT UNIQUE NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-### Modified Tables
-
-Add `organization_id` foreign key to:
-- `agents`
-- `devices`
-- `alerts` (if exists)
-- Any other tenant-specific data
-
-### Row Level Security (RLS)
-
-```sql
--- Example: Devices table RLS
-ALTER TABLE devices ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view devices in their organization"
-  ON devices FOR SELECT
-  USING (
-    organization_id IN (
-      SELECT organization_id FROM organization_members
-      WHERE user_id = auth.uid()
-    )
-  );
-```
+All tables have RLS enabled. Service role key bypasses RLS for API routes. Organization-scoped queries use `organization_id` filtering.
 
 ## API Endpoints
 
-### Agent API (Existing + Modified)
-
-| Endpoint | Method | Change |
-|----------|--------|--------|
-| `/api/agent/register` | POST | New - first-time agent setup |
-| `/api/agent/heartbeat` | POST | Add org validation |
-| `/api/agent/devices` | POST | Add org validation |
-| `/api/agent/status` | GET | Add org validation |
-
-### Dashboard API (New)
+### Agent API (API key auth)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/organizations` | GET/POST | List/create orgs |
-| `/api/organizations/:id/members` | GET/POST | Manage members |
-| `/api/organizations/:id/invitations` | POST | Send invites |
-| `/api/billing/checkout` | POST | Create Stripe checkout |
-| `/api/billing/portal` | POST | Create customer portal |
-| `/api/billing/webhook` | POST | Stripe webhook handler |
+| `/api/agent/heartbeat` | POST | Agent check-in, returns config + pending commands |
+| `/api/agent/devices/discovered` | POST | Submit discovered devices from scans |
+| `/api/agent/devices/status` | POST | Submit device status reports |
+| `/api/agent/segments/register` | POST | Auto-register network segments |
+| `/api/agent/ping` | GET | Agent connectivity check |
 
-## Security Considerations
+### Dashboard API (Clerk session auth)
 
-### Data Isolation
-- RLS policies on all tenant data
-- Agent keys scoped to organization
-- API keys scoped to organization
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/onboarding` | GET/POST | Check/create organization |
+| `/api/dashboard/members` | GET/POST | List/invite members |
+| `/api/dashboard/agents` | GET/POST | Manage agents |
+| `/api/checkout/embedded` | POST | Create Stripe Checkout session |
+| `/api/billing/*` | Various | Plan changes, cancel, reactivate, payment update |
 
-### Authentication
-- OAuth 2.0 with PKCE
-- Session management via Supabase Auth
-- MFA support (optional, via Supabase)
+### Webhook Endpoints (public, signature-verified)
 
-### Agent Security
-- Agent key rotation capability
-- IP allowlisting (optional)
-- TLS for all communication
+| Endpoint | Provider | Events |
+|----------|----------|--------|
+| `/api/webhook/stripe` | Stripe | checkout.session.completed, subscription.*, invoice.* |
+| `/api/webhook/clerk` | Clerk/Svix | user.created, user.updated, user.deleted |
 
-### Compliance
-- GDPR-ready (data export, deletion)
-- SOC 2 considerations (audit logs)
-- UK data residency (Supabase region selection)
+### Internal API (staff auth via `users.is_staff`)
 
-## Performance Requirements
+| Endpoint | Description |
+|----------|-------------|
+| `/api/internal/organizations` | Admin org management |
+| `/api/internal/stats` | Platform statistics |
 
-| Metric | Target |
-|--------|--------|
-| Dashboard load time | < 2 seconds |
-| Real-time update latency | < 1 second |
-| Agent heartbeat interval | 60 seconds |
-| Device status check | 30 seconds |
-| API response time | < 200ms (p95) |
+### Cron Jobs (Vercel Cron)
 
-## Testing Requirements
+| Endpoint | Schedule | Description |
+|----------|----------|-------------|
+| `/api/cron/lifecycle` | Every 6h | Trial warnings/expiry, grace period enforcement, data purge, log pruning |
 
-### Unit Tests
-- RLS policy tests
-- Billing calculation tests
-- Usage metering tests
+## Security
 
-### Integration Tests
-- Multi-tenant isolation verification
-- Stripe webhook handling
-- OAuth flow end-to-end
-
-### Load Tests
-- 100 concurrent organizations
-- 10,000 devices per organization
-- 1,000 real-time subscriptions
+- **Middleware**: CSP headers, rate limiting, security headers on all routes
+- **Auth**: Clerk sessions for dashboard, API keys for agents, svix signatures for webhooks
+- **Data**: RLS on all tables, service role for server-side, org-scoped queries
+- **Staff**: `users.is_staff` in Supabase (not Clerk metadata) — checked in middleware + internal-auth
+- **Validation**: Zod schemas on all user input via `validateRequest()`
 
 ## Deployment
 
-### Environments
-- **Development:** Local Supabase, test Stripe
-- **Staging:** Supabase project, test Stripe
-- **Production:** Supabase project, live Stripe
+- **Dashboard**: Vercel project `velocitypulse-dashboard`, production at `app.velocitypulse.io`
+- **Auth**: Clerk production instance at `clerk.velocitypulse.io`
+- **Database**: Supabase project `velocitypulse-dashboard` (London region)
+- **DNS**: `velocitypulse.io` on GoDaddy, A record `app` -> `76.76.21.21`
 
-### Monitoring
-- Vercel Analytics (frontend)
-- Supabase Dashboard (database)
-- Stripe Dashboard (billing)
-- Custom logging (errors, events)
+### Environment Variables (Vercel — dashboard project)
 
-## Timeline Estimate
+| Variable | Purpose |
+|----------|---------|
+| `CLERK_SECRET_KEY` | Clerk Backend API |
+| `CLERK_WEBHOOK_SECRET` | Svix signature verification for Clerk webhooks |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk frontend |
+| `STRIPE_SECRET_KEY` | Stripe Backend API |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase admin access (bypasses RLS) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase client access (RLS enforced) |
 
-| Phase | Scope |
-|-------|-------|
-| Phase 1 | Multi-tenancy, Auth, Billing |
-| Phase 2 | Onboarding wizard, Agent provisioning |
-| Phase 3 | Beta testing, Bug fixes |
-| Phase 4 | Public launch, Marketing site |
+### Plans
+
+| Plan | Devices | Agents | Users |
+|------|---------|--------|-------|
+| Trial (14 days) | 25 | 1 | 3 |
+| Starter | 100 | 3 | 10 |
+| Unlimited | Unlimited | Unlimited | Unlimited |
 
 ---
 
-*Last updated: January 2026*
+*Last updated: February 2026*

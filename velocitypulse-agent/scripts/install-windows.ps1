@@ -576,8 +576,8 @@ function Restore-UpgradeBackup {
 
     if ($nodeExe -and (Test-Path $nssmPath)) {
         $entryPoint = Join-Path $InstallDir "dist\index.js"
-        & $nssmPath install $ServiceName $nodeExe $entryPoint 2>&1 | Out-Null
-        & $nssmPath set $ServiceName AppDirectory $InstallDir 2>&1 | Out-Null
+        & $nssmPath install $ServiceName "`"$nodeExe`"" "`"$entryPoint`"" 2>&1 | Out-Null
+        & $nssmPath set $ServiceName AppDirectory "`"$InstallDir`"" 2>&1 | Out-Null
         & $nssmPath set $ServiceName Start SERVICE_AUTO_START 2>&1 | Out-Null
         & $nssmPath start $ServiceName 2>&1 | Out-Null
     }
@@ -950,14 +950,14 @@ if (-not (Test-Path $logsDir)) {
     New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 }
 
-# Register service via NSSM
-& $nssmPath install $ServiceName $nodeExe $entryPoint 2>&1 | Out-Null
-& $nssmPath set $ServiceName AppDirectory $InstallDir 2>&1 | Out-Null
+# Register service via NSSM (quote paths - spaces in "Program Files" break NSSM)
+& $nssmPath install $ServiceName "`"$nodeExe`"" "`"$entryPoint`"" 2>&1 | Out-Null
+& $nssmPath set $ServiceName AppDirectory "`"$InstallDir`"" 2>&1 | Out-Null
 & $nssmPath set $ServiceName DisplayName $ServiceDisplay 2>&1 | Out-Null
 & $nssmPath set $ServiceName Description "VelocityPulse network monitoring agent" 2>&1 | Out-Null
 & $nssmPath set $ServiceName Start SERVICE_AUTO_START 2>&1 | Out-Null
-& $nssmPath set $ServiceName AppStdout (Join-Path $logsDir "service.log") 2>&1 | Out-Null
-& $nssmPath set $ServiceName AppStderr (Join-Path $logsDir "service-error.log") 2>&1 | Out-Null
+& $nssmPath set $ServiceName AppStdout "`"$(Join-Path $logsDir "service.log")`"" 2>&1 | Out-Null
+& $nssmPath set $ServiceName AppStderr "`"$(Join-Path $logsDir "service-error.log")`"" 2>&1 | Out-Null
 & $nssmPath set $ServiceName AppRotateFiles 1 2>&1 | Out-Null
 & $nssmPath set $ServiceName AppRotateBytes 1048576 2>&1 | Out-Null
 

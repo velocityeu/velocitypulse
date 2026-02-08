@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
 
@@ -34,7 +35,7 @@ export function UsageQuotaWarnings() {
   useEffect(() => {
     async function fetchUsage() {
       try {
-        const res = await fetch('/api/dashboard/usage')
+        const res = await authFetch('/api/dashboard/usage')
         if (!res.ok) return
 
         const data: UsageData = await res.json()

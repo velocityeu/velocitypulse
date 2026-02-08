@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { loadStripe } from '@stripe/stripe-js'
 import { EmbeddedCheckoutProvider, EmbeddedCheckout as StripeEmbeddedCheckout } from '@stripe/react-stripe-js'
 
@@ -15,7 +16,7 @@ export function EmbeddedCheckout({ priceId, organizationId }: EmbeddedCheckoutPr
   const [error, setError] = useState<string | null>(null)
 
   const fetchClientSecret = useCallback(async () => {
-    const response = await fetch('/api/checkout/embedded', {
+    const response = await authFetch('/api/checkout/embedded', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ priceId, organizationId }),

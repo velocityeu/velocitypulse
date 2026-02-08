@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { Loader2 } from 'lucide-react'
@@ -50,7 +51,7 @@ function PaymentForm({ onSuccess, onOpenChange }: { onSuccess: () => void; onOpe
         ? setupIntent.payment_method
         : setupIntent.payment_method.id
 
-      const response = await fetch('/api/billing/update-payment', {
+      const response = await authFetch('/api/billing/update-payment', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paymentMethodId: pmId }),
@@ -105,7 +106,7 @@ export function UpdatePaymentMethod({ open, onOpenChange, onSuccess }: UpdatePay
     if (open && !clientSecret) {
       setLoading(true)
       setError(null)
-      fetch('/api/billing/update-payment', { method: 'POST' })
+      authFetch('/api/billing/update-payment', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
           if (data.clientSecret) {

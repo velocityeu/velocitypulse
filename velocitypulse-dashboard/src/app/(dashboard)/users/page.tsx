@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import {
   Plus, Trash2, RefreshCw, Loader2, AlertCircle,
   Users, Crown, Shield, Edit3, Eye, Search,
@@ -119,7 +120,7 @@ export default function UsersPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/dashboard/members')
+      const res = await authFetch('/api/dashboard/members')
       if (!res.ok) throw new Error('Failed to load members')
       const data = await res.json()
       setMembers(data.members || [])
@@ -141,7 +142,7 @@ export default function UsersPage() {
 
   // Invite user
   const handleInvite = async (email: string, role: MemberRole) => {
-    const res = await fetch('/api/dashboard/members', {
+    const res = await authFetch('/api/dashboard/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, role }),
@@ -156,7 +157,7 @@ export default function UsersPage() {
     if (!memberToChangeRole) return
     setChangingRole(true)
     try {
-      const res = await fetch(`/api/dashboard/members/${memberToChangeRole.id}`, {
+      const res = await authFetch(`/api/dashboard/members/${memberToChangeRole.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: newRole }),
@@ -177,7 +178,7 @@ export default function UsersPage() {
     if (!memberToRemove) return
     setRemovingMember(true)
     try {
-      const res = await fetch(`/api/dashboard/members/${memberToRemove.id}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/dashboard/members/${memberToRemove.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to remove member')
@@ -196,7 +197,7 @@ export default function UsersPage() {
     setBulkChanging(true)
     try {
       const promises = selectedNonOwnerMembers.map(m =>
-        fetch(`/api/dashboard/members/${m.id}`, {
+        authFetch(`/api/dashboard/members/${m.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ role: bulkNewRole }),
@@ -226,7 +227,7 @@ export default function UsersPage() {
     setBulkRemoving(true)
     try {
       const promises = selectedNonOwnerMembers.map(m =>
-        fetch(`/api/dashboard/members/${m.id}`, { method: 'DELETE' }).then(res => {
+        authFetch(`/api/dashboard/members/${m.id}`, { method: 'DELETE' }).then(res => {
           if (!res.ok) throw new Error('Failed')
           return m.id
         })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { useTheme } from 'next-themes'
 import { UserProfile } from '@clerk/nextjs'
 import { Sun, Moon, Monitor, Settings as SettingsIcon, Palette, Paintbrush, Shield, Loader2 } from 'lucide-react'
@@ -162,7 +163,7 @@ function BrandingTab({ organization, onSave }: { organization: ReturnType<typeof
     setSuccess(false)
 
     try {
-      const response = await fetch('/api/dashboard/branding', {
+      const response = await authFetch('/api/dashboard/branding', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -197,7 +198,7 @@ function BrandingTab({ organization, onSave }: { organization: ReturnType<typeof
     setError(null)
 
     try {
-      const response = await fetch('/api/dashboard/branding', {
+      const response = await authFetch('/api/dashboard/branding', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -336,7 +337,7 @@ function SSOTab() {
   useEffect(() => {
     async function fetchSSO() {
       try {
-        const response = await fetch('/api/dashboard/sso')
+        const response = await authFetch('/api/dashboard/sso')
         if (response.ok) {
           const data = await response.json()
           setSsoEnabled(data.sso_enabled)
@@ -362,7 +363,7 @@ function SSOTab() {
     setSuccess(false)
 
     try {
-      const response = await fetch('/api/dashboard/sso', {
+      const response = await authFetch('/api/dashboard/sso', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -395,7 +396,7 @@ function SSOTab() {
     setError(null)
 
     try {
-      const response = await fetch('/api/dashboard/sso', { method: 'DELETE' })
+      const response = await authFetch('/api/dashboard/sso', { method: 'DELETE' })
 
       if (!response.ok) {
         const data = await response.json()

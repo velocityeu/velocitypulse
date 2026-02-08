@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 
 interface UseSonarPingOptions {
   animationDuration?: number // ms, default 2000
@@ -35,7 +36,7 @@ export function useSonarPing(options: UseSonarPingOptions = {}) {
     playSound()
 
     try {
-      const res = await fetch(`/api/dashboard/agents/${agentId}/commands`, {
+      const res = await authFetch(`/api/dashboard/agents/${agentId}/commands`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command_type: 'ping' }),
@@ -72,7 +73,7 @@ export function useSonarPing(options: UseSonarPingOptions = {}) {
     // Send commands in parallel
     await Promise.allSettled(
       agentIds.map(id =>
-        fetch(`/api/dashboard/agents/${id}/commands`, {
+        authFetch(`/api/dashboard/agents/${id}/commands`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command_type: 'ping' }),

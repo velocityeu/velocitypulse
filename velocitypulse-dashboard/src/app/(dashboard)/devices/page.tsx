@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import {
   Plus, Trash2, Pencil, Search, RefreshCw,
   Loader2, AlertCircle, CheckCircle2, XCircle, AlertTriangle, HelpCircle
@@ -37,9 +38,9 @@ export default function DevicesPage() {
     setError(null)
     try {
       const [devicesRes, categoriesRes, segmentsRes] = await Promise.all([
-        fetch('/api/dashboard/devices'),
-        fetch('/api/dashboard/categories'),
-        fetch('/api/dashboard/segments'),
+        authFetch('/api/dashboard/devices'),
+        authFetch('/api/dashboard/categories'),
+        authFetch('/api/dashboard/segments'),
       ])
 
       if (devicesRes.ok) {
@@ -83,7 +84,7 @@ export default function DevicesPage() {
   const handleSaveDevice = async (deviceData: Partial<Device>) => {
     if (editingDevice) {
       // Update
-      const res = await fetch(`/api/dashboard/devices/${editingDevice.id}`, {
+      const res = await authFetch(`/api/dashboard/devices/${editingDevice.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(deviceData),
@@ -93,7 +94,7 @@ export default function DevicesPage() {
       setDevices(prev => prev.map(d => d.id === editingDevice.id ? data.device : d))
     } else {
       // Create
-      const res = await fetch('/api/dashboard/devices', {
+      const res = await authFetch('/api/dashboard/devices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(deviceData),
@@ -109,7 +110,7 @@ export default function DevicesPage() {
     if (!deviceToDelete) return
     setDeletingDevice(true)
     try {
-      const res = await fetch(`/api/dashboard/devices/${deviceToDelete.id}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/dashboard/devices/${deviceToDelete.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to delete device')

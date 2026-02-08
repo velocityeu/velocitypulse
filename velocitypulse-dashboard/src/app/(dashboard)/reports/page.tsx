@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Download } from 'lucide-react'
@@ -14,7 +15,7 @@ export default function ReportsPage() {
     setDownloading(true)
     try {
       const params = new URLSearchParams({ format, status })
-      const response = await fetch(`/api/dashboard/reports/devices?${params}`)
+      const response = await authFetch(`/api/dashboard/reports/devices?${params}`)
 
       if (format === 'csv') {
         const blob = await response.blob()

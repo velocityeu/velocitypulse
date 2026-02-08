@@ -26,6 +26,11 @@ let cachedOrg: {
   permissions: MemberPermissions | null
 } | null = null
 
+/** Clear the module-level org cache. Called by authFetch on 401. */
+export function clearOrgCache(): void {
+  cachedOrg = null
+}
+
 export function OrganizationProvider({ children }: OrganizationProviderProps) {
   const [organization, setOrganization] = useState<Organization | null>(cachedOrg?.organization ?? null)
   const [role, setRole] = useState<MemberRole | null>(cachedOrg?.role ?? null)
@@ -98,6 +103,34 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
     fetchOrganization()
     return () => { abortControllerRef.current?.abort() }
   }, [fetchOrganization])
+
+  // Proactively re-check auth when returning to a stale tab (5+ min idle)
+  useEffect(() => {
+    let lastVisible = Date.now()
+
+    const handleVisibility = async () => {
+      if (document.visibilityState !== 'visible') {
+        lastVisible = Date.now()
+        return
+      }
+
+      const idleMs = Date.now() - lastVisible
+      if (idleMs < 5 * 60 * 1000) return // less than 5 min idle
+
+      try {
+        const res = await fetch('/api/onboarding', { method: 'GET' })
+        if (res.status === 401) {
+          cachedOrg = null
+          window.location.href = '/sign-in'
+        }
+      } catch {
+        // Network error — ignore, user will hit 401 on next action
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [])
 
   const value: OrganizationContextValue = {
     organization,

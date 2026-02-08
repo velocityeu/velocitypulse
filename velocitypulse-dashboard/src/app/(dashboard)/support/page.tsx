@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,7 +52,7 @@ export default function SupportPage() {
   async function loadTickets() {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/dashboard/support')
+      const res = await authFetch('/api/dashboard/support')
       if (res.ok) {
         const data = await res.json()
         setTickets(data.tickets || [])

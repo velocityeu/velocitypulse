@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
 import {
@@ -91,8 +92,8 @@ export default function BillingPage() {
     async function fetchData() {
       try {
         const [orgResponse, billingResponse] = await Promise.all([
-          fetch('/api/onboarding'),
-          fetch('/api/billing/details'),
+          authFetch('/api/onboarding'),
+          authFetch('/api/billing/details'),
         ])
 
         const orgData = await orgResponse.json()
@@ -123,7 +124,7 @@ export default function BillingPage() {
 
   const refreshBillingData = async () => {
     try {
-      const response = await fetch('/api/billing/details')
+      const response = await authFetch('/api/billing/details')
       if (response.ok) {
         const data = await response.json()
         setBillingData(data)
@@ -156,7 +157,7 @@ export default function BillingPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/billing/change-plan', {
+      const response = await authFetch('/api/billing/change-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceId: pendingPlanChange.priceId }),
@@ -182,7 +183,7 @@ export default function BillingPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/billing/cancel', {
+      const response = await authFetch('/api/billing/cancel', {
         method: 'POST',
       })
 
@@ -205,7 +206,7 @@ export default function BillingPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/billing/reactivate', {
+      const response = await authFetch('/api/billing/reactivate', {
         method: 'POST',
       })
 

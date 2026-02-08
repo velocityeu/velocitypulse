@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { Bell, Plus, Trash2, Pencil, Mail, MessageSquare, Globe, Webhook, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -86,8 +87,8 @@ export default function NotificationsPage() {
     setLoading(true)
     try {
       const [channelsRes, rulesRes] = await Promise.all([
-        fetch('/api/notifications/channels'),
-        fetch('/api/notifications/rules'),
+        authFetch('/api/notifications/channels'),
+        authFetch('/api/notifications/rules'),
       ])
 
       if (channelsRes.ok) {
@@ -132,7 +133,7 @@ export default function NotificationsPage() {
       ? `/api/notifications/channels/${editingChannel.id}`
       : '/api/notifications/channels'
 
-    const res = await fetch(url, {
+    const res = await authFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(channelForm),
@@ -147,14 +148,14 @@ export default function NotificationsPage() {
   async function deleteChannel(id: string) {
     if (!confirm('Delete this notification channel?')) return
 
-    const res = await fetch(`/api/notifications/channels/${id}`, { method: 'DELETE' })
+    const res = await authFetch(`/api/notifications/channels/${id}`, { method: 'DELETE' })
     if (res.ok) {
       fetchData()
     }
   }
 
   async function toggleChannel(id: string, enabled: boolean) {
-    await fetch(`/api/notifications/channels/${id}`, {
+    await authFetch(`/api/notifications/channels/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_enabled: enabled }),
@@ -190,7 +191,7 @@ export default function NotificationsPage() {
       ? `/api/notifications/rules/${editingRule.id}`
       : '/api/notifications/rules'
 
-    const res = await fetch(url, {
+    const res = await authFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(ruleForm),
@@ -205,14 +206,14 @@ export default function NotificationsPage() {
   async function deleteRule(id: string) {
     if (!confirm('Delete this notification rule?')) return
 
-    const res = await fetch(`/api/notifications/rules/${id}`, { method: 'DELETE' })
+    const res = await authFetch(`/api/notifications/rules/${id}`, { method: 'DELETE' })
     if (res.ok) {
       fetchData()
     }
   }
 
   async function toggleRule(id: string, enabled: boolean) {
-    await fetch(`/api/notifications/rules/${id}`, {
+    await authFetch(`/api/notifications/rules/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_enabled: enabled }),

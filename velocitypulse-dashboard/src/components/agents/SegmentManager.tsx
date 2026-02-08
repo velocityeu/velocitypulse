@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { Plus, Trash2, Loader2, Network, Calculator } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,7 +48,7 @@ export function SegmentManager({
     setAdding(true)
     setAddError(null)
     try {
-      const res = await fetch(`/api/dashboard/agents/${agentId}/segments`, {
+      const res = await authFetch(`/api/dashboard/agents/${agentId}/segments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName, cidr: newCidr }),
@@ -69,7 +70,7 @@ export function SegmentManager({
     if (!segmentToDelete) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/segments/${segmentToDelete.id}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/segments/${segmentToDelete.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete segment')
       onSegmentDeleted(segmentToDelete.id)
       setSegmentToDelete(null)
@@ -82,7 +83,7 @@ export function SegmentManager({
 
   const handleToggleEnabled = async (segment: NetworkSegment) => {
     try {
-      const res = await fetch(`/api/segments/${segment.id}`, {
+      const res = await authFetch(`/api/segments/${segment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_enabled: !segment.is_enabled }),
@@ -97,7 +98,7 @@ export function SegmentManager({
 
   const handleSaveEdit = async (segment: NetworkSegment) => {
     try {
-      const res = await fetch(`/api/segments/${segment.id}`, {
+      const res = await authFetch(`/api/segments/${segment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editName, cidr: editCidr }),

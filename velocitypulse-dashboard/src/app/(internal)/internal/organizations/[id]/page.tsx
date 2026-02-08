@@ -24,9 +24,11 @@ import {
   FileText,
   ExternalLink,
   Trash2,
+  Send,
 } from 'lucide-react'
 import { formatDate, formatDateTime, formatCurrency, getDaysUntilTrialExpires } from '@/lib/utils'
 import { ConfirmActionDialog } from '@/components/internal/ConfirmActionDialog'
+import { SendMessageDialog } from '@/components/internal/SendMessageDialog'
 import type { Organization, OrganizationStatus, OrganizationPlan, AuditLog } from '@/types'
 
 interface AgentWithCounts {
@@ -77,6 +79,7 @@ export default function OrganizationDetailPage() {
   const [org, setOrg] = useState<OrganizationDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [showSendMessage, setShowSendMessage] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string
     description: string
@@ -450,6 +453,15 @@ export default function OrganizationDetailPage() {
                 </Button>
               )}
 
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => setShowSendMessage(true)}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Send Message to Owner
+              </Button>
+
               <hr className="my-2" />
 
               {/* Utility Actions */}
@@ -554,6 +566,16 @@ export default function OrganizationDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Send Message Dialog */}
+      {data && (
+        <SendMessageDialog
+          orgId={data.id}
+          orgName={data.name}
+          open={showSendMessage}
+          onOpenChange={setShowSendMessage}
+        />
+      )}
 
       {/* Confirm Action Dialog */}
       <ConfirmActionDialog

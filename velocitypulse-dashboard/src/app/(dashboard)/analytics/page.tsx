@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { Loader2, BarChart3, Clock, Activity, Wifi } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -44,7 +45,7 @@ export default function AnalyticsPage() {
 
     async function fetchDevices() {
       try {
-        const response = await fetch('/api/dashboard/analytics?range=24h')
+        const response = await authFetch('/api/dashboard/analytics?range=24h')
         if (response.ok) {
           const result: AnalyticsResponse = await response.json()
           const deviceList = result.uptime.map(u => ({
@@ -72,7 +73,7 @@ export default function AnalyticsPage() {
       const params = new URLSearchParams({ range })
       if (deviceId) params.set('deviceId', deviceId)
 
-      const response = await fetch(`/api/dashboard/analytics?${params}`)
+      const response = await authFetch(`/api/dashboard/analytics?${params}`)
 
       if (!response.ok) {
         const result = await response.json()

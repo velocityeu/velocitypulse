@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { useParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -47,7 +48,7 @@ export default function TicketDetailPage() {
   async function loadTicket() {
     setIsLoading(true)
     try {
-      const res = await fetch(`/api/dashboard/support/${params.id}`)
+      const res = await authFetch(`/api/dashboard/support/${params.id}`)
       if (res.ok) {
         const data = await res.json()
         setTicket(data.ticket)
@@ -66,7 +67,7 @@ export default function TicketDetailPage() {
 
     setIsSending(true)
     try {
-      const res = await fetch(`/api/dashboard/support/${params.id}/comments`, {
+      const res = await authFetch(`/api/dashboard/support/${params.id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: replyContent }),

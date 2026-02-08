@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { useUser } from '@clerk/nextjs'
 import { APP_VERSION, LATEST_AGENT_VERSION } from '@/lib/constants'
 
@@ -25,7 +26,7 @@ export function DashboardInfoBar() {
 
   // Fetch client IP on mount
   useEffect(() => {
-    fetch('/api/client-info')
+    authFetch('/api/client-info')
       .then(res => res.json())
       .then(data => setClientIp(data.ip))
       .catch(() => setClientIp(null))

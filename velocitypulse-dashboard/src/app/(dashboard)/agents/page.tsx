@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import {
   Plus, Copy, Check, Eye, EyeOff, Server,
   Loader2, AlertCircle, RefreshCw
@@ -44,7 +45,7 @@ export default function AgentsPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/dashboard/agents')
+      const res = await authFetch('/api/dashboard/agents')
       if (!res.ok) throw new Error('Failed to load agents')
       const data = await res.json()
       setAgents(data.agents || [])
@@ -64,7 +65,7 @@ export default function AgentsPage() {
     if (!newAgentName.trim()) return
     setCreatingAgent(true)
     try {
-      const res = await fetch('/api/dashboard/agents', {
+      const res = await authFetch('/api/dashboard/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -90,7 +91,7 @@ export default function AgentsPage() {
     if (!agentToDelete) return
     setDeletingAgent(true)
     try {
-      const res = await fetch(`/api/dashboard/agents/${agentToDelete.id}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/dashboard/agents/${agentToDelete.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to delete agent')
@@ -107,7 +108,7 @@ export default function AgentsPage() {
   // Toggle agent enabled
   const handleToggleEnabled = async (agentId: string, enabled: boolean) => {
     try {
-      const res = await fetch(`/api/dashboard/agents/${agentId}`, {
+      const res = await authFetch(`/api/dashboard/agents/${agentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_enabled: enabled }),
@@ -123,7 +124,7 @@ export default function AgentsPage() {
   // Send command to agent
   const handleSendCommand = async (agentId: string, commandType: string) => {
     try {
-      await fetch(`/api/dashboard/agents/${agentId}/commands`, {
+      await authFetch(`/api/dashboard/agents/${agentId}/commands`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command_type: commandType }),

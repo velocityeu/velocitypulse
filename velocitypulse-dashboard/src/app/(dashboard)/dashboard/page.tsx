@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { useSearchParams } from 'next/navigation'
 import { useOrganization } from '@/lib/contexts/OrganizationContext'
 import { createBrowserClient } from '@/lib/db/client'
@@ -124,10 +125,10 @@ export default function DashboardPage() {
     setIsLoading(true)
     try {
       const [devicesRes, categoriesRes, segmentsRes, agentsRes] = await Promise.all([
-        fetch('/api/dashboard/devices'),
-        fetch('/api/dashboard/categories'),
-        fetch('/api/dashboard/segments'),
-        fetch('/api/dashboard/agents'),
+        authFetch('/api/dashboard/devices'),
+        authFetch('/api/dashboard/categories'),
+        authFetch('/api/dashboard/segments'),
+        authFetch('/api/dashboard/agents'),
       ])
 
       if (devicesRes.ok) {

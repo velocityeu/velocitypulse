@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { verifyInternalAccess } from '@/lib/api/internal-auth'
-import { supabase } from '@/lib/db/client'
+import { supabase, getAdminClient } from '@/lib/db/client'
 
 // Lazy Stripe initialization (same pattern as webhook/checkout routes)
 let stripe: Stripe | null = null
@@ -152,8 +152,86 @@ export async function POST(
           )
         }
 
-        // Delete organization and all related data
-        // Order matters due to foreign keys
+        // Cancel any remaining Stripe resources
+        if (org.stripe_subscription_id) {
+          try {
+            await getStripe().subscriptions.cancel(org.stripe_subscription_id)
+          } catch {
+            // Already cancelled or doesn't exist — continue
+          }
+        }
+        if (org.stripe_customer_id) {
+          try {
+            // Void open invoices
+            const invoices = await getStripe().invoices.list({
+              customer: org.stripe_customer_id,
+              status: 'open',
+              limit: 100,
+            })
+            await Promise.allSettled(
+              invoices.data.map(inv => getStripe().invoices.voidInvoice(inv.id))
+            )
+          } catch {
+            // Non-fatal — continue with deletion
+          }
+        }
+
+        // Delete Supabase Storage branding files (if org has custom branding)
+        if (org.custom_branding) {
+          try {
+            const adminClient = getAdminClient()
+            const { data: files } = await adminClient.storage
+              .from('branding')
+              .list(id)
+            if (files && files.length > 0) {
+              await adminClient.storage
+                .from('branding')
+                .remove(files.map(f => `${id}/${f.name}`))
+            }
+          } catch {
+            // Non-fatal — continue with deletion
+          }
+        }
+
+        // Delete organization and ALL related data (FK-safe order)
+        // 1. Notification-related tables
+        await supabase.from('notification_cooldowns').delete().eq('organization_id', id)
+        await supabase.from('notification_history').delete().eq('organization_id', id)
+        await supabase.from('notification_rules').delete().eq('organization_id', id)
+        await supabase.from('notification_channels').delete().eq('organization_id', id)
+
+        // 2. Device status history (via device IDs)
+        const { data: orgDevices } = await supabase
+          .from('devices')
+          .select('id')
+          .eq('organization_id', id)
+        if (orgDevices && orgDevices.length > 0) {
+          const deviceIds = orgDevices.map(d => d.id)
+          await supabase.from('device_status_history').delete().in('device_id', deviceIds)
+        }
+
+        // 3. API usage tracking
+        await supabase.from('api_usage_monthly').delete().eq('organization_id', id)
+        await supabase.from('api_usage_hourly').delete().eq('organization_id', id)
+
+        // 4. Support tickets and comments
+        const { data: tickets } = await supabase
+          .from('support_tickets')
+          .select('id')
+          .eq('organization_id', id)
+        if (tickets && tickets.length > 0) {
+          const ticketIds = tickets.map(t => t.id)
+          await supabase.from('ticket_comments').delete().in('ticket_id', ticketIds)
+        }
+        await supabase.from('support_tickets').delete().eq('organization_id', id)
+
+        // 5. Admin audit logs — SET NULL instead of delete (preserve admin trail)
+        await supabase
+          .from('admin_audit_logs')
+          .update({ organization_id: null })
+          .eq('organization_id', id)
+
+        // 6. Original tables (existing cleanup)
         await supabase.from('audit_logs').delete().eq('organization_id', id)
         await supabase.from('agent_commands').delete().eq('organization_id', id)
         await supabase.from('devices').delete().eq('organization_id', id)

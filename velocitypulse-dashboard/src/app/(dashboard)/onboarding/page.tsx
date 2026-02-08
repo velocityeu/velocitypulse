@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
 import { Building2, ArrowRight, Loader2 } from 'lucide-react'
@@ -25,7 +26,7 @@ export default function OnboardingPage() {
   useEffect(() => {
     async function checkOrganization() {
       try {
-        const response = await fetch('/api/onboarding')
+        const response = await authFetch('/api/onboarding')
         const data = await response.json()
 
         if (data.hasOrganization) {
@@ -70,7 +71,7 @@ export default function OnboardingPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/onboarding', {
+      const response = await authFetch('/api/onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ organizationName: orgName.trim() }),

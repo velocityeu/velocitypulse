@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import { Download, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -105,7 +106,7 @@ export default function AuditLogPage() {
       if (startDate) params.set('start_date', startDate)
       if (endDate) params.set('end_date', endDate)
 
-      const res = await fetch(`/api/dashboard/audit-logs?${params}`)
+      const res = await authFetch(`/api/dashboard/audit-logs?${params}`)
       if (res.ok) {
         const data = await res.json()
         setLogs(data.logs)

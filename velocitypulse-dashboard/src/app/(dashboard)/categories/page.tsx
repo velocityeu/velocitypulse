@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { authFetch } from '@/lib/auth-fetch'
 import {
   DndContext,
   closestCenter,
@@ -137,7 +138,7 @@ export default function CategoriesPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/dashboard/categories')
+      const res = await authFetch('/api/dashboard/categories')
       if (!res.ok) throw new Error('Failed to load categories')
       const data = await res.json()
       setCategories(data.categories || [])
@@ -165,7 +166,7 @@ export default function CategoriesPage() {
 
       // Save new order to server
       try {
-        const res = await fetch('/api/dashboard/categories/reorder', {
+        const res = await authFetch('/api/dashboard/categories/reorder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderedIds: newCategories.map(c => c.id) }),
@@ -183,7 +184,7 @@ export default function CategoriesPage() {
   const handleSaveCategory = async (categoryData: Partial<Category>) => {
     if (editingCategory) {
       // Update
-      const res = await fetch(`/api/dashboard/categories/${editingCategory.id}`, {
+      const res = await authFetch(`/api/dashboard/categories/${editingCategory.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(categoryData),
@@ -193,7 +194,7 @@ export default function CategoriesPage() {
       setCategories(prev => prev.map(c => c.id === editingCategory.id ? data.category : c))
     } else {
       // Create
-      const res = await fetch('/api/dashboard/categories', {
+      const res = await authFetch('/api/dashboard/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(categoryData),
@@ -209,7 +210,7 @@ export default function CategoriesPage() {
     if (!categoryToDelete) return
     setDeletingCategory(true)
     try {
-      const res = await fetch(`/api/dashboard/categories/${categoryToDelete.id}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/dashboard/categories/${categoryToDelete.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to delete category')

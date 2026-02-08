@@ -536,8 +536,11 @@ if (-not (Test-Path $entryPoint)) {
 Write-Host "  Installing dependencies (this may take a minute)..."
 Push-Location $InstallDir
 try {
-    $npmOutput = npm install --production 2>&1
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $npmOutput = npm install --omit=dev 2>&1
     $npmExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
 } finally {
     Pop-Location
 }
@@ -545,7 +548,7 @@ try {
 if ($npmExit -ne 0) {
     Write-Host "  ERROR: npm install failed (exit code $npmExit)." -ForegroundColor Red
     Write-Host "  Output: $npmOutput" -ForegroundColor Red
-    Write-Host "  Try: cd '$InstallDir' && npm install --production" -ForegroundColor Yellow
+    Write-Host "  Try: cd '$InstallDir' && npm install --omit=dev" -ForegroundColor Yellow
     exit 1
 }
 

@@ -597,12 +597,11 @@ Write-Host "[7/8] Registering Windows service..." -ForegroundColor Yellow
 
 $nodeExe = (Get-Command node).Source
 
-# Create service
+# Create service using New-Service (handles path quoting correctly)
 $binPath = "\`"$nodeExe\`" \`"$entryPoint\`""
-sc.exe create $ServiceName binPath= $binPath start= auto DisplayName= $ServiceDisplay | Out-Null
-sc.exe description $ServiceName "VelocityPulse network monitoring agent" | Out-Null
+New-Service -Name $ServiceName -BinaryPathName $binPath -DisplayName $ServiceDisplay -StartupType Automatic -Description "VelocityPulse network monitoring agent" | Out-Null
 
-# Set working directory via registry (sc.exe doesn't support it)
+# Set working directory via registry (wrap in cmd.exe /c cd)
 $regPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\$ServiceName"
 if (Test-Path $regPath) {
     $wrappedBinPath = "cmd.exe /c \`"cd /d \`"$InstallDir\`" && \`"$nodeExe\`" \`"$entryPoint\`"\`""
@@ -613,7 +612,7 @@ if (Test-Path $regPath) {
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if (-not $svc) {
     Write-Host "  ERROR: Service registration failed." -ForegroundColor Red
-    Write-Host "  Try running: sc.exe create $ServiceName binPath= \`"$binPath\`" start= auto" -ForegroundColor Yellow
+    Write-Host "  Try: New-Service -Name $ServiceName -BinaryPathName '$binPath' -StartupType Automatic" -ForegroundColor Yellow
     exit 1
 }
 Write-Host "  Service registered" -ForegroundColor Green

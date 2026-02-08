@@ -57,7 +57,7 @@ const RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
   '/api/agent/heartbeat': { max: 120, windowMs: 60000 },
   '/api/agent/devices/status': { max: 60, windowMs: 60000 },
   '/api/agent/devices/discovered': { max: 30, windowMs: 60000 },
-  '/api/onboarding': { max: 5, windowMs: 60000 },
+  '/api/onboarding': { max: 20, windowMs: 60000 },
   '/api/checkout/embedded': { max: 10, windowMs: 60000 },
   '/api/checkout': { max: 10, windowMs: 60000 },
   '/api/billing/change-plan': { max: 5, windowMs: 60000 },

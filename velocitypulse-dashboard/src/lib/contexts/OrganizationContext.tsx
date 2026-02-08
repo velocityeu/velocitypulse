@@ -19,11 +19,18 @@ interface OrganizationProviderProps {
   children: ReactNode
 }
 
+// Module-level cache — survives component remounts so navigations never flicker
+let cachedOrg: {
+  organization: Organization
+  role: MemberRole | null
+  permissions: MemberPermissions | null
+} | null = null
+
 export function OrganizationProvider({ children }: OrganizationProviderProps) {
-  const [organization, setOrganization] = useState<Organization | null>(null)
-  const [role, setRole] = useState<MemberRole | null>(null)
-  const [permissions, setPermissions] = useState<MemberPermissions | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [organization, setOrganization] = useState<Organization | null>(cachedOrg?.organization ?? null)
+  const [role, setRole] = useState<MemberRole | null>(cachedOrg?.role ?? null)
+  const [permissions, setPermissions] = useState<MemberPermissions | null>(cachedOrg?.permissions ?? null)
+  const [isLoading, setIsLoading] = useState(cachedOrg === null)
   const [error, setError] = useState<Error | null>(null)
 
   const router = useRouter()
@@ -31,11 +38,10 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
   routerRef.current = router
 
   const abortControllerRef = useRef<AbortController | null>(null)
-  const hasFetchedRef = useRef(false)
 
   const fetchOrganization = useCallback(async () => {
-    // Skip refetch if we already have org data
-    if (hasFetchedRef.current) return
+    // Skip if we already have cached data
+    if (cachedOrg) return
 
     // Cancel any in-flight request
     abortControllerRef.current?.abort()
@@ -65,10 +71,14 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
         return
       }
 
+      cachedOrg = {
+        organization: data.organization,
+        role: data.role,
+        permissions: data.permissions,
+      }
       setOrganization(data.organization)
       setRole(data.role)
       setPermissions(data.permissions)
-      hasFetchedRef.current = true
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
       console.error('Failed to fetch organization:', err)
@@ -78,9 +88,9 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
     }
   }, [])
 
-  // Explicit refetch that clears the hasFetched guard
+  // Explicit refetch — clears the module cache and re-fetches
   const refetch = useCallback(async () => {
-    hasFetchedRef.current = false
+    cachedOrg = null
     await fetchOrganization()
   }, [fetchOrganization])
 

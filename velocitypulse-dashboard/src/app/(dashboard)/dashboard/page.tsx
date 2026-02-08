@@ -7,7 +7,7 @@ import { createBrowserClient } from '@/lib/db/client'
 import type { Device, Category, NetworkSegment, Agent, ViewMode, SortField, SortDirection } from '@/types'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import {
-  Loader2, Search, RefreshCw, Settings2, Server, CheckCircle2, X
+  Search, RefreshCw, Settings2, Server, CheckCircle2, X
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -277,29 +277,6 @@ export default function DashboardPage() {
       online: onlineAgents.length,
     }
   }, [agents])
-
-  // Loading states
-  if (orgLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Loading organization...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!organization) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <p className="text-lg font-medium">No organization found</p>
-          <p className="text-sm text-muted-foreground">Please complete onboarding to continue.</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">

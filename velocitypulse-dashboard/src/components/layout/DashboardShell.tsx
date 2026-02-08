@@ -169,6 +169,24 @@ export function DashboardShell({ children }: DashboardShellProps) {
     )
   }
 
+  // No organization loaded (not loading, no error — e.g. after redirect failure)
+  if (!organization) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        {renderHeader()}
+        <div className="flex flex-1">
+          <Sidebar collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} isStaff={isStaff} />
+          <main className="flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <p className="text-lg font-medium">No organization found</p>
+              <p className="text-sm text-muted-foreground">Please complete onboarding to continue.</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
   // Normal render with organization context
   return (
     <div className="min-h-screen bg-background flex flex-col">

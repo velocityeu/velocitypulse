@@ -27,9 +27,16 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
   const [error, setError] = useState<Error | null>(null)
 
   const router = useRouter()
+  const routerRef = useRef(router)
+  routerRef.current = router
+
   const abortControllerRef = useRef<AbortController | null>(null)
+  const hasFetchedRef = useRef(false)
 
   const fetchOrganization = useCallback(async () => {
+    // Skip refetch if we already have org data
+    if (hasFetchedRef.current) return
+
     // Cancel any in-flight request
     abortControllerRef.current?.abort()
     const controller = new AbortController()
@@ -37,16 +44,13 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
 
     try {
       setError(null)
-      // Only show loading spinner on initial load, not refetches
-      if (!organization) {
-        setIsLoading(true)
-      }
+      setIsLoading(true)
 
       const response = await fetch('/api/onboarding', { signal: controller.signal })
 
       if (!response.ok) {
         if (response.status === 401) {
-          router.push('/sign-in')
+          routerRef.current.push('/sign-in')
           return
         }
         throw new Error('Failed to fetch organization')
@@ -56,7 +60,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
 
       if (!data.hasOrganization) {
         if (!window.location.pathname.startsWith('/onboarding')) {
-          router.push('/onboarding')
+          routerRef.current.push('/onboarding')
         }
         return
       }
@@ -64,6 +68,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
       setOrganization(data.organization)
       setRole(data.role)
       setPermissions(data.permissions)
+      hasFetchedRef.current = true
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
       console.error('Failed to fetch organization:', err)
@@ -71,7 +76,13 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
     } finally {
       setIsLoading(false)
     }
-  }, [router]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Explicit refetch that clears the hasFetched guard
+  const refetch = useCallback(async () => {
+    hasFetchedRef.current = false
+    await fetchOrganization()
+  }, [fetchOrganization])
 
   useEffect(() => {
     fetchOrganization()
@@ -84,7 +95,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
     permissions,
     isLoading,
     error,
-    refetch: fetchOrganization,
+    refetch,
   }
 
   return (

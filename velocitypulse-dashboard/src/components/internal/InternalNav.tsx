@@ -9,7 +9,9 @@ import {
   ShieldAlert,
   HeadphonesIcon,
   CreditCard,
+  ChevronLeft,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -45,12 +47,39 @@ const navItems = [
   },
 ]
 
-export function InternalNav() {
+interface InternalNavProps {
+  collapsed?: boolean
+  onCollapse?: (collapsed: boolean) => void
+}
+
+export function InternalNav({ collapsed = false, onCollapse }: InternalNavProps) {
   const pathname = usePathname()
 
   return (
-    <nav className="w-64 border-r bg-muted/30 min-h-[calc(100vh-3.5rem)]">
-      <div className="p-4 space-y-1">
+    <nav className={cn(
+      'hidden md:flex flex-col border-r bg-muted/30 min-h-[calc(100vh-3.5rem)] transition-all duration-300',
+      collapsed ? 'w-16' : 'w-56'
+    )}>
+      {/* Collapse toggle */}
+      <div className={cn(
+        'flex items-center border-b h-12',
+        collapsed ? 'justify-center' : 'justify-end px-3'
+      )}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onCollapse?.(!collapsed)}
+          className="h-8 w-8"
+        >
+          <ChevronLeft className={cn(
+            'h-4 w-4 transition-transform',
+            collapsed && 'rotate-180'
+          )} />
+        </Button>
+      </div>
+
+      {/* Navigation */}
+      <div className="p-2 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
@@ -61,11 +90,13 @@ export function InternalNav() {
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                collapsed && 'justify-center px-2'
               )}
+              title={collapsed ? item.label : undefined}
             >
-              <item.icon className="h-4 w-4" />
-              {item.label}
+              <item.icon className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>{item.label}</span>}
             </Link>
           )
         })}

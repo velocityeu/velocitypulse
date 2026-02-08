@@ -48,15 +48,9 @@ function getBadgeVariant(planName: string, trialDaysRemaining?: number | null): 
 }
 
 function useIsStaff(): boolean {
-  try {
-    // useUser() requires ClerkProvider — during SSG/prerender it may not be available
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { user } = useUser()
-    const role = (user?.publicMetadata as { role?: string })?.role
-    return role === 'staff' || role === 'admin'
-  } catch {
-    return false
-  }
+  const { user } = useUser()
+  const role = (user?.publicMetadata as { role?: string })?.role
+  return role === 'staff' || role === 'admin'
 }
 
 export function DashboardShell({ children }: DashboardShellProps) {

@@ -1,7 +1,7 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Organization, MemberRole, MemberPermissions } from '@/types'
 
 interface OrganizationContextValue {
@@ -27,18 +27,25 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
   const [error, setError] = useState<Error | null>(null)
 
   const router = useRouter()
-  const pathname = usePathname()
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const fetchOrganization = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
+    // Cancel any in-flight request
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
 
-      const response = await fetch('/api/onboarding')
+    try {
+      setError(null)
+      // Only show loading spinner on initial load, not refetches
+      if (!organization) {
+        setIsLoading(true)
+      }
+
+      const response = await fetch('/api/onboarding', { signal: controller.signal })
 
       if (!response.ok) {
         if (response.status === 401) {
-          // Not authenticated - redirect to sign-in
           router.push('/sign-in')
           return
         }
@@ -48,8 +55,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
       const data = await response.json()
 
       if (!data.hasOrganization) {
-        // No organization - redirect to onboarding (unless already there)
-        if (!pathname?.startsWith('/onboarding')) {
+        if (!window.location.pathname.startsWith('/onboarding')) {
           router.push('/onboarding')
         }
         return
@@ -59,15 +65,17 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
       setRole(data.role)
       setPermissions(data.permissions)
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       console.error('Failed to fetch organization:', err)
       setError(err instanceof Error ? err : new Error('Failed to fetch organization'))
     } finally {
       setIsLoading(false)
     }
-  }, [router, pathname])
+  }, [router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchOrganization()
+    return () => { abortControllerRef.current?.abort() }
   }, [fetchOrganization])
 
   const value: OrganizationContextValue = {

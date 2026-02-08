@@ -104,7 +104,11 @@ export async function POST(request: Request) {
     }
 
     // Create checkout session
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || (() => {
+      const host = request.headers.get('host') || 'localhost:3000'
+      const protocol = host.includes('localhost') ? 'http' : 'https'
+      return `${protocol}://${host}`
+    })()
 
     const session = await stripeClient.checkout.sessions.create({
       customer: customerId,

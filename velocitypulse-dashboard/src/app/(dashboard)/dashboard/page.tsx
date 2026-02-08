@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useOrganization } from '@/lib/contexts/OrganizationContext'
 import { createBrowserClient } from '@/lib/db/client'
 import type { Device, Category, NetworkSegment, Agent, ViewMode, SortField, SortDirection } from '@/types'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import {
-  Loader2, Search, RefreshCw, Settings2, Server
+  Loader2, Search, RefreshCw, Settings2, Server, CheckCircle2, X
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,8 @@ const STORAGE_KEYS = {
 
 export default function DashboardPage() {
   const { organization, isLoading: orgLoading } = useOrganization()
+  const searchParams = useSearchParams()
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false)
 
   // Data state
   const [devices, setDevices] = useState<Device[]>([])
@@ -80,6 +83,18 @@ export default function DashboardPage() {
     if (savedSortDirection) setSortDirection(savedSortDirection as SortDirection)
     if (savedGroupBySegment) setGroupBySegment(savedGroupBySegment === 'true')
   }, [])
+
+  // Handle checkout success query param
+  useEffect(() => {
+    if (searchParams.get('checkout') === 'success') {
+      setCheckoutSuccess(true)
+      // Clean URL without triggering navigation
+      window.history.replaceState({}, '', '/dashboard')
+      // Auto-dismiss after 8 seconds
+      const timer = setTimeout(() => setCheckoutSuccess(false), 8000)
+      return () => clearTimeout(timer)
+    }
+  }, [searchParams])
 
   // Save preferences to localStorage
   const handleViewModeChange = (mode: ViewMode) => {
@@ -288,6 +303,22 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Checkout success banner */}
+      {checkoutSuccess && (
+        <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 dark:border-green-800 dark:bg-green-950">
+          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+          <p className="text-sm font-medium text-green-800 dark:text-green-200">
+            Payment successful! Your subscription is now active.
+          </p>
+          <button
+            onClick={() => setCheckoutSuccess(false)}
+            className="ml-auto text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Usage quota warnings */}
       <UsageQuotaWarnings />
 

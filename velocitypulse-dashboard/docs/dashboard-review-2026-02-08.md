@@ -33,3 +33,6 @@ Key risks are centered around API key rotation (old keys not accepted), cron end
 - No tests cover API key rotation grace period.
 - No tests cover cron auth when `CRON_SECRET` is missing.
 - No tests cover overlap validation in `/api/dashboard/agents/[id]/segments`.
+
+## Applied Changes (2026-02-08)
+- Renamed `src/middleware.ts` to `src/proxy.ts` to align with Next.js 16 conventions and remove runtime warnings.

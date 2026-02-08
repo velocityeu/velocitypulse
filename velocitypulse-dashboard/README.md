@@ -149,7 +149,7 @@ src/
 │   ├── supabase.ts                # Supabase client
 │   └── stripe.ts                  # Stripe client
 ├── types/                         # TypeScript interfaces
-└── middleware.ts                   # Security headers, rate limiting, route protection
+└── proxy.ts                        # Security headers, rate limiting, route protection
 ```
 
 ## Authentication Model

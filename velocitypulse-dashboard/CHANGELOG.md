@@ -11,6 +11,7 @@ All notable changes to VelocityPulse Dashboard will be documented in this file.
 - Unified CIDR validation + overlap checks for agent segment creation
 - Wired env validation at startup and aligned env schema with actual usage
 - Documentation alignment for auth headers, cron method, and additional endpoints
+- Renamed `src/middleware.ts` to `src/proxy.ts` to clear Next.js 16 warnings
 
 ### Production Launch (2026-02-07)
 
@@ -50,7 +51,7 @@ All notable changes to VelocityPulse Dashboard will be documented in this file.
 - Sentry wired into 10 priority API routes (replaced `console.error` with `logger.error`)
 - Health check endpoints (`/api/health` in dashboard + web)
 - Complete audit logging for categories, notifications, devices (~11 routes)
-- Security middleware (`src/middleware.ts`): CSP, HSTS, X-Frame-Options, rate limiting
+- Security middleware (`src/proxy.ts`): CSP, HSTS, X-Frame-Options, rate limiting
 - Zod input validation schemas on 7 mutation routes with consistent error format
 - Zod env validation (`src/lib/env.ts`) with `getServerEnv`/`getClientEnv`
 - Error response helpers (`src/lib/api/errors.ts`): unauthorized, forbidden, notFound, etc.

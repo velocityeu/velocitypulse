@@ -156,6 +156,10 @@ export async function POST(request: NextRequest) {
         is_monitored: true,
         discovered_by: 'manual',
         sort_order: nextSortOrder,
+        monitoring_mode: body.monitoring_mode || 'manual',
+        check_interval_seconds: body.check_interval_seconds || 60,
+        ssl_expiry_warn_days: body.ssl_expiry_warn_days || null,
+        dns_expected_ip: body.dns_expected_ip || null,
       })
       .select(`
         *,

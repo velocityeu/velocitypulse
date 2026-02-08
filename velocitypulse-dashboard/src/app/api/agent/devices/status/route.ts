@@ -90,16 +90,24 @@ export async function POST(request: Request) {
         const previousStatus = device.status as DeviceStatus
         const newStatus = report.status
 
+        // Build update payload
+        const updatePayload: Record<string, unknown> = {
+          status: report.status,
+          response_time_ms: report.response_time_ms,
+          last_check: report.checked_at,
+          last_online: report.status === 'online' ? report.checked_at : undefined,
+          updated_at: new Date().toISOString(),
+        }
+
+        // Include SSL metadata if provided
+        if (report.ssl_expiry_at) updatePayload.ssl_expiry_at = report.ssl_expiry_at
+        if (report.ssl_issuer) updatePayload.ssl_issuer = report.ssl_issuer
+        if (report.ssl_subject) updatePayload.ssl_subject = report.ssl_subject
+
         // Update device status
         const { error: updateError } = await supabase
           .from('devices')
-          .update({
-            status: report.status,
-            response_time_ms: report.response_time_ms,
-            last_check: report.checked_at,
-            last_online: report.status === 'online' ? report.checked_at : undefined,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq('id', device.id)
           .eq('organization_id', agentContext.organizationId)
 

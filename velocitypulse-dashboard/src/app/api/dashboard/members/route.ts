@@ -77,11 +77,11 @@ export async function GET() {
     const userIds = (members || []).map(m => m.user_id)
     const { data: users } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name, image_url')
+      .select('id, email, first_name, last_name, image_url, last_sign_in_at')
       .in('id', userIds)
 
     const userMap = new Map(
-      (users || []).map((u: { id: string; email: string; first_name: string | null; last_name: string | null; image_url: string | null }) => [u.id, u])
+      (users || []).map((u: { id: string; email: string; first_name: string | null; last_name: string | null; image_url: string | null; last_sign_in_at: string | null }) => [u.id, u])
     )
 
     const membersWithUserData = (members || []).map(member => {
@@ -96,6 +96,7 @@ export async function GET() {
               lastName: user.last_name,
               fullName: [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Unknown',
               imageUrl: user.image_url,
+              lastSignInAt: user.last_sign_in_at,
             }
           : {
               id: member.user_id,
@@ -104,6 +105,7 @@ export async function GET() {
               lastName: null,
               fullName: 'Unknown User',
               imageUrl: null,
+              lastSignInAt: null,
             },
       }
     })

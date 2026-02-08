@@ -1,0 +1,58 @@
+'use client'
+
+import { RefreshCw, ArrowUpCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { SonarPingButton } from '@/components/dashboard/SonarPingButton'
+import { isNewerVersion } from '@/lib/version'
+import { LATEST_AGENT_VERSION } from '@/lib/constants'
+import type { Agent } from '@/types'
+
+interface AgentCommandBarProps {
+  agent: Agent
+  isPinging: boolean
+  onPing: () => void
+  onScanNow: () => void
+  onUpgrade: () => void
+}
+
+export function AgentCommandBar({
+  agent,
+  isPinging,
+  onPing,
+  onScanNow,
+  onUpgrade,
+}: AgentCommandBarProps) {
+  const showUpgrade = agent.version ? isNewerVersion(agent.version, LATEST_AGENT_VERSION) : false
+
+  return (
+    <div className="flex items-center gap-1">
+      <SonarPingButton
+        isPinging={isPinging}
+        onClick={onPing}
+        disabled={!agent.is_online}
+      />
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={onScanNow}
+        disabled={!agent.is_online}
+        title="Scan Now"
+      >
+        <RefreshCw className="h-4 w-4" />
+      </Button>
+      {showUpgrade && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-amber-600 hover:text-amber-700"
+          onClick={onUpgrade}
+          disabled={!agent.is_online}
+          title="Upgrade Agent"
+        >
+          <ArrowUpCircle className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  )
+}

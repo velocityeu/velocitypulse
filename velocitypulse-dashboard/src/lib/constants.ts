@@ -2,6 +2,9 @@
 // VelocityPulse Constants
 // ==============================================
 
+// Dashboard version
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '0.1.0'
+
 // Agent version management
 export const LATEST_AGENT_VERSION = process.env.LATEST_AGENT_VERSION || '1.0.0'
 export const AGENT_DOWNLOAD_URL = process.env.AGENT_DOWNLOAD_URL || 'https://github.com/velocityeu/velocitypulse-agent/releases/latest'

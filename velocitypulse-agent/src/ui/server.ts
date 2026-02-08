@@ -1,4 +1,5 @@
 import express from 'express'
+import os from 'os'
 import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
 import path from 'path'
@@ -7,6 +8,20 @@ import type { Logger } from '../utils/logger.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+export interface HealthStats {
+  uptime: number // seconds
+  memoryUsedMB: number
+  memoryTotalMB: number
+  cpuUsage: number // percentage (0-100)
+  startedAt: string
+}
+
+export interface VersionInfo {
+  current: string
+  latest: string | null
+  updateAvailable: boolean
+}
 
 export interface AgentUIState {
   agentId: string | null
@@ -20,6 +35,8 @@ export interface AgentUIState {
   devices: DeviceInfo[]
   logs: LogEntry[]
   scanning: boolean
+  health: HealthStats
+  versionInfo: VersionInfo
 }
 
 export interface SegmentInfo {
@@ -54,10 +71,13 @@ export class AgentUIServer {
   private logger: Logger
   private state: AgentUIState
   private port: number
+  private healthInterval: ReturnType<typeof setInterval> | null = null
+  private startedAt: string
 
   constructor(port: number, logger: Logger, initialState: Partial<AgentUIState> = {}) {
     this.port = port
     this.logger = logger
+    this.startedAt = new Date().toISOString()
     this.app = express()
     this.httpServer = createServer(this.app)
     this.io = new SocketIOServer(this.httpServer, {
@@ -67,6 +87,7 @@ export class AgentUIServer {
       },
     })
 
+    const mem = process.memoryUsage()
     this.state = {
       agentId: null,
       agentName: 'VelocityPulse Agent',
@@ -79,11 +100,24 @@ export class AgentUIServer {
       devices: [],
       logs: [],
       scanning: false,
+      health: {
+        uptime: process.uptime(),
+        memoryUsedMB: Math.round(mem.rss / 1024 / 1024),
+        memoryTotalMB: Math.round(os.totalmem() / 1024 / 1024),
+        cpuUsage: 0,
+        startedAt: this.startedAt,
+      },
+      versionInfo: {
+        current: initialState.version || '1.0.0',
+        latest: null,
+        updateAvailable: false,
+      },
       ...initialState,
     }
 
     this.setupRoutes()
     this.setupSocketIO()
+    this.startHealthUpdates()
   }
 
   private setupRoutes(): void {
@@ -192,6 +226,30 @@ export class AgentUIServer {
     }
   }
 
+  updateVersionInfo(latest: string | null, updateAvailable: boolean): void {
+    this.state.versionInfo = {
+      current: this.state.version,
+      latest,
+      updateAvailable,
+    }
+    this.io.emit('version_info', this.state.versionInfo)
+  }
+
+  private startHealthUpdates(): void {
+    // Update health stats every 5 seconds
+    this.healthInterval = setInterval(() => {
+      const mem = process.memoryUsage()
+      this.state.health = {
+        uptime: process.uptime(),
+        memoryUsedMB: Math.round(mem.rss / 1024 / 1024),
+        memoryTotalMB: Math.round(os.totalmem() / 1024 / 1024),
+        cpuUsage: Math.round(os.loadavg()[0] * 100) / 100,
+        startedAt: this.startedAt,
+      }
+      this.io.emit('health', this.state.health)
+    }, 5000)
+  }
+
   addLog(level: LogEntry['level'], message: string): void {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
@@ -220,6 +278,10 @@ export class AgentUIServer {
 
   // Stop the server
   async stop(): Promise<void> {
+    if (this.healthInterval) {
+      clearInterval(this.healthInterval)
+      this.healthInterval = null
+    }
     return new Promise((resolve, reject) => {
       this.io.close()
       this.httpServer.close((err) => {

@@ -3,6 +3,8 @@ import { loadConfig } from './config.js'
 import { createLogger } from './utils/logger.js'
 import { VERSION, PRODUCT_NAME } from './utils/version.js'
 import { DashboardClient, type NetworkSegment, type DeviceToMonitor, type StatusReport, type AgentCommand } from './api/client.js'
+import { checkSsl } from './scanner/ssl.js'
+import { checkDns } from './scanner/dns.js'
 import { discoverDevices } from './scanner/discover.js'
 import { pingHost } from './scanner/ping.js'
 import { checkTcpPort } from './scanner/tcp.js'
@@ -10,6 +12,8 @@ import { checkHttp } from './scanner/http.js'
 import { getPrimaryLocalNetwork, generateAutoSegmentName } from './utils/network-detect.js'
 import { AgentUIServer, type SegmentInfo, type DeviceInfo } from './ui/server.js'
 import { RealtimeClient, type AgentCommand as RealtimeAgentCommand } from './api/realtime.js'
+import { performUpgrade } from './upgrade/upgrader.js'
+import { shouldAutoUpgrade } from './utils/version.js'
 
 // UI Server port (can be configured via env)
 const UI_PORT = parseInt(process.env.AGENT_UI_PORT || '3001', 10)
@@ -207,9 +211,12 @@ async function main() {
         )
         uiServer.addLog('info', `Heartbeat OK - ${response.segments.length} segment(s)`)
 
-        // Check for upgrade
+        // Check for upgrade and update UI
         if (response.upgrade_available && response.latest_agent_version) {
           logger.info(`Upgrade available: ${VERSION} -> ${response.latest_agent_version}`)
+          uiServer.updateVersionInfo(response.latest_agent_version, true)
+        } else {
+          uiServer.updateVersionInfo(null, false)
         }
 
         // Process pending commands
@@ -469,6 +476,145 @@ async function main() {
     }
   }
 
+  // Track last check time per device for remote monitoring
+  const remoteDeviceLastCheck = new Map<string, number>()
+
+  /**
+   * Remote monitor loop - checks devices in remote_monitor segments
+   * Uses per-device check intervals and routes to appropriate scanner
+   */
+  async function remoteMonitorLoop() {
+    // Wait for initial heartbeat
+    await new Promise(resolve => setTimeout(resolve, 10000))
+
+    while (isRunning) {
+      try {
+        // Find remote_monitor segments
+        const remoteSegments = Array.from(segmentStates.values())
+          .filter(s => s.segment.segment_type === 'remote_monitor')
+
+        if (remoteSegments.length === 0) {
+          await new Promise(resolve => setTimeout(resolve, 30000))
+          continue
+        }
+
+        // Get all devices to monitor
+        const allDevices = await client.getDevicesToMonitor()
+        const remoteSegmentIds = new Set(remoteSegments.map(s => s.segment.id))
+
+        // Filter to devices in remote segments
+        const remoteDevices = allDevices.filter(
+          d => d.network_segment_id && remoteSegmentIds.has(d.network_segment_id)
+        )
+
+        if (remoteDevices.length === 0) {
+          await new Promise(resolve => setTimeout(resolve, 30000))
+          continue
+        }
+
+        const now = Date.now()
+        const reports: StatusReport[] = []
+
+        for (const device of remoteDevices) {
+          const interval = (device.check_interval_seconds || 60) * 1000
+          const lastCheck = remoteDeviceLastCheck.get(device.id) || 0
+
+          if (now - lastCheck < interval) continue
+
+          remoteDeviceLastCheck.set(device.id, now)
+
+          const target = device.hostname || device.ip_address
+          if (!target) continue
+
+          try {
+            let status: 'online' | 'offline' | 'degraded' | 'unknown' = 'unknown'
+            let responseTime: number | null = null
+            let sslExpiryAt: string | undefined
+            let sslIssuer: string | undefined
+            let sslSubject: string | undefined
+
+            switch (device.check_type) {
+              case 'ssl': {
+                const port = device.port || 443
+                const result = await checkSsl(target, logger, port, device.ssl_expiry_warn_days || 30)
+                status = result.status
+                responseTime = result.response_time_ms
+                sslExpiryAt = result.ssl_expiry_at
+                sslIssuer = result.ssl_issuer
+                sslSubject = result.ssl_subject
+                break
+              }
+
+              case 'dns': {
+                const result = await checkDns(target, logger, device.dns_expected_ip)
+                status = result.status
+                responseTime = result.response_time_ms
+                break
+              }
+
+              case 'http': {
+                const url = device.url || `https://${target}`
+                const result = await checkHttp(url, logger)
+                status = result.status
+                responseTime = result.response_time_ms
+                break
+              }
+
+              case 'tcp': {
+                const port = device.port || 443
+                const result = await checkTcpPort(target, port, logger)
+                status = result.status
+                responseTime = result.response_time_ms
+                break
+              }
+
+              case 'ping':
+              default: {
+                const result = await pingHost(target, logger)
+                status = result.status
+                responseTime = result.response_time_ms
+                break
+              }
+            }
+
+            reports.push({
+              device_id: device.id,
+              ip_address: device.ip_address || target,
+              status,
+              response_time_ms: responseTime,
+              check_type: device.check_type,
+              checked_at: new Date().toISOString(),
+              ssl_expiry_at: sslExpiryAt,
+              ssl_issuer: sslIssuer,
+              ssl_subject: sslSubject,
+            })
+
+            logger.debug(`Remote check ${target} (${device.check_type}): ${status}`)
+          } catch (err) {
+            logger.error(`Remote check failed for ${target}: ${err instanceof Error ? err.message : 'Unknown'}`)
+          }
+        }
+
+        // Upload status reports
+        if (reports.length > 0) {
+          const response = await client.uploadStatusReports(reports)
+          logger.debug(`Remote monitor: ${response.processed} reports uploaded`)
+        }
+
+        // Prune stale entries
+        const activeIds = new Set(remoteDevices.map(d => d.id))
+        for (const id of remoteDeviceLastCheck.keys()) {
+          if (!activeIds.has(id)) remoteDeviceLastCheck.delete(id)
+        }
+      } catch (error) {
+        logger.error(`Remote monitor error: ${error instanceof Error ? error.message : 'Unknown'}`)
+      }
+
+      // Short sleep between iterations
+      await new Promise(resolve => setTimeout(resolve, 5000))
+    }
+  }
+
   /**
    * Auto-scan - detect and register local network if no segments assigned
    */
@@ -613,20 +759,51 @@ async function main() {
           }
 
           case 'upgrade': {
-            // Upgrade command - acknowledge and log
-            // Full upgrade logic would download new version and restart
             const targetVersion = command.payload?.target_version as string
             const downloadUrl = command.payload?.download_url as string
 
             logger.info(`Upgrade requested: ${VERSION} -> ${targetVersion}`)
-            logger.info(`Download URL: ${downloadUrl}`)
 
-            // For now, just acknowledge - full upgrade requires installer work
+            if (!targetVersion || !downloadUrl) {
+              await client.acknowledgeCommand(command.id, false, undefined, 'target_version and download_url required')
+              break
+            }
+
+            // Check if auto-upgrade is allowed for this version
+            if (!config.enableAutoUpgrade) {
+              logger.warn('Auto-upgrade is disabled. Set ENABLE_AUTO_UPGRADE=true to allow.')
+              await client.acknowledgeCommand(command.id, true, {
+                current_version: VERSION,
+                target_version: targetVersion,
+                message: 'Auto-upgrade disabled - manual upgrade required',
+              })
+              break
+            }
+
+            if (!shouldAutoUpgrade(targetVersion, VERSION, config.autoUpgradeOnMinor)) {
+              logger.warn(`Auto-upgrade policy blocks ${VERSION} -> ${targetVersion}`)
+              await client.acknowledgeCommand(command.id, true, {
+                current_version: VERSION,
+                target_version: targetVersion,
+                message: 'Upgrade blocked by policy (major version change)',
+              })
+              break
+            }
+
+            // Acknowledge before starting (upgrade may exit the process)
             await client.acknowledgeCommand(command.id, true, {
               current_version: VERSION,
               target_version: targetVersion,
-              message: 'Upgrade acknowledged - manual upgrade required',
+              message: 'Upgrade starting...',
             })
+
+            // Perform the upgrade (this may exit the process)
+            const result = await performUpgrade(targetVersion, downloadUrl, logger)
+
+            if (!result.success) {
+              logger.error(`Upgrade failed: ${result.message}`)
+              // Process didn't exit, so the upgrade failed before the swap
+            }
             break
           }
 
@@ -766,6 +943,7 @@ async function main() {
     heartbeatLoop(),
     scanLoop(),
     statusCheckLoop(),
+    remoteMonitorLoop(),
   ]).catch(error => {
     logger.error(`Fatal error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     process.exit(1)

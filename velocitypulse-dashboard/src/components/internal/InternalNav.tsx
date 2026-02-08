@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -10,8 +11,10 @@ import {
   HeadphonesIcon,
   CreditCard,
   ChevronLeft,
+  Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -36,6 +39,11 @@ const navItems = [
     icon: CreditCard,
   },
   {
+    label: 'Admins',
+    href: '/internal/admins',
+    icon: Users,
+  },
+  {
     label: 'Security',
     href: '/internal/security',
     icon: ShieldAlert,
@@ -44,6 +52,7 @@ const navItems = [
     label: 'Support',
     href: '/internal/support',
     icon: HeadphonesIcon,
+    badgeKey: 'support',
   },
 ]
 
@@ -54,6 +63,28 @@ interface InternalNavProps {
 
 export function InternalNav({ collapsed = false, onCollapse }: InternalNavProps) {
   const pathname = usePathname()
+  const [openTicketCount, setOpenTicketCount] = useState(0)
+
+  useEffect(() => {
+    fetchTicketCount()
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchTicketCount, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
+  async function fetchTicketCount() {
+    try {
+      const res = await fetch('/api/internal/support')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.stats) {
+          setOpenTicketCount(data.stats.open + data.stats.in_progress)
+        }
+      }
+    } catch {
+      // Silently fail — badge is cosmetic
+    }
+  }
 
   return (
     <nav className={cn(
@@ -82,6 +113,7 @@ export function InternalNav({ collapsed = false, onCollapse }: InternalNavProps)
       <div className="p-2 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+          const badgeCount = item.badgeKey === 'support' ? openTicketCount : 0
           return (
             <Link
               key={item.href}
@@ -95,8 +127,29 @@ export function InternalNav({ collapsed = false, onCollapse }: InternalNavProps)
               )}
               title={collapsed ? item.label : undefined}
             >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              <div className="relative">
+                <item.icon className="h-4 w-4 shrink-0" />
+                {collapsed && badgeCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full bg-red-500" />
+                )}
+              </div>
+              {!collapsed && (
+                <>
+                  <span className="flex-1">{item.label}</span>
+                  {badgeCount > 0 && (
+                    <Badge
+                      className={cn(
+                        'h-5 min-w-[20px] px-1.5 text-xs',
+                        isActive
+                          ? 'bg-primary-foreground/20 text-primary-foreground'
+                          : 'bg-red-500/10 text-red-500'
+                      )}
+                    >
+                      {badgeCount}
+                    </Badge>
+                  )}
+                </>
+              )}
             </Link>
           )
         })}

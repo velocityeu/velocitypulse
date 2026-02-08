@@ -3,6 +3,92 @@ import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 
 /**
+ * PATCH /api/dashboard/agents/[id]
+ * Update an agent's name, description, or is_enabled
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id: agentId } = await params
+
+    let body: { name?: string; description?: string; is_enabled?: boolean }
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    const supabase = createServiceClient()
+
+    const { data: membership, error: memberError } = await supabase
+      .from('organization_members')
+      .select('organization_id, role, permissions')
+      .eq('user_id', userId)
+      .limit(1)
+      .single()
+
+    if (memberError || !membership) {
+      return NextResponse.json({ error: 'No organization found' }, { status: 404 })
+    }
+
+    const canManage = membership.role === 'owner' || membership.role === 'admin' ||
+      (membership.permissions as { can_manage_agents?: boolean })?.can_manage_agents
+    if (!canManage) {
+      return NextResponse.json({ error: 'You do not have permission to update agents' }, { status: 403 })
+    }
+
+    // Build update object
+    const updates: Record<string, unknown> = {}
+    if (body.name !== undefined) {
+      if (!body.name.trim()) {
+        return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 })
+      }
+      updates.name = body.name.trim()
+    }
+    if (body.description !== undefined) updates.description = body.description.trim()
+    if (body.is_enabled !== undefined) updates.is_enabled = body.is_enabled
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No updates provided' }, { status: 400 })
+    }
+
+    const { data: agent, error: updateError } = await supabase
+      .from('agents')
+      .update(updates)
+      .eq('id', agentId)
+      .eq('organization_id', membership.organization_id)
+      .select()
+      .single()
+
+    if (updateError || !agent) {
+      return NextResponse.json({ error: 'Agent not found or update failed' }, { status: 404 })
+    }
+
+    await supabase.from('audit_logs').insert({
+      organization_id: membership.organization_id,
+      actor_type: 'user',
+      actor_id: userId,
+      action: 'agent.updated',
+      resource_type: 'agent',
+      resource_id: agentId,
+      metadata: updates,
+    })
+
+    return NextResponse.json({ agent })
+  } catch (error) {
+    console.error('Update agent error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+/**
  * DELETE /api/dashboard/agents/[id]
  * Delete an agent and all its related data
  */

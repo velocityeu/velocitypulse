@@ -73,7 +73,10 @@ export async function GET(request: NextRequest) {
         is_monitored,
         network_segment_id,
         mac_address,
-        hostname
+        hostname,
+        check_interval_seconds,
+        ssl_expiry_warn_days,
+        dns_expected_ip
       `)
       .eq('organization_id', agentContext.organizationId)
       .in('network_segment_id', segmentIds)
@@ -102,7 +105,10 @@ export async function GET(request: NextRequest) {
       network_segment_id: device.network_segment_id,
       mac_address: device.mac_address,
       hostname: device.hostname,
-      is_monitored: device.is_monitored ?? true, // API already filters for monitored devices
+      is_monitored: device.is_monitored ?? true,
+      check_interval_seconds: device.check_interval_seconds,
+      ssl_expiry_warn_days: device.ssl_expiry_warn_days,
+      dns_expected_ip: device.dns_expected_ip,
     }))
 
     return NextResponse.json({

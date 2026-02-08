@@ -2,14 +2,16 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Plus, Trash2, Copy, Check, Eye, EyeOff, Server, Network,
-  Loader2, AlertCircle, ChevronDown, ChevronRight, RefreshCw
+  Plus, Copy, Check, Eye, EyeOff, Server,
+  Loader2, AlertCircle, RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { SonarPingButton } from '@/components/dashboard/SonarPingButton'
+import { AgentCard } from '@/components/agents/AgentCard'
+import { useSonarPing } from '@/lib/hooks/useSonarPing'
 import type { Agent, NetworkSegment } from '@/types'
 
 interface AgentWithSegments extends Agent {
@@ -17,13 +19,9 @@ interface AgentWithSegments extends Agent {
 }
 
 export default function AgentsPage() {
-  // Agents state
   const [agents, setAgents] = useState<AgentWithSegments[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // Expanded agents
-  const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set())
 
   // Create agent dialog
   const [showCreateAgent, setShowCreateAgent] = useState(false)
@@ -33,6 +31,9 @@ export default function AgentsPage() {
   const [createdApiKey, setCreatedApiKey] = useState<string | null>(null)
   const [showApiKey, setShowApiKey] = useState(false)
   const [copiedKey, setCopiedKey] = useState(false)
+
+  // Sonar ping
+  const { pingAgent, pingAgents: pingMultipleAgents, isPinging } = useSonarPing()
 
   // Delete agent dialog
   const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null)
@@ -73,7 +74,6 @@ export default function AgentsPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create agent')
-
       setCreatedApiKey(data.agent.api_key)
       setAgents(prev => [...prev, data.agent])
       setNewAgentName('')
@@ -104,6 +104,57 @@ export default function AgentsPage() {
     }
   }
 
+  // Toggle agent enabled
+  const handleToggleEnabled = async (agentId: string, enabled: boolean) => {
+    try {
+      const res = await fetch(`/api/dashboard/agents/${agentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_enabled: enabled }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setAgents(prev => prev.map(a => a.id === agentId ? { ...a, ...data.agent } : a))
+    } catch {
+      // Silently fail
+    }
+  }
+
+  // Send command to agent
+  const handleSendCommand = async (agentId: string, commandType: string) => {
+    try {
+      await fetch(`/api/dashboard/agents/${agentId}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command_type: commandType }),
+      })
+    } catch {
+      // Silently fail
+    }
+  }
+
+  // Segment callbacks
+  const handleSegmentAdded = (agentId: string, segment: NetworkSegment) => {
+    setAgents(prev => prev.map(a => {
+      if (a.id !== agentId) return a
+      return { ...a, network_segments: [...(a.network_segments || []), segment] }
+    }))
+  }
+
+  const handleSegmentDeleted = (agentId: string, segmentId: string) => {
+    setAgents(prev => prev.map(a => {
+      if (a.id !== agentId) return a
+      return { ...a, network_segments: (a.network_segments || []).filter(s => s.id !== segmentId) }
+    }))
+  }
+
+  const handleSegmentUpdated = (agentId: string, segment: NetworkSegment) => {
+    setAgents(prev => prev.map(a => {
+      if (a.id !== agentId) return a
+      return { ...a, network_segments: (a.network_segments || []).map(s => s.id === segment.id ? segment : s) }
+    }))
+  }
+
   // Copy API key
   const copyApiKey = async () => {
     if (!createdApiKey) return
@@ -112,42 +163,12 @@ export default function AgentsPage() {
     setTimeout(() => setCopiedKey(false), 2000)
   }
 
-  // Close create dialog
   const closeCreateDialog = () => {
     setShowCreateAgent(false)
     setCreatedApiKey(null)
     setShowApiKey(false)
     setNewAgentName('')
     setNewAgentDescription('')
-  }
-
-  // Toggle agent expansion
-  const toggleAgentExpanded = (agentId: string) => {
-    setExpandedAgents(prev => {
-      const next = new Set(prev)
-      if (next.has(agentId)) {
-        next.delete(agentId)
-      } else {
-        next.add(agentId)
-      }
-      return next
-    })
-  }
-
-  // Format last seen time
-  const formatLastSeen = (lastSeenAt?: string) => {
-    if (!lastSeenAt) return 'Never'
-    const date = new Date(lastSeenAt)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-
-    if (diffMins < 1) return 'Just now'
-    if (diffMins < 60) return `${diffMins}m ago`
-    const diffHours = Math.floor(diffMins / 60)
-    if (diffHours < 24) return `${diffHours}h ago`
-    const diffDays = Math.floor(diffHours / 24)
-    return `${diffDays}d ago`
   }
 
   return (
@@ -161,6 +182,15 @@ export default function AgentsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {agents.length > 0 && (
+            <SonarPingButton
+              isPinging={agents.some(a => isPinging(a.id))}
+              onClick={() => pingMultipleAgents(agents.filter(a => a.is_online).map(a => a.id))}
+              variant="text"
+              label="Ping All"
+              disabled={isLoading || agents.filter(a => a.is_online).length === 0}
+            />
+          )}
           <Button variant="outline" size="icon" onClick={loadAgents} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
@@ -182,13 +212,12 @@ export default function AgentsPage() {
         </div>
       )}
 
-      {/* Loading state */}
+      {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : agents.length === 0 ? (
-        /* Empty state */
         <Card>
           <CardContent className="py-12 text-center">
             <Server className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -203,123 +232,21 @@ export default function AgentsPage() {
           </CardContent>
         </Card>
       ) : (
-        /* Agent list */
         <div className="grid gap-4">
-          {agents.map(agent => {
-            const isExpanded = expandedAgents.has(agent.id)
-            const segments = agent.network_segments || []
-
-            return (
-              <Card key={agent.id}>
-                <CardContent className="p-0">
-                  {/* Agent header */}
-                  <div className="p-4 flex items-center gap-4">
-                    {/* Status indicator */}
-                    <div className={`w-3 h-3 rounded-full shrink-0 ${agent.is_online ? 'bg-status-online' : 'bg-status-offline'}`} />
-
-                    {/* Agent info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium truncate">{agent.name}</h3>
-                        <Badge variant={agent.is_enabled ? 'success' : 'secondary'} className="shrink-0">
-                          {agent.is_enabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {agent.description || 'No description'}
-                      </p>
-                    </div>
-
-                    {/* Agent metadata */}
-                    <div className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
-                      {agent.version && (
-                        <div>
-                          <span className="text-xs uppercase tracking-wide">Version</span>
-                          <p className="font-mono">{agent.version}</p>
-                        </div>
-                      )}
-                      {agent.last_ip_address && (
-                        <div>
-                          <span className="text-xs uppercase tracking-wide">IP Address</span>
-                          <p className="font-mono">{agent.last_ip_address}</p>
-                        </div>
-                      )}
-                      <div>
-                        <span className="text-xs uppercase tracking-wide">API Key</span>
-                        <p className="font-mono">{agent.api_key_prefix}...</p>
-                      </div>
-                      <div>
-                        <span className="text-xs uppercase tracking-wide">Last Seen</span>
-                        <p>{formatLastSeen(agent.last_seen_at)}</p>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2">
-                      {segments.length > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleAgentExpanded(agent.id)}
-                          className="gap-1"
-                        >
-                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          <span className="hidden sm:inline">{segments.length} segment{segments.length !== 1 ? 's' : ''}</span>
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setAgentToDelete(agent)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Mobile metadata */}
-                  <div className="md:hidden px-4 pb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    {agent.version && <span>v{agent.version}</span>}
-                    {agent.last_ip_address && <span>{agent.last_ip_address}</span>}
-                    <span>Key: {agent.api_key_prefix}...</span>
-                    <span>Last seen: {formatLastSeen(agent.last_seen_at)}</span>
-                  </div>
-
-                  {/* Expanded segments */}
-                  {isExpanded && segments.length > 0 && (
-                    <div className="border-t bg-muted/50 p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Network className="h-4 w-4 text-muted-foreground" />
-                        <h4 className="text-sm font-medium">Network Segments</h4>
-                      </div>
-                      <div className="grid gap-2">
-                        {segments.map(segment => (
-                          <div
-                            key={segment.id}
-                            className="flex items-center justify-between p-3 bg-background rounded-lg border"
-                          >
-                            <div>
-                              <p className="font-medium text-sm">{segment.name}</p>
-                              <p className="text-xs font-mono text-muted-foreground">{segment.cidr}</p>
-                            </div>
-                            <div className="flex items-center gap-3 text-sm">
-                              <span className="text-muted-foreground">
-                                {segment.last_scan_device_count} devices
-                              </span>
-                              <Badge variant={segment.is_enabled ? 'success' : 'secondary'}>
-                                {segment.is_enabled ? 'Active' : 'Disabled'}
-                              </Badge>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )
-          })}
+          {agents.map(agent => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              isPinging={isPinging(agent.id)}
+              onPing={() => pingAgent(agent.id)}
+              onSendCommand={(cmd) => handleSendCommand(agent.id, cmd)}
+              onDelete={() => setAgentToDelete(agent)}
+              onToggleEnabled={(enabled) => handleToggleEnabled(agent.id, enabled)}
+              onSegmentAdded={(seg) => handleSegmentAdded(agent.id, seg)}
+              onSegmentDeleted={(segId) => handleSegmentDeleted(agent.id, segId)}
+              onSegmentUpdated={(seg) => handleSegmentUpdated(agent.id, seg)}
+            />
+          ))}
         </div>
       )}
 

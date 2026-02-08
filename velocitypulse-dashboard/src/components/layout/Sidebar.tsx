@@ -18,6 +18,7 @@ import {
   Gauge,
   FileText,
   ClipboardList,
+  LifeBuoy,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -35,6 +36,7 @@ const navItems = [
   { label: 'Audit Log', href: '/audit-log', icon: ClipboardList },
   { label: 'Usage', href: '/usage', icon: Gauge },
   { label: 'Reports', href: '/reports', icon: FileText },
+  { label: 'Support', href: '/support', icon: LifeBuoy },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 

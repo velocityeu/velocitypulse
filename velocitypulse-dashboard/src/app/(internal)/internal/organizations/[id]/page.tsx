@@ -26,6 +26,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { formatDate, formatDateTime, formatCurrency, getDaysUntilTrialExpires } from '@/lib/utils'
+import { ConfirmActionDialog } from '@/components/internal/ConfirmActionDialog'
 import type { Organization, OrganizationStatus, OrganizationPlan, AuditLog } from '@/types'
 
 interface AgentWithCounts {
@@ -76,6 +77,14 @@ export default function OrganizationDetailPage() {
   const [org, setOrg] = useState<OrganizationDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    description: string
+    confirmLabel: string
+    variant: 'default' | 'destructive'
+    action: string
+    payload?: Record<string, unknown>
+  } | null>(null)
 
   useEffect(() => {
     loadOrganization()
@@ -292,11 +301,14 @@ export default function OrganizationDetailPage() {
                           variant="ghost"
                           size="sm"
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            if (confirm(`Delete agent "${agent.name}"? This will also delete ${agent.device_count} devices and ${agent.segment_count} segments.`)) {
-                              performAction('delete_agent', { agent_id: agent.id })
-                            }
-                          }}
+                          onClick={() => setConfirmDialog({
+                            title: 'Delete Agent',
+                            description: `Delete agent "${agent.name}"? This will also delete ${agent.device_count} devices and ${agent.segment_count} segments.`,
+                            confirmLabel: 'Delete Agent',
+                            variant: 'destructive',
+                            action: 'delete_agent',
+                            payload: { agent_id: agent.id },
+                          })}
                           disabled={actionLoading === 'delete_agent'}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -336,11 +348,14 @@ export default function OrganizationDetailPage() {
                           variant="ghost"
                           size="sm"
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            if (confirm(`Delete segment "${segment.name}"? This will also delete ${segment.device_count} devices.`)) {
-                              performAction('delete_segment', { segment_id: segment.id })
-                            }
-                          }}
+                          onClick={() => setConfirmDialog({
+                            title: 'Delete Segment',
+                            description: `Delete segment "${segment.name}"? This will also delete ${segment.device_count} devices.`,
+                            confirmLabel: 'Delete Segment',
+                            variant: 'destructive',
+                            action: 'delete_segment',
+                            payload: { segment_id: segment.id },
+                          })}
                           disabled={actionLoading === 'delete_segment'}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -421,11 +436,13 @@ export default function OrganizationDetailPage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start text-orange-600"
-                  onClick={() => {
-                    if (confirm('Are you sure you want to suspend this organization?')) {
-                      performAction('suspend')
-                    }
-                  }}
+                  onClick={() => setConfirmDialog({
+                    title: 'Suspend Organization',
+                    description: 'Are you sure you want to suspend this organization? Users will lose access to the dashboard.',
+                    confirmLabel: 'Suspend',
+                    variant: 'destructive',
+                    action: 'suspend',
+                  })}
                   disabled={actionLoading === 'suspend'}
                 >
                   <Pause className="h-4 w-4 mr-2" />
@@ -481,11 +498,13 @@ export default function OrganizationDetailPage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                  onClick={() => {
-                    if (confirm('Are you sure you want to cancel this organization? This will stop billing and schedule data deletion.')) {
-                      performAction('cancel')
-                    }
-                  }}
+                  onClick={() => setConfirmDialog({
+                    title: 'Cancel Subscription',
+                    description: 'Are you sure you want to cancel this organization? This will stop billing and schedule data deletion.',
+                    confirmLabel: 'Cancel Subscription',
+                    variant: 'destructive',
+                    action: 'cancel',
+                  })}
                   disabled={actionLoading === 'cancel'}
                 >
                   <XCircle className="h-4 w-4 mr-2" />
@@ -497,11 +516,13 @@ export default function OrganizationDetailPage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                  onClick={() => {
-                    if (confirm('Are you sure you want to permanently delete this organization and all its data? This cannot be undone.')) {
-                      performAction('delete')
-                    }
-                  }}
+                  onClick={() => setConfirmDialog({
+                    title: 'Delete Organization Permanently',
+                    description: 'Are you sure you want to permanently delete this organization and all its data? This action cannot be undone.',
+                    confirmLabel: 'Delete Permanently',
+                    variant: 'destructive',
+                    action: 'delete',
+                  })}
                   disabled={actionLoading === 'delete'}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
@@ -534,6 +555,20 @@ export default function OrganizationDetailPage() {
         </div>
       </div>
 
+      {/* Confirm Action Dialog */}
+      <ConfirmActionDialog
+        open={!!confirmDialog}
+        onOpenChange={(open) => { if (!open) setConfirmDialog(null) }}
+        title={confirmDialog?.title || ''}
+        description={confirmDialog?.description || ''}
+        confirmLabel={confirmDialog?.confirmLabel || 'Confirm'}
+        variant={confirmDialog?.variant || 'default'}
+        onConfirm={async () => {
+          if (confirmDialog) {
+            await performAction(confirmDialog.action, confirmDialog.payload)
+          }
+        }}
+      />
     </div>
   )
 }

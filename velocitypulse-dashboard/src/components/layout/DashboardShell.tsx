@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Sidebar, MobileSidebar, MobileMenuButton } from '@/components/layout/Sidebar'
+import { DashboardInfoBar } from '@/components/layout/DashboardInfoBar'
 import { AgentStatusIndicator } from '@/components/dashboard/AgentStatusIndicator'
 import { useOrganization } from '@/lib/contexts/OrganizationContext'
 import { useBranding } from '@/lib/hooks/useBranding'
@@ -191,6 +192,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {renderHeader()}
+      <DashboardInfoBar />
       <MobileSidebar open={mobileMenuOpen} onOpenChange={setMobileMenuOpen} isStaff={isStaff} />
       <div className="flex flex-1">
         <Sidebar collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} isStaff={isStaff} />

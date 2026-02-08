@@ -12,9 +12,13 @@ export const createDeviceSchema = z.object({
   ip_address: z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/, 'Invalid IP address').optional(),
   url: z.string().url().optional(),
   port: z.number().int().min(1).max(65535).nullable().optional(),
-  check_type: z.enum(['ping', 'http', 'tcp']).default('ping'),
+  check_type: z.enum(['ping', 'http', 'tcp', 'ssl', 'dns']).default('ping'),
   category_id: z.string().uuid().nullable().optional(),
   description: z.string().max(500).optional(),
+  check_interval_seconds: z.number().int().min(30).max(86400).optional(),
+  monitoring_mode: z.enum(['auto', 'manual']).optional(),
+  ssl_expiry_warn_days: z.number().int().min(1).max(365).optional(),
+  dns_expected_ip: z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/, 'Invalid IP address').optional(),
 })
 
 // Category creation
@@ -39,9 +43,12 @@ export const statusReportSchema = z.object({
     ip_address: z.string().optional(),
     status: z.enum(['online', 'offline', 'degraded', 'unknown']),
     response_time_ms: z.number().nullable(),
-    check_type: z.enum(['ping', 'http', 'tcp']).default('ping'),
+    check_type: z.enum(['ping', 'http', 'tcp', 'ssl', 'dns']).default('ping'),
     checked_at: z.string(),
     error: z.string().optional(),
+    ssl_expiry_at: z.string().optional(),
+    ssl_issuer: z.string().optional(),
+    ssl_subject: z.string().optional(),
   })).min(1, 'At least one report is required'),
 })
 

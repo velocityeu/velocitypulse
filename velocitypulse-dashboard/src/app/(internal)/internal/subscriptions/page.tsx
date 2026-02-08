@@ -294,15 +294,22 @@ export default function SubscriptionsPage() {
                       {formatDate(sub.current_period_start)} - {formatDate(sub.current_period_end)}
                     </td>
                     <td className="py-3">
-                      <Button variant="ghost" size="sm" asChild>
-                        <a
-                          href={`https://dashboard.stripe.com/subscriptions/${sub.stripe_subscription_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href={`/internal/subscriptions/${sub.id}`}>
+                            Details
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" asChild>
+                          <a
+                            href={`https://dashboard.stripe.com/subscriptions/${sub.stripe_subscription_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

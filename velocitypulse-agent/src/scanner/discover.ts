@@ -3,6 +3,10 @@ import { arpScan, populateArpCache, type DiscoveredDevice } from './arp.js'
 import { pingSweep } from './ping-sweep.js'
 import { mdnsScan } from './mdns.js'
 import { ssdpScan } from './ssdp.js'
+import { portScan, PORT_SERVICES } from './port-scan.js'
+import { grabBanners, identifyService } from './banner.js'
+import { detectOs } from './os-detect.js'
+import { querySnmp } from './snmp.js'
 import type { Logger } from '../utils/logger.js'
 
 export type { DiscoveredDevice }
@@ -46,14 +50,95 @@ function mergeDiscoveredDevices(...deviceArrays: DiscoveredDevice[][]): Discover
 }
 
 /**
+ * Enrich discovered devices with port scanning, banner grabbing, OS detection, and SNMP.
+ * Runs enrichment in batches to avoid overwhelming the network.
+ */
+async function enrichDevices(
+  devices: DiscoveredDevice[],
+  logger: Logger,
+  options: { enablePortScan?: boolean; enableSnmp?: boolean } = {}
+): Promise<DiscoveredDevice[]> {
+  const { enablePortScan = true, enableSnmp = true } = options
+
+  if (devices.length === 0) return devices
+
+  logger.info(`Enriching ${devices.length} devices (ports=${enablePortScan}, snmp=${enableSnmp})`)
+
+  // Process devices in batches of 5 to avoid network congestion
+  const BATCH_SIZE = 5
+  for (let i = 0; i < devices.length; i += BATCH_SIZE) {
+    const batch = devices.slice(i, i + BATCH_SIZE)
+
+    await Promise.all(batch.map(async (device) => {
+      const ip = device.ip_address
+
+      try {
+        // Port scan
+        if (enablePortScan) {
+          const scanResult = await portScan(ip, logger)
+          if (scanResult.open_ports.length > 0) {
+            device.open_ports = [...new Set([...(device.open_ports || []), ...scanResult.open_ports])]
+
+            // Derive service names from ports
+            const portServices = scanResult.open_ports
+              .map(p => PORT_SERVICES[p])
+              .filter((s): s is string => !!s)
+
+            // Banner grab on open ports for more detail
+            const banners = await grabBanners(ip, scanResult.open_ports, logger)
+            const bannerServices = banners
+              .map(b => identifyService(b.banner, b.port))
+              .filter((s): s is string => !!s)
+
+            device.services = [...new Set([
+              ...(device.services || []),
+              ...portServices,
+              ...bannerServices,
+            ])]
+          }
+        }
+
+        // OS detection (uses TTL + port heuristics)
+        const osResult = await detectOs(ip, logger, device.open_ports, device.services)
+        if (osResult.os_hints.length > 0) {
+          device.os_hints = [...new Set([...(device.os_hints || []), ...osResult.os_hints])]
+        }
+        if (osResult.device_type !== 'unknown') {
+          device.device_type = osResult.device_type
+        }
+
+        // SNMP query
+        if (enableSnmp) {
+          const snmpInfo = await querySnmp(ip, logger)
+          if (snmpInfo) {
+            device.snmp_info = snmpInfo
+            // Use SNMP sysName as hostname if we don't have one
+            if (!device.hostname && snmpInfo.sysName) {
+              device.hostname = snmpInfo.sysName
+            }
+          }
+        }
+      } catch (error) {
+        logger.debug(`Enrichment error for ${ip}: ${error instanceof Error ? error.message : 'unknown'}`)
+      }
+    }))
+  }
+
+  logger.info(`Enrichment complete for ${devices.length} devices`)
+  return devices
+}
+
+/**
  * Unified device discovery function that selects the appropriate method
  * based on whether the target network is local or remote.
  *
  * For local networks (directly connected):
  * - Uses ARP scanning + mDNS + SSDP in parallel (fast, provides MAC, hostname, UPnP info)
+ * - Then enriches with port scan, banner grab, OS detect, SNMP
  *
  * For remote networks (across routers):
  * - Uses ICMP ping sweep only (mDNS/SSDP are link-local protocols)
+ * - Then enriches with port scan, banner grab, OS detect, SNMP
  *
  * @param cidr - The CIDR range to scan (e.g., "192.168.1.0/24")
  * @param logger - Logger instance for output
@@ -66,6 +151,7 @@ export async function discoverDevices(
   pingConcurrency = 50
 ): Promise<DiscoveredDevice[]> {
   const isLocal = isLocalNetwork(cidr)
+  let devices: DiscoveredDevice[]
 
   if (isLocal) {
     logger.info(`Segment ${cidr} is LOCAL - using ARP + mDNS + SSDP discovery`)
@@ -93,11 +179,14 @@ export async function discoverDevices(
       logger.info(`After CIDR filter - mDNS: ${filteredMdns.length}, SSDP: ${filteredSsdp.length}`)
     }
 
-    return mergeDiscoveredDevices(arpDevices, filteredMdns, filteredSsdp)
+    devices = mergeDiscoveredDevices(arpDevices, filteredMdns, filteredSsdp)
   } else {
     logger.info(`Segment ${cidr} is REMOTE - using ping sweep`)
     logger.info(`Note: MAC address and manufacturer info not available for remote networks`)
 
-    return pingSweep(cidr, logger, pingConcurrency)
+    devices = await pingSweep(cidr, logger, pingConcurrency)
   }
+
+  // Enrich all discovered devices with port scan, banners, OS detection, SNMP
+  return enrichDevices(devices, logger)
 }

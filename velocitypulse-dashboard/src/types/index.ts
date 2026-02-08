@@ -4,7 +4,7 @@
 
 // Status types
 export type DeviceStatus = 'online' | 'offline' | 'degraded' | 'unknown'
-export type CheckType = 'ping' | 'http' | 'tcp'
+export type CheckType = 'ping' | 'http' | 'tcp' | 'ssl' | 'dns'
 export type DeviceType = 'server' | 'workstation' | 'network' | 'printer' | 'iot' | 'unknown'
 export type DiscoveryMethod = 'manual' | 'agent_scan' | 'agent_arp' | 'agent_mdns' | 'agent_ssdp' | 'agent_snmp'
 export type ViewMode = 'grid' | 'list' | 'compact'
@@ -22,8 +22,40 @@ export interface User {
   last_name: string | null
   image_url: string | null
   is_staff: boolean
+  last_sign_in_at: string | null
   created_at: string
   updated_at: string
+}
+
+// ==============================================
+// Admin Role Types (SaaS internal)
+// ==============================================
+
+export type AdminRole = 'super_admin' | 'billing_admin' | 'support_admin' | 'viewer'
+
+export interface AdminRoleRecord {
+  user_id: string
+  role: AdminRole
+  is_active: boolean
+  invited_by: string | null
+  created_at: string
+  updated_at: string
+  // Joined from users table
+  user?: User
+}
+
+export interface AdminAuditLog {
+  id: string
+  actor_id: string
+  actor_email: string | null
+  action: string
+  resource_type: string | null
+  resource_id: string | null
+  organization_id: string | null
+  metadata: Record<string, unknown>
+  ip_address: string | null
+  user_agent: string | null
+  created_at: string
 }
 
 // ==============================================
@@ -117,6 +149,8 @@ export interface AgentWithSegments extends Agent {
 // Network Segment Types (Multi-Tenant)
 // ==============================================
 
+export type SegmentType = 'local_scan' | 'remote_monitor'
+
 export interface NetworkSegment {
   id: string
   organization_id: string // FK to organization
@@ -128,6 +162,7 @@ export interface NetworkSegment {
   is_enabled: boolean
   last_scan_at?: string
   last_scan_device_count: number
+  segment_type: SegmentType
   created_at: string
   updated_at: string
   is_auto_registered?: boolean
@@ -201,6 +236,14 @@ export interface Device {
     manufacturer?: string
   }
   last_full_scan_at?: string
+  // Remote monitoring fields
+  ssl_expiry_at?: string
+  ssl_expiry_warn_days?: number
+  ssl_issuer?: string
+  ssl_subject?: string
+  dns_expected_ip?: string
+  check_interval_seconds?: number
+  monitoring_mode?: 'auto' | 'manual'
   // Joined
   category?: Category
   agent?: Agent
@@ -388,6 +431,10 @@ export interface DeviceStatusReport {
   check_type: CheckType
   checked_at: string
   error?: string
+  // SSL metadata from agent
+  ssl_expiry_at?: string
+  ssl_issuer?: string
+  ssl_subject?: string
 }
 
 export interface AgentStatusRequest {
@@ -526,6 +573,46 @@ export interface AnalyticsResponse {
   history: DeviceStatusHistoryRecord[]
   uptime: DeviceUptimeStats[]
   range: AnalyticsTimeRange
+}
+
+// ==============================================
+// Support / Helpdesk Types
+// ==============================================
+
+export type TicketCategory = 'billing' | 'subscription' | 'technical' | 'other'
+export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent'
+export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
+
+export interface SupportTicket {
+  id: string
+  ticket_number: string
+  organization_id: string
+  created_by: string
+  assigned_to: string | null
+  subject: string
+  description: string
+  category: TicketCategory
+  priority: TicketPriority
+  status: TicketStatus
+  created_at: string
+  updated_at: string
+  // Joined
+  organization?: { id?: string; name: string; customer_number: string; slug?: string; plan?: string; status?: string }
+  creator?: { email: string; first_name: string | null; last_name: string | null }
+  assignee?: { email: string; first_name: string | null; last_name: string | null }
+  comment_count?: number
+}
+
+export interface TicketComment {
+  id: string
+  ticket_id: string
+  author_id: string
+  author_type: 'user' | 'admin'
+  content: string
+  is_internal: boolean
+  created_at: string
+  // Joined
+  author?: { email: string; first_name: string | null; last_name: string | null }
 }
 
 // ==============================================

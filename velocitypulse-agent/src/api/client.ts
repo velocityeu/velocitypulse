@@ -6,6 +6,7 @@ export interface NetworkSegment {
   name: string
   cidr: string
   scan_interval_seconds: number
+  segment_type: 'local_scan' | 'remote_monitor'
   is_auto_registered?: boolean
   interface_name?: string
 }
@@ -77,10 +78,15 @@ export interface DiscoveryResponse {
 export interface DeviceToMonitor {
   id: string
   ip_address?: string
-  check_type: 'ping' | 'http' | 'tcp'
+  hostname?: string
+  check_type: 'ping' | 'http' | 'tcp' | 'ssl' | 'dns'
   port?: number | null
   url?: string
   is_monitored: boolean
+  check_interval_seconds?: number
+  ssl_expiry_warn_days?: number
+  dns_expected_ip?: string
+  network_segment_id?: string
 }
 
 export interface StatusReport {
@@ -88,9 +94,13 @@ export interface StatusReport {
   ip_address: string
   status: 'online' | 'offline' | 'degraded' | 'unknown'
   response_time_ms: number | null
-  check_type: 'ping' | 'http' | 'tcp'
+  check_type: 'ping' | 'http' | 'tcp' | 'ssl' | 'dns'
   checked_at: string
   error?: string
+  // SSL metadata
+  ssl_expiry_at?: string
+  ssl_issuer?: string
+  ssl_subject?: string
 }
 
 export interface StatusResponse {

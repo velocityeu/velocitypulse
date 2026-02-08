@@ -3,16 +3,18 @@ import { headers } from 'next/headers'
 import crypto from 'crypto'
 import type { AgentContext } from '@/types'
 import { API_KEY_PREFIX } from '@/lib/constants'
+import { verifyAgentApiKey } from '@/lib/api/agent-key'
 
 /**
- * Authenticates an agent via API key in Authorization header or X-Agent-Key header
+ * Authenticates an agent via API key in Authorization header, X-Agent-Key, or X-API-Key header
  *
  * API Key format: vp_{org_prefix}_{random_24_chars}
  * Example: vp_acme1234_xK7mN9pQ2rStUvWxYz345678
  *
- * Supports both header formats:
+ * Supports header formats:
  * - Authorization: Bearer <api_key>
  * - X-Agent-Key: <api_key>
+ * - X-API-Key: <api_key>
  *
  * Returns agent context if valid (including organization), null if invalid
  */
@@ -28,6 +30,14 @@ export async function authenticateAgent(): Promise<AgentContext | null> {
     apiKey = xAgentKey
   }
 
+  // Fall back to X-API-Key (legacy/doc mismatch)
+  if (!apiKey) {
+    const xApiKey = headersList.get('x-api-key')
+    if (xApiKey) {
+      apiKey = xApiKey
+    }
+  }
+
   // Fall back to Authorization: Bearer
   if (!apiKey) {
     const authHeader = headersList.get('authorization')
@@ -40,48 +50,8 @@ export async function authenticateAgent(): Promise<AgentContext | null> {
     return null
   }
 
-  // Validate API key format: vp_{prefix}_{random}
-  if (!apiKey.startsWith(API_KEY_PREFIX) || apiKey.length < 20) {
-    return null
-  }
-
-  // Extract prefix for fast lookup (first 12 chars: vp_XXXXXXXX)
-  const prefix = apiKey.slice(0, 12)
-
-  // Hash full key for verification
-  const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex')
-
-  const supabase = createServiceClient()
-
-  // Look up agent by prefix and verify hash
-  const { data: agent, error } = await supabase
-    .from('agents')
-    .select('id, name, is_enabled, organization_id')
-    .eq('api_key_prefix', prefix)
-    .eq('api_key_hash', keyHash)
-    .single()
-
-  if (error || !agent) {
-    return null
-  }
-
-  // Check agent is enabled
-  if (!agent.is_enabled) {
-    return null
-  }
-
-  // Check organization is active (not suspended/cancelled)
-  const { data: org, error: orgError } = await supabase
-    .from('organizations')
-    .select('id, status')
-    .eq('id', agent.organization_id)
-    .single()
-
-  if (orgError || !org) {
-    return null
-  }
-
-  if (org.status === 'suspended' || org.status === 'cancelled') {
+  const agentContext = await verifyAgentApiKey(apiKey)
+  if (!agentContext) {
     return null
   }
 
@@ -90,19 +60,16 @@ export async function authenticateAgent(): Promise<AgentContext | null> {
                    headersList.get('x-real-ip') ||
                    'unknown'
 
+  const supabase = createServiceClient()
   await supabase
     .from('agents')
     .update({
       last_seen_at: new Date().toISOString(),
       last_ip_address: clientIp,
     })
-    .eq('id', agent.id)
+    .eq('id', agentContext.agentId)
 
-  return {
-    agentId: agent.id,
-    agentName: agent.name,
-    organizationId: agent.organization_id,
-  }
+  return agentContext
 }
 
 /**

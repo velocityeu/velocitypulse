@@ -12,12 +12,19 @@ export const runtime = 'nodejs'
 
 /**
  * Lifecycle cron job - runs every 6 hours via Vercel Cron.
- * Protected by CRON_SECRET or Vercel's automatic cron auth header.
+ * Protected by CRON_SECRET. In production, CRON_SECRET must be set.
  */
-export async function GET(request: NextRequest) {
-  // Verify cron secret
+async function handleLifecycle(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
+
+  if (!cronSecret && process.env.NODE_ENV === 'production') {
+    logger.error('CRON_SECRET is not configured', { route: 'api/cron/lifecycle' })
+    return NextResponse.json(
+      { error: 'CRON_SECRET is not configured' },
+      { status: 500 }
+    )
+  }
 
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -233,6 +240,14 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+export async function GET(request: NextRequest) {
+  return handleLifecycle(request)
+}
+
+export async function POST(request: NextRequest) {
+  return handleLifecycle(request)
 }
 
 /**

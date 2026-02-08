@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
+import { isValidCidr, validateNoOverlap } from '@/lib/utils/cidr'
 
 /**
  * POST /api/dashboard/agents/[id]/segments
@@ -33,10 +34,12 @@ export async function POST(
       return NextResponse.json({ error: 'CIDR is required' }, { status: 400 })
     }
 
-    // Basic CIDR validation
-    const cidrRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/
-    if (!cidrRegex.test(body.cidr.trim())) {
-      return NextResponse.json({ error: 'Invalid CIDR format (e.g., 192.168.1.0/24)' }, { status: 400 })
+    // CIDR validation
+    if (!isValidCidr(body.cidr.trim())) {
+      return NextResponse.json(
+        { error: 'Invalid CIDR format. Expected format: x.x.x.x/nn (e.g., 192.168.1.0/24)' },
+        { status: 400 }
+      )
     }
 
     const supabase = createServiceClient()
@@ -69,6 +72,28 @@ export async function POST(
 
     if (!agent) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+
+    // Validate no overlap with existing segments
+    const { data: existingSegments, error: segmentsError } = await supabase
+      .from('network_segments')
+      .select('id, name, cidr')
+      .eq('organization_id', membership.organization_id)
+
+    if (segmentsError) {
+      console.error('Failed to fetch existing segments:', segmentsError)
+      return NextResponse.json({ error: 'Failed to validate segment overlap' }, { status: 500 })
+    }
+
+    const overlapCheck = validateNoOverlap(body.cidr.trim(), existingSegments || [])
+    if (!overlapCheck.valid) {
+      return NextResponse.json(
+        {
+          error: overlapCheck.message,
+          overlapping_segment: overlapCheck.overlappingSegment,
+        },
+        { status: 409 }
+      )
     }
 
     // Create segment

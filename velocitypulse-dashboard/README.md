@@ -34,6 +34,7 @@ Create `.env.local` from `.env.example`:
 ### Clerk (Auth)
 ```
 CLERK_SECRET_KEY=sk_...
+CLERK_WEBHOOK_SECRET=whsec_...
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
@@ -69,6 +70,7 @@ SENTRY_AUTH_TOKEN=sntrys_...
 ### Resend (Email)
 ```
 RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=VelocityPulse <noreply@velocitypulse.io>
 ```
 
 ### Cron
@@ -155,9 +157,9 @@ src/
 | Method | Used By | Details |
 |--------|---------|---------|
 | Clerk JWT | Dashboard users | Session cookie, middleware-protected routes |
-| API Key | Agents | `x-api-key` header, validated against `agents` table |
+| API Key | Agents | `x-agent-key`, `x-api-key`, or `Authorization: Bearer` header, validated against `agents` table |
 | CRON_SECRET | Vercel Cron | `Authorization: Bearer` header on `/api/cron/*` |
-| Staff role | Internal admins | `publicMetadata.role === 'staff'` in Clerk |
+| Staff role | Internal admins | `users.is_staff` in Supabase, set by Clerk webhook based on `publicMetadata.role` |
 
 **Production Clerk domain:** `clerk.velocitypulse.io` — Social login providers configured: Google, Microsoft, Apple.
 
@@ -186,4 +188,4 @@ Deployed on Vercel with root directory set to `velocitypulse-dashboard`.
 
 ## API Documentation
 
-See [docs/API.md](docs/API.md) for complete documentation of all 48 API endpoints.
+See [docs/API.md](docs/API.md) for primary endpoints and an additional endpoint summary.

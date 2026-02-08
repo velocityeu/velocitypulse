@@ -12,7 +12,6 @@ import type {
   ServerAuthenticatedPayload,
   ServerErrorPayload,
 } from './types'
-import crypto from 'crypto'
 
 // Lazy-load Supabase client to avoid issues during import
 let supabaseClient: ReturnType<typeof import('@/lib/db/client').createServiceClient> | null = null
@@ -25,7 +24,6 @@ async function getSupabase() {
 }
 
 // Constants
-const API_KEY_PREFIX = 'vp_'
 const LATEST_AGENT_VERSION = process.env.LATEST_AGENT_VERSION || '1.0.0'
 const AGENT_DOWNLOAD_URL = process.env.AGENT_DOWNLOAD_URL || 'https://github.com/velocityeu/velocitypulse-agent/releases/latest'
 
@@ -41,44 +39,8 @@ async function authenticateAgentByKey(apiKey: string): Promise<{
   organizationId: string
 } | null> {
   try {
-    // Validate format
-    if (!apiKey.startsWith(API_KEY_PREFIX) || apiKey.length < 20) {
-      return null
-    }
-
-    // Extract prefix for lookup
-    const prefix = apiKey.slice(0, 12)
-    const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex')
-
-    const supabase = await getSupabase()
-
-    const { data: agent, error } = await supabase
-      .from('agents')
-      .select('id, name, is_enabled, organization_id')
-      .eq('api_key_prefix', prefix)
-      .eq('api_key_hash', keyHash)
-      .single()
-
-    if (error || !agent || !agent.is_enabled) {
-      return null
-    }
-
-    // Check organization status
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('status')
-      .eq('id', agent.organization_id)
-      .single()
-
-    if (!org || org.status === 'suspended' || org.status === 'cancelled') {
-      return null
-    }
-
-    return {
-      agentId: agent.id,
-      agentName: agent.name,
-      organizationId: agent.organization_id,
-    }
+    const { verifyAgentApiKey } = await import('@/lib/api/agent-key')
+    return await verifyAgentApiKey(apiKey)
   } catch (error) {
     console.error('[Socket] Auth error:', error)
     return null

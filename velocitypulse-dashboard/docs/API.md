@@ -1,18 +1,22 @@
 # VelocityPulse Dashboard API Documentation
 
+This document covers the primary dashboard, agent, billing, and admin endpoints. Additional implemented endpoints are listed near the end for completeness.
+
 ## Authentication
 
 ### Clerk JWT (Dashboard Routes)
 All `/api/dashboard/*`, `/api/billing/*`, `/api/checkout`, and `/api/onboarding` routes require a valid Clerk JWT session. The session is validated via `auth()` from `@clerk/nextjs/server`.
 
 ### API Key (Agent Routes)
-All `/api/agent/*` routes require an API key via `X-Agent-Key` header or `Authorization: Bearer <key>`. Keys are hashed (SHA-256) and stored in the `agents` table. The key format is `vp_{org_prefix}_{random}`.
+All `/api/agent/*` routes require an API key via `X-Agent-Key`, `X-API-Key`, or `Authorization: Bearer <key>`. Keys are hashed (SHA-256) and stored in the `agents` table. The key format is `vp_{org_prefix}_{random}`.
+
+**Rotation:** When an API key is rotated, the previous key remains valid for 24 hours (grace period).
 
 ### Internal Auth (Admin Routes)
 All `/api/internal/*` routes require Clerk JWT with staff/admin role, verified by `verifyInternalAccess()`.
 
 ### CRON Secret
-`/api/cron/*` routes require `Authorization: Bearer <CRON_SECRET>`.
+`/api/cron/*` routes require `Authorization: Bearer <CRON_SECRET>`. In production, `CRON_SECRET` must be configured.
 
 ---
 
@@ -661,11 +665,11 @@ Search organizations and users for support.
 
 ## CRON Endpoints
 
-### POST /api/cron/lifecycle
+### GET /api/cron/lifecycle (also accepts POST)
 SaaS lifecycle automation (trial warnings, expirations, suspensions, data purges).
 
 - **Auth**: CRON Secret (`Authorization: Bearer <CRON_SECRET>`)
-- **Notes**: Should be called daily. Sends trial warning emails at 3 days remaining, expires trials, suspends past-due accounts after grace period, purges cancelled org data after retention period.
+- **Notes**: Scheduled every 6 hours. Sends trial warning emails at 3 days remaining, expires trials, suspends past-due accounts after grace period, purges cancelled org data after retention period.
 
 ---
 
@@ -686,6 +690,40 @@ Update a segment.
 
 ### DELETE /api/segments/[id]
 Delete a segment.
+
+---
+
+## Additional Implemented Endpoints (Summary)
+
+These endpoints are used by the UI and internal tooling but are not fully expanded in this document:
+
+- `POST /api/webhook/clerk` â€” Clerk user sync webhook (Svix signed).
+- `GET /api/health` â€” Health check.
+- `GET /api/client-info` â€” Returns client environment/config info for the UI.
+- `GET /api/dashboard/segments` â€” Dashboard segments list.
+- `POST /api/dashboard/agents/[id]/segments` â€” Create segment for an agent (CIDR validation + overlap checks).
+- `POST /api/dashboard/agents/[id]/rotate-key` â€” Rotate agent API key (24h grace on previous key).
+- `POST /api/dashboard/agents/[id]/commands` â€” Queue agent commands.
+- `GET|PATCH|DELETE /api/agents/[id]` â€” Agent detail operations (non-dashboard route).
+- `GET|PATCH|DELETE /api/dashboard/agents/[id]` â€” Agent detail operations (dashboard route).
+- `GET /api/dashboard/devices/export` â€” Export devices (CSV/JSON).
+- `POST /api/dashboard/devices/import` â€” Import devices (CSV).
+- `GET /api/billing/details` â€” Billing overview (subscription, payment method, invoices).
+- `POST /api/billing/change-plan` â€” Change subscription plan.
+- `POST /api/billing/update-payment` â€” Update payment method.
+- `POST /api/billing/cancel` â€” Cancel subscription.
+- `POST /api/billing/reactivate` â€” Reactivate subscription.
+- `GET /api/invitations/verify` â€” Verify invitation token.
+- `POST /api/invitations/accept` â€” Accept invitation.
+- `DELETE /api/dashboard/invitations/[id]` â€” Revoke invitation.
+- `POST /api/dashboard/invitations/[id]/resend` â€” Resend invitation email.
+- `DELETE /api/internal/invitations/[id]` â€” Revoke admin invitation.
+- `GET /api/internal/admins` â€” List staff/admin users.
+- `POST /api/internal/admins` â€” Invite or create staff/admin user.
+- `PATCH /api/internal/admins/[id]` â€” Update admin role or status.
+- `DELETE /api/internal/admins/[id]` â€” Remove admin role.
+- `GET /api/dashboard/support` â€” Support tickets for org.
+- `GET /api/internal/support` â€” Support tickets across orgs.
 
 ---
 

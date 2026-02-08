@@ -4,6 +4,14 @@ All notable changes to VelocityPulse Dashboard will be documented in this file.
 
 ## [Unreleased]
 
+### Post-Review Fixes (2026-02-08)
+
+- Enforced API key rotation grace period (previous key valid for 24h) for HTTP and Socket.IO auth
+- Hardened cron auth: require `CRON_SECRET` in production; added POST handler for lifecycle cron
+- Unified CIDR validation + overlap checks for agent segment creation
+- Wired env validation at startup and aligned env schema with actual usage
+- Documentation alignment for auth headers, cron method, and additional endpoints
+
 ### Production Launch (2026-02-07)
 
 - Migrated Clerk from development to production instance (`clerk.velocitypulse.io`)
@@ -200,7 +208,7 @@ NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-06-20',
+  apiVersion: '2026-01-28.clover',
   maxNetworkRetries: 3,
   timeout: 30000,
 })

@@ -10,5 +10,25 @@
       "master": true,
       "main": true
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/agent",
+      "has": [{ "type": "host", "value": "get.velocitypulse.io" }],
+      "destination": "/api/get/agent"
+    },
+    {
+      "source": "/agent.sh",
+      "has": [{ "type": "host", "value": "get.velocitypulse.io" }],
+      "destination": "/api/get/agent-sh"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/:path((?!agent).*)",
+      "has": [{ "type": "host", "value": "get.velocitypulse.io" }],
+      "destination": "https://velocitypulse.io",
+      "permanent": false
+    }
+  ]
 }

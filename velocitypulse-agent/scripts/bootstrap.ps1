@@ -8,7 +8,7 @@ $ProgressPreference = 'SilentlyContinue'
 Write-Host "VelocityPulse Agent - Bootstrap Installer" -ForegroundColor Cyan
 Write-Host "Downloading installer..." -ForegroundColor Yellow
 
-$installerUrl = "https://raw.githubusercontent.com/velocityeu/velocitypulse-agent/master/scripts/install.ps1"
+$installerUrl = "https://raw.githubusercontent.com/velocityeu/velocitypulse-agent/main/scripts/install-windows.ps1"
 $installerPath = "$env:TEMP\install-velocitypulse-agent.ps1"
 
 try {

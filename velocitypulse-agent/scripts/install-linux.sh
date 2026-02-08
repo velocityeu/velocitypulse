@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================
 # VelocityPulse Agent Installer (Linux)
-# One-liner: curl -sSL https://install.velocitypulse.io/agent | bash
+# One-liner: curl -sSL https://get.velocitypulse.io/agent.sh | bash
 # ==============================================
 
 set -e

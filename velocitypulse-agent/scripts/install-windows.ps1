@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Downloads and installs the VelocityPulse Agent as a Windows service.
-    One-liner: irm https://install.velocitypulse.io/agent | iex
+    One-liner: irm https://get.velocitypulse.io/agent | iex
 
 .PARAMETER ApiKey
     The agent API key from your VelocityPulse dashboard.

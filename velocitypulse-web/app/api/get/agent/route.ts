@@ -831,34 +831,61 @@ if (-not $nssmReady) {
 Write-Host "[5/9] Downloading latest agent release..." -ForegroundColor Yellow
 
 # Monorepo releases: filter for agent-v* tags
+# Supports private repos via GITHUB_TOKEN env var
 $releasesUrl = "https://api.github.com/repos/velocityeu/velocitypulse/releases"
+$apiHeaders = @{ "User-Agent" = "VelocityPulse-Installer" }
+if ($env:GITHUB_TOKEN) {
+    $apiHeaders["Authorization"] = "token $($env:GITHUB_TOKEN)"
+}
 try {
-    $releases = Invoke-RestMethod -Uri $releasesUrl -Headers @{ "User-Agent" = "VelocityPulse-Installer" }
+    $releases = Invoke-RestMethod -Uri $releasesUrl -Headers $apiHeaders
     $agentRelease = $releases | Where-Object { $_.tag_name -like "agent-v*" } | Select-Object -First 1
 
     if ($agentRelease) {
         $version = $agentRelease.tag_name
-        $asset = $agentRelease.assets | Where-Object { $_.name -like "velocitypulse-agent-*" } | Select-Object -First 1
+        # Prefer .zip for Windows
+        $asset = $agentRelease.assets | Where-Object { $_.name -like "velocitypulse-agent-*.zip" } | Select-Object -First 1
+        if (-not $asset) {
+            $asset = $agentRelease.assets | Where-Object { $_.name -like "velocitypulse-agent-*" } | Select-Object -First 1
+        }
 
         if ($asset) {
-            $downloadUrl = $asset.browser_download_url
+            # For private repos, use API asset endpoint (browser_download_url returns 404)
+            if ($env:GITHUB_TOKEN) {
+                $downloadUrl = "https://api.github.com/repos/velocityeu/velocitypulse/releases/assets/$($asset.id)"
+                $useApiDownload = $true
+            } else {
+                $downloadUrl = $asset.browser_download_url
+                $useApiDownload = $false
+            }
         } else {
             $downloadUrl = $agentRelease.zipball_url
+            $useApiDownload = $false
         }
         Write-Host "  Version: $version" -ForegroundColor Green
     } else {
         throw "No agent releases found"
     }
 } catch {
-    Write-Host "  WARNING: Could not fetch latest release. Using main branch." -ForegroundColor Yellow
+    Write-Host "  WARNING: Could not fetch latest release." -ForegroundColor Yellow
+    if (-not $env:GITHUB_TOKEN) {
+        Write-Host "  For private repos, set GITHUB_TOKEN env var before running." -ForegroundColor Yellow
+    }
+    Write-Host "  Falling back to main branch archive." -ForegroundColor Yellow
     $version = "latest"
     $downloadUrl = "https://github.com/velocityeu/velocitypulse/archive/refs/heads/main.zip"
+    $useApiDownload = $false
 }
 
 $tempZip = Join-Path $env:TEMP "vp-agent-$([guid]::NewGuid().ToString('N').Substring(0,8)).zip"
 $tempExtract = Join-Path $env:TEMP "vp-agent-extract"
 
-Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip
+$dlHeaders = @{ "User-Agent" = "VelocityPulse-Installer" }
+if ($useApiDownload -and $env:GITHUB_TOKEN) {
+    $dlHeaders["Authorization"] = "token $($env:GITHUB_TOKEN)"
+    $dlHeaders["Accept"] = "application/octet-stream"
+}
+Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -Headers $dlHeaders
 Write-Host "  Downloaded OK" -ForegroundColor Green
 
 # ============================================
@@ -1002,7 +1029,7 @@ if (-not (Test-Path $logsDir)) {
 & $nssmPath set $ServiceName AppRotateFiles 1 2>&1 | Out-Null
 & $nssmPath set $ServiceName AppRotateBytes 1048576 2>&1 | Out-Null
 
-# Set AppParameters via registry -- PowerShell's argument escaping to native exes
+# Set AppParameters via registry — PowerShell's argument escaping to native exes
 # is unreliable with embedded quotes, so write the quoted path directly to the registry
 $paramsRegPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\$ServiceName\\Parameters"
 if (Test-Path $paramsRegPath) {

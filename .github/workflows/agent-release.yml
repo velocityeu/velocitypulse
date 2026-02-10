@@ -63,15 +63,17 @@ jobs:
         run: npm test
         continue-on-error: true
 
-      - name: Create release archive
+      - name: Create release archives
         run: |
-          ARCHIVE_NAME="velocitypulse-agent-${{ steps.tag.outputs.version }}.tar.gz"
-          tar -czf "../$ARCHIVE_NAME" \
-            dist/ \
-            package.json \
-            package-lock.json \
-            src/ui/public/
-          echo "archive_name=$ARCHIVE_NAME" >> "$GITHUB_OUTPUT"
+          VER="${{ steps.tag.outputs.version }}"
+          STAGE_DIR="../velocitypulse-agent-${VER}"
+          mkdir -p "$STAGE_DIR/src/ui"
+          cp -r dist/ package.json package-lock.json "$STAGE_DIR/"
+          cp -r src/ui/public/ "$STAGE_DIR/src/ui/"
+          # tar.gz for Linux
+          tar -czf "../velocitypulse-agent-${VER}.tar.gz" -C .. "velocitypulse-agent-${VER}"
+          # zip for Windows
+          cd .. && zip -rq "velocitypulse-agent-${VER}.zip" "velocitypulse-agent-${VER}"
         id: archive
 
       - name: Create GitHub Release
@@ -95,4 +97,6 @@ jobs:
             ```powershell
             irm https://get.velocitypulse.io/agent | iex
             ```
-          files: ${{ steps.archive.outputs.archive_name }}
+          files: |
+            velocitypulse-agent-${{ steps.tag.outputs.version }}.tar.gz
+            velocitypulse-agent-${{ steps.tag.outputs.version }}.zip

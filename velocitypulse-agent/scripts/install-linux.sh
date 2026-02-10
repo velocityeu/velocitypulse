@@ -82,20 +82,22 @@ TEMP_DIR=$(mktemp -d)
 TEMP_ZIP="$TEMP_DIR/agent.tar.gz"
 
 # Try GitHub releases API (monorepo: filter for agent-v* tags)
+# Supports both public repos (unauthenticated) and private repos (with GITHUB_TOKEN)
 RELEASES_URL="https://api.github.com/repos/velocityeu/velocitypulse/releases"
 DOWNLOAD_URL=""
+AUTH_HEADER=""
+if [ -n "$GITHUB_TOKEN" ]; then
+    AUTH_HEADER="-H \"Authorization: token $GITHUB_TOKEN\""
+fi
 
 if command -v curl &>/dev/null; then
-    RELEASES_JSON=$(curl -sL -H "User-Agent: VelocityPulse-Installer" "$RELEASES_URL" 2>/dev/null || echo "")
+    RELEASES_JSON=$(eval curl -sL -H \"User-Agent: VelocityPulse-Installer\" $AUTH_HEADER \"$RELEASES_URL\" 2>/dev/null || echo "")
     AGENT_TAG=$(echo "$RELEASES_JSON" | grep -o '"tag_name":"agent-v[^"]*"' | head -1 | cut -d'"' -f4)
     if [ -n "$AGENT_TAG" ]; then
         # Find the tarball asset for this release
         ASSET_URL=$(echo "$RELEASES_JSON" | grep -o '"browser_download_url":"[^"]*velocitypulse-agent-[^"]*\.tar\.gz"' | head -1 | cut -d'"' -f4)
         if [ -n "$ASSET_URL" ]; then
             DOWNLOAD_URL="$ASSET_URL"
-        else
-            # Fallback to source tarball
-            DOWNLOAD_URL=$(echo "$RELEASES_JSON" | grep -A5 "\"tag_name\":\"$AGENT_TAG\"" | grep -o '"tarball_url":"[^"]*"' | head -1 | cut -d'"' -f4)
         fi
         VERSION="$AGENT_TAG"
         echo -e "${GREEN}  Version: $VERSION${NC}"
@@ -103,12 +105,18 @@ if command -v curl &>/dev/null; then
 fi
 
 if [ -z "$DOWNLOAD_URL" ]; then
+    echo -e "${YELLOW}  Could not find a release. Is the repo private?${NC}"
+    echo -e "${YELLOW}  For private repos, set GITHUB_TOKEN before running the installer.${NC}"
+    echo -e "${YELLOW}  Falling back to main branch archive...${NC}"
     DOWNLOAD_URL="https://github.com/velocityeu/velocitypulse/archive/refs/heads/main.tar.gz"
     VERSION="latest"
-    echo -e "${YELLOW}  Using latest from main branch${NC}"
 fi
 
-curl -sL "$DOWNLOAD_URL" -o "$TEMP_ZIP"
+eval curl -sL $AUTH_HEADER \"$DOWNLOAD_URL\" -o \"$TEMP_ZIP\"
+if [ ! -s "$TEMP_ZIP" ]; then
+    echo -e "${RED}  ERROR: Download failed. Check network or GITHUB_TOKEN.${NC}"
+    exit 1
+fi
 echo -e "${GREEN}  Downloaded${NC}"
 
 # ==============================================

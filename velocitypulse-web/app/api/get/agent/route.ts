@@ -881,27 +881,57 @@ if (-not (Test-Path $InstallDir)) {
 Copy-Item -Path "$($sourceDir.FullName)\\*" -Destination $InstallDir -Recurse -Force
 Write-Host "  Files extracted" -ForegroundColor Green
 
-# Verify entry point
 $entryPoint = Join-Path $InstallDir "dist\\index.js"
-if (-not (Test-Path $entryPoint)) {
-    throw "dist\\index.js not found. Release may be missing pre-built files."
-}
 
-# Install npm dependencies
-Write-Host "  Installing dependencies (this may take a minute)..."
-Push-Location $InstallDir
-try {
-    $prevEAP = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    $npmOutput = npm install --omit=dev 2>&1
-    $npmExit = $LASTEXITCODE
-    $ErrorActionPreference = $prevEAP
-} finally {
-    Pop-Location
-}
+# Check if this is a pre-built release or source archive
+if (Test-Path $entryPoint) {
+    # Pre-built release: install production dependencies only
+    Write-Host "  Pre-built dist/ found. Installing production dependencies..."
+    Push-Location $InstallDir
+    try {
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $npmOutput = npm install --omit=dev 2>&1
+        $npmExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEAP
+    } finally {
+        Pop-Location
+    }
+    if ($npmExit -ne 0) {
+        throw "npm install failed (exit code $npmExit). Output: $npmOutput"
+    }
+} else {
+    # Source archive: install all dependencies (including TypeScript) and build
+    Write-Host "  No pre-built dist/ found. Building from source..." -ForegroundColor Yellow
+    Push-Location $InstallDir
+    try {
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
 
-if ($npmExit -ne 0) {
-    throw "npm install failed (exit code $npmExit). Output: $npmOutput"
+        Write-Host "  Installing dependencies (this may take a minute)..."
+        $npmOutput = npm install 2>&1
+        $npmExit = $LASTEXITCODE
+        if ($npmExit -ne 0) {
+            throw "npm install failed (exit code $npmExit). Output: $npmOutput"
+        }
+
+        Write-Host "  Building agent..."
+        $buildOutput = npm run build 2>&1
+        $buildExit = $LASTEXITCODE
+        if ($buildExit -ne 0) {
+            throw "npm run build failed (exit code $buildExit). Output: $buildOutput"
+        }
+
+        $ErrorActionPreference = $prevEAP
+        Write-Host "  Build completed" -ForegroundColor Green
+    } finally {
+        Pop-Location
+    }
+
+    # Verify build output
+    if (-not (Test-Path $entryPoint)) {
+        throw "Build completed but dist\\index.js not found. Check build configuration."
+    }
 }
 
 # Verify node_modules

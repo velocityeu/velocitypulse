@@ -127,10 +127,25 @@ fi
 cp -rf "$SOURCE_DIR"/* "$INSTALL_DIR/"
 echo -e "\${GREEN}  Files installed\${NC}"
 
-# Install dependencies
-echo "  Installing dependencies..."
+# Check if this is a pre-built release or source archive
 cd "$INSTALL_DIR"
-npm install --production --silent 2>/dev/null
+if [ -f "$INSTALL_DIR/dist/index.js" ]; then
+    # Pre-built release: install production dependencies only
+    echo "  Pre-built dist/ found. Installing production dependencies..."
+    npm install --production --silent 2>/dev/null
+else
+    # Source archive: install all dependencies (including TypeScript) and build
+    echo -e "\${YELLOW}  No pre-built dist/ found. Building from source...\${NC}"
+    echo "  Installing dependencies (this may take a minute)..."
+    npm install --silent 2>/dev/null
+    echo "  Building agent..."
+    npm run build 2>/dev/null
+    if [ ! -f "$INSTALL_DIR/dist/index.js" ]; then
+        echo -e "\${RED}  ERROR: Build failed. dist/index.js not found.\${NC}"
+        exit 1
+    fi
+    echo -e "\${GREEN}  Build completed\${NC}"
+fi
 echo -e "\${GREEN}  Dependencies installed\${NC}"
 
 # ==============================================

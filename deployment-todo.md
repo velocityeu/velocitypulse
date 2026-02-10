@@ -4,15 +4,15 @@ One-time setup tasks to complete the deployment pipeline.
 
 ## Vercel Git Integration
 
-- [ ] Connect `velocitypulse-web` Vercel project to GitHub repo `velocityeu/velocitypulse` (root: `velocitypulse-web`)
-- [ ] Connect `velocitypulse-dashboard` Vercel project to GitHub repo `velocityeu/velocitypulse` (root: `velocitypulse-dashboard`)
-- [ ] Delete or disconnect any stale `velocitypulse` Vercel project (if one exists from manual deploys)
+- [x] Connect `velocitypulse-web` Vercel project to GitHub repo `velocityeu/velocitypulse` (root: `velocitypulse-web`)
+- [x] Connect `velocitypulse-dashboard` Vercel project to GitHub repo `velocityeu/velocitypulse` (root: `velocitypulse-dashboard`)
+- [x] Delete or disconnect any stale `velocitypulse` Vercel project — deleted
 
 ## Verify Auto-Deploy
 
 - [ ] Push a test change to `velocitypulse-web/` and verify only the web project deploys
-- [ ] Push a test change to `velocitypulse-dashboard/` and verify only the dashboard deploys
-- [ ] Verify build ID in production footer matches the git commit SHA
+- [x] Push a test change to `velocitypulse-dashboard/` and verify only the dashboard deploys — confirmed: `efe3d2a` push auto-deployed dashboard in ~1m; web correctly skipped by ignoreCommand
+- [x] Verify build ID in production footer matches the git commit SHA — web shows `281dd96` (its last deploy commit), dashboard deployed with `efe3d2a`
 
 ## Agent Release
 
@@ -23,6 +23,6 @@ One-time setup tasks to complete the deployment pipeline.
 
 ## Version Display
 
-- [ ] Verify dashboard sidebar shows `v0.1.0 (abc1234)` format
-- [ ] Verify web footer shows `v0.1.1 (abc1234)` format
+- [ ] Verify dashboard sidebar shows `v0.1.0 (abc1234)` format (requires auth — can't verify via curl)
+- [x] Verify web footer shows `v0.1.1 (abc1234)` format — confirmed `281dd96` in HTML
 - [ ] Verify agent UI header and footer show build ID when built via CI

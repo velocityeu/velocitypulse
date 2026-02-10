@@ -10,7 +10,7 @@ One-time setup tasks to complete the deployment pipeline.
 
 ## Verify Auto-Deploy
 
-- [ ] Push a test change to `velocitypulse-web/` and verify only the web project deploys
+- [x] Push a test change to `velocitypulse-web/` and verify only the web project deploys — confirmed: `5a420dd` push auto-deployed web in ~35s; dashboard correctly skipped by ignoreCommand
 - [x] Push a test change to `velocitypulse-dashboard/` and verify only the dashboard deploys — confirmed: `efe3d2a` push auto-deployed dashboard in ~1m; web correctly skipped by ignoreCommand
 - [x] Verify build ID in production footer matches the git commit SHA — web shows `281dd96` (its last deploy commit), dashboard deployed with `efe3d2a`
 

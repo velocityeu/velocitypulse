@@ -1,3 +1,4 @@
+// @ts-check
 const { withSentryConfig } = require('@sentry/nextjs')
 const { execSync } = require('child_process')
 const pkg = require('./package.json')

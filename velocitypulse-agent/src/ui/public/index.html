@@ -374,6 +374,7 @@
                 <span><span class="brand-text">VelocityPulse</span> <span class="agent-text">Agent</span></span>
             </h1>
             <span class="version-badge current" id="version-badge">v1.0.0</span>
+            <span class="version-badge current" id="build-badge" style="font-size: 0.65rem; opacity: 0.7;"></span>
         </div>
         <div class="header-right">
             <button class="sonar-btn" id="sonar-btn" onclick="pingDashboard()" title="Sonar Ping">
@@ -561,7 +562,7 @@
         </div>
 
         <footer class="footer">
-            <span>VelocityPulse Agent v<span id="footer-version">1.0.0</span></span>
+            <span>VelocityPulse Agent v<span id="footer-version">1.0.0</span> <span id="footer-build" style="opacity: 0.6;"></span></span>
             <span>
                 <a href="https://velocitypulse.io" target="_blank">velocitypulse.io</a>
                 &middot;
@@ -685,6 +686,9 @@
             document.getElementById('org-id').textContent = state.organizationId ? state.organizationId.substring(0, 8) + '...' : '-';
             document.getElementById('version').textContent = state.version || '1.0.0';
             document.getElementById('footer-version').textContent = state.version || '1.0.0';
+            const bid = state.buildId && state.buildId !== '__BUILD_ID__' ? state.buildId : '';
+            document.getElementById('build-badge').textContent = bid ? '(' + bid + ')' : '';
+            document.getElementById('footer-build').textContent = bid ? '(' + bid + ')' : '';
             document.getElementById('last-heartbeat').textContent = state.lastHeartbeat
                 ? new Date(state.lastHeartbeat).toLocaleTimeString()
                 : '-';
@@ -734,7 +738,8 @@
                 badge.title = 'Update available! Click to learn more.';
             } else {
                 badge.className = 'version-badge current';
-                badge.textContent = 'v' + (state.version || '1.0.0');
+                const bid = state.buildId && state.buildId !== '__BUILD_ID__' ? state.buildId : '';
+                badge.textContent = 'v' + (state.version || '1.0.0') + (bid ? ' (' + bid + ')' : '');
                 badge.title = 'Up to date';
             }
         }

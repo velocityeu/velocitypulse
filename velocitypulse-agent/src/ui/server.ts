@@ -5,6 +5,7 @@ import { Server as SocketIOServer } from 'socket.io'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import type { Logger } from '../utils/logger.js'
+import { BUILD_ID } from '../utils/version.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -36,6 +37,7 @@ export interface AgentUIState {
   organizationId: string | null
   dashboardUrl: string
   version: string
+  buildId: string
   connected: boolean
   lastHeartbeat: string | null
   segments: SegmentInfo[]
@@ -102,6 +104,7 @@ export class AgentUIServer {
       organizationId: null,
       dashboardUrl: '',
       version: '1.0.0',
+      buildId: BUILD_ID,
       connected: false,
       lastHeartbeat: null,
       segments: [],

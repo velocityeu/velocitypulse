@@ -1,0 +1,98 @@
+name: Agent Release
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: velocitypulse-agent
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: tag
+        run: |
+          TAG="${GITHUB_REF#refs/tags/agent-v}"
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag matches package.json
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PKG_VERSION" != "${{ steps.tag.outputs.version }}" ]; then
+            echo "ERROR: Tag version (${{ steps.tag.outputs.version }}) does not match package.json ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Verify tag matches version.ts
+        run: |
+          TS_VERSION=$(grep "export const VERSION" src/utils/version.ts | grep -oP "'[^']+'" | tr -d "'")
+          if [ "$TS_VERSION" != "${{ steps.tag.outputs.version }}" ]; then
+            echo "ERROR: Tag version (${{ steps.tag.outputs.version }}) does not match version.ts ($TS_VERSION)"
+            exit 1
+          fi
+
+      - name: Inject build ID
+        run: |
+          sed -i "s/__BUILD_ID__/${{ steps.tag.outputs.short_sha }}/g" src/utils/version.ts
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: velocitypulse-agent/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Create release archive
+        run: |
+          ARCHIVE_NAME="velocitypulse-agent-${{ steps.tag.outputs.version }}.tar.gz"
+          tar -czf "../$ARCHIVE_NAME" \
+            dist/ \
+            package.json \
+            package-lock.json \
+            src/ui/public/
+          echo "archive_name=$ARCHIVE_NAME" >> "$GITHUB_OUTPUT"
+        id: archive
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: agent-v${{ steps.tag.outputs.version }}
+          name: VelocityPulse Agent v${{ steps.tag.outputs.version }}
+          body: |
+            ## VelocityPulse Agent v${{ steps.tag.outputs.version }}
+
+            **Build:** `${{ steps.tag.outputs.short_sha }}`
+
+            ### Installation
+
+            **Linux:**
+            ```bash
+            curl -sSL https://get.velocitypulse.io/agent.sh | sudo bash
+            ```
+
+            **Windows (PowerShell as Admin):**
+            ```powershell
+            irm https://get.velocitypulse.io/agent | iex
+            ```
+          files: ${{ steps.archive.outputs.archive_name }}

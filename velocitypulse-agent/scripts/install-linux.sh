@@ -81,21 +81,29 @@ echo -e "${YELLOW}[3/6] Downloading latest agent release...${NC}"
 TEMP_DIR=$(mktemp -d)
 TEMP_ZIP="$TEMP_DIR/agent.tar.gz"
 
-# Try GitHub releases API
-RELEASE_URL="https://api.github.com/repos/velocityeu/velocitypulse-agent/releases/latest"
+# Try GitHub releases API (monorepo: filter for agent-v* tags)
+RELEASES_URL="https://api.github.com/repos/velocityeu/velocitypulse/releases"
 DOWNLOAD_URL=""
 
 if command -v curl &>/dev/null; then
-    RELEASE_JSON=$(curl -sL -H "User-Agent: VelocityPulse-Installer" "$RELEASE_URL" 2>/dev/null || echo "")
-    if echo "$RELEASE_JSON" | grep -q "tarball_url"; then
-        DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o '"tarball_url":[^,]*' | cut -d'"' -f4)
-        VERSION=$(echo "$RELEASE_JSON" | grep -o '"tag_name":[^,]*' | cut -d'"' -f4)
+    RELEASES_JSON=$(curl -sL -H "User-Agent: VelocityPulse-Installer" "$RELEASES_URL" 2>/dev/null || echo "")
+    AGENT_TAG=$(echo "$RELEASES_JSON" | grep -o '"tag_name":"agent-v[^"]*"' | head -1 | cut -d'"' -f4)
+    if [ -n "$AGENT_TAG" ]; then
+        # Find the tarball asset for this release
+        ASSET_URL=$(echo "$RELEASES_JSON" | grep -o '"browser_download_url":"[^"]*velocitypulse-agent-[^"]*\.tar\.gz"' | head -1 | cut -d'"' -f4)
+        if [ -n "$ASSET_URL" ]; then
+            DOWNLOAD_URL="$ASSET_URL"
+        else
+            # Fallback to source tarball
+            DOWNLOAD_URL=$(echo "$RELEASES_JSON" | grep -A5 "\"tag_name\":\"$AGENT_TAG\"" | grep -o '"tarball_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+        fi
+        VERSION="$AGENT_TAG"
         echo -e "${GREEN}  Version: $VERSION${NC}"
     fi
 fi
 
 if [ -z "$DOWNLOAD_URL" ]; then
-    DOWNLOAD_URL="https://github.com/velocityeu/velocitypulse-agent/archive/refs/heads/main.tar.gz"
+    DOWNLOAD_URL="https://github.com/velocityeu/velocitypulse/archive/refs/heads/main.tar.gz"
     VERSION="latest"
     echo -e "${YELLOW}  Using latest from main branch${NC}"
 fi

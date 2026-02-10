@@ -131,9 +131,14 @@ export default function Footer() {
             <div className="text-sm text-tertiary">
               <span>2026 Velocity EU Ltd. All rights reserved.</span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-tertiary">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-              <span>All systems operational</span>
+            <div className="flex items-center gap-4 text-sm text-tertiary">
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                <span>All systems operational</span>
+              </span>
+              <span className="font-mono text-xs opacity-60">
+                v{process.env.NEXT_PUBLIC_APP_VERSION || '0.1.1'} ({process.env.NEXT_PUBLIC_BUILD_ID || 'dev'})
+              </span>
             </div>
           </div>
         </div>

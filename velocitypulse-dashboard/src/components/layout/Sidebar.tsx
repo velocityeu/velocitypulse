@@ -23,6 +23,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useBranding } from '@/lib/hooks/useBranding'
+import { APP_VERSION, BUILD_ID } from '@/lib/constants'
 import Image from 'next/image'
 
 const navItems = [
@@ -144,6 +145,11 @@ export function Sidebar({ collapsed = false, onCollapse, isStaff }: SidebarProps
           <ExternalLink className="h-4 w-4 shrink-0" />
           {!collapsed && <span>VelocityPulse.io</span>}
         </a>
+        {!collapsed && (
+          <p className="px-3 py-1 text-xs text-muted-foreground/60 font-mono">
+            v{APP_VERSION} ({BUILD_ID})
+          </p>
+        )}
       </div>
     </aside>
   )
@@ -253,6 +259,9 @@ export function MobileSidebar({ open, onOpenChange, isStaff }: { open: boolean; 
             <ExternalLink className="h-4 w-4 shrink-0" />
             <span>VelocityPulse.io</span>
           </a>
+          <p className="px-3 py-1 text-xs text-muted-foreground/60 font-mono">
+            v{APP_VERSION} ({BUILD_ID})
+          </p>
         </div>
       </aside>
     </>

@@ -4,6 +4,7 @@
 
 // Dashboard version
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '0.1.0'
+export const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID || 'dev'
 
 // Agent version management
 export const LATEST_AGENT_VERSION = process.env.LATEST_AGENT_VERSION || '1.0.0'

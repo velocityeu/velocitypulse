@@ -2,4 +2,3 @@
 .env*.local
 .claude/settings.local.json
 nul
-DEPLOYMENT.md

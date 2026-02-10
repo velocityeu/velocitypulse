@@ -9,7 +9,7 @@
     irm https://get.velocitypulse.io/agent | iex
 .EXAMPLE
     # Or download and run directly:
-    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/velocityeu/velocitypulse-agent/main/scripts/install.ps1" -OutFile "$env:TEMP\install.ps1"; & "$env:TEMP\install.ps1"
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/velocityeu/velocitypulse/main/velocitypulse-agent/scripts/install.ps1" -OutFile "$env:TEMP\install.ps1"; & "$env:TEMP\install.ps1"
 .NOTES
     Version: 1.0.0
     Author: Velocity EU
@@ -46,7 +46,7 @@ Write-Host ""
 
 # Version and constants
 $Version = "1.0.0"
-$ZipUrl = "https://github.com/velocityeu/velocitypulse-agent/archive/refs/heads/main.zip"
+$ZipUrl = "https://github.com/velocityeu/velocitypulse/archive/refs/heads/main.zip"
 # NSSM download URLs (primary + fallbacks)
 $NssmUrls = @(
     "https://nssm.cc/release/nssm-2.24.zip",

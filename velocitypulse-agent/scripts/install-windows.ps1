@@ -826,26 +826,29 @@ if (-not $nssmReady) {
 # ============================================
 Write-Host "[5/9] Downloading latest agent release..." -ForegroundColor Yellow
 
-$releasesUrl = "https://api.github.com/repos/velocityeu/velocitypulse-agent/releases/latest"
+# Monorepo releases: filter for agent-v* tags
+$releasesUrl = "https://api.github.com/repos/velocityeu/velocitypulse/releases"
 try {
-    $release = Invoke-RestMethod -Uri $releasesUrl -Headers @{ "User-Agent" = "VelocityPulse-Installer" }
-    $version = $release.tag_name
-    $asset = $release.assets | Where-Object { $_.name -like "*windows*" -or $_.name -like "*.zip" } | Select-Object -First 1
+    $releases = Invoke-RestMethod -Uri $releasesUrl -Headers @{ "User-Agent" = "VelocityPulse-Installer" }
+    $agentRelease = $releases | Where-Object { $_.tag_name -like "agent-v*" } | Select-Object -First 1
 
-    if (-not $asset) {
-        $asset = $release.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
-    }
+    if ($agentRelease) {
+        $version = $agentRelease.tag_name
+        $asset = $agentRelease.assets | Where-Object { $_.name -like "velocitypulse-agent-*" } | Select-Object -First 1
 
-    if ($asset) {
-        $downloadUrl = $asset.browser_download_url
+        if ($asset) {
+            $downloadUrl = $asset.browser_download_url
+        } else {
+            $downloadUrl = $agentRelease.zipball_url
+        }
+        Write-Host "  Version: $version" -ForegroundColor Green
     } else {
-        $downloadUrl = $release.zipball_url
+        throw "No agent releases found"
     }
-    Write-Host "  Version: $version" -ForegroundColor Green
 } catch {
     Write-Host "  WARNING: Could not fetch latest release. Using main branch." -ForegroundColor Yellow
     $version = "latest"
-    $downloadUrl = "https://github.com/velocityeu/velocitypulse-agent/archive/refs/heads/main.zip"
+    $downloadUrl = "https://github.com/velocityeu/velocitypulse/archive/refs/heads/main.zip"
 }
 
 $tempZip = Join-Path $env:TEMP "vp-agent-$([guid]::NewGuid().ToString('N').Substring(0,8)).zip"

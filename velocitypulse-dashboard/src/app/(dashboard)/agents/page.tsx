@@ -113,11 +113,14 @@ export default function AgentsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_enabled: enabled }),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        setError('Failed to toggle agent')
+        return
+      }
       const data = await res.json()
       setAgents(prev => prev.map(a => a.id === agentId ? { ...a, ...data.agent } : a))
     } catch {
-      // Silently fail
+      setError('Failed to toggle agent')
     }
   }
 
@@ -130,7 +133,7 @@ export default function AgentsPage() {
         body: JSON.stringify({ command_type: commandType }),
       })
     } catch {
-      // Silently fail
+      setError('Failed to send command')
     }
   }
 

@@ -6,6 +6,14 @@ import { Settings, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -16,20 +24,18 @@ import {
 } from '@/components/ui/dialog'
 import type { Agent } from '@/types'
 
-const SCAN_INTERVAL_OPTIONS = [
+const HEARTBEAT_INTERVAL_OPTIONS = [
+  { value: 10, label: '10 seconds' },
+  { value: 15, label: '15 seconds' },
+  { value: 30, label: '30 seconds' },
   { value: 60, label: '1 minute' },
-  { value: 300, label: '5 minutes' },
-  { value: 600, label: '10 minutes' },
-  { value: 900, label: '15 minutes' },
-  { value: 1800, label: '30 minutes' },
-  { value: 3600, label: '1 hour' },
 ]
 
-const DISCOVERY_SEGMENTS = [
-  { key: 'arp', label: 'ARP Scanning' },
-  { key: 'ping', label: 'ICMP Ping Sweep' },
-  { key: 'mdns', label: 'mDNS Discovery' },
-  { key: 'ssdp', label: 'SSDP/UPnP Discovery' },
+const LOG_LEVEL_OPTIONS = [
+  { value: 'debug', label: 'Debug' },
+  { value: 'info', label: 'Info' },
+  { value: 'warn', label: 'Warn' },
+  { value: 'error', label: 'Error' },
 ]
 
 interface ConfigPushDialogProps {
@@ -39,18 +45,13 @@ interface ConfigPushDialogProps {
 }
 
 export function ConfigPushDialog({ agent, open, onOpenChange }: ConfigPushDialogProps) {
-  const [scanInterval, setScanInterval] = useState(300)
-  const [pingTimeout, setPingTimeout] = useState(2000)
-  const [enabledSegments, setEnabledSegments] = useState<string[]>(['arp', 'ping'])
+  const [heartbeatInterval, setHeartbeatInterval] = useState(30)
+  const [enableAutoScan, setEnableAutoScan] = useState(true)
+  const [autoScanInterval, setAutoScanInterval] = useState(300)
+  const [logLevel, setLogLevel] = useState('info')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-
-  const toggleSegment = (key: string) => {
-    setEnabledSegments(prev =>
-      prev.includes(key) ? prev.filter(s => s !== key) : [...prev, key]
-    )
-  }
 
   const handleSubmit = async () => {
     setSending(true)
@@ -64,9 +65,10 @@ export function ConfigPushDialog({ agent, open, onOpenChange }: ConfigPushDialog
         body: JSON.stringify({
           command_type: 'update_config',
           payload: {
-            scan_interval_seconds: scanInterval,
-            ping_timeout_ms: pingTimeout,
-            enabled_discovery: enabledSegments,
+            heartbeatInterval,
+            enableAutoScan,
+            autoScanInterval,
+            logLevel,
           },
         }),
       })
@@ -99,53 +101,68 @@ export function ConfigPushDialog({ agent, open, onOpenChange }: ConfigPushDialog
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Scan Interval */}
+          {/* Heartbeat Interval */}
           <div>
-            <Label>Scan Interval</Label>
+            <Label>Heartbeat Interval</Label>
             <select
-              value={scanInterval}
-              onChange={e => setScanInterval(Number(e.target.value))}
+              value={heartbeatInterval}
+              onChange={e => setHeartbeatInterval(Number(e.target.value))}
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
-              {SCAN_INTERVAL_OPTIONS.map(opt => (
+              {HEARTBEAT_INTERVAL_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-          </div>
-
-          {/* Ping Timeout */}
-          <div>
-            <Label>Ping Timeout (ms)</Label>
-            <Input
-              type="number"
-              value={pingTimeout}
-              onChange={e => setPingTimeout(Number(e.target.value))}
-              min={500}
-              max={30000}
-              step={500}
-              className="mt-1"
-            />
             <p className="text-xs text-muted-foreground mt-1">
-              How long to wait for a device response (500-30000ms)
+              How often the agent sends heartbeats to the server
             </p>
           </div>
 
-          {/* Discovery Methods */}
-          <div>
-            <Label>Discovery Methods</Label>
-            <div className="mt-2 space-y-2">
-              {DISCOVERY_SEGMENTS.map(seg => (
-                <label key={seg.key} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={enabledSegments.includes(seg.key)}
-                    onChange={() => toggleSegment(seg.key)}
-                    className="rounded border-input"
-                  />
-                  <span className="text-sm">{seg.label}</span>
-                </label>
-              ))}
+          {/* Auto Scan */}
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Auto Scan</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically discover devices on assigned network segments
+              </p>
             </div>
+            <Switch checked={enableAutoScan} onCheckedChange={setEnableAutoScan} />
+          </div>
+
+          {/* Auto Scan Interval */}
+          {enableAutoScan && (
+            <div>
+              <Label>Auto Scan Interval (seconds)</Label>
+              <Input
+                type="number"
+                value={autoScanInterval}
+                onChange={e => setAutoScanInterval(Number(e.target.value))}
+                min={30}
+                step={30}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                How often to scan for new devices (minimum 30 seconds)
+              </p>
+            </div>
+          )}
+
+          {/* Log Level */}
+          <div>
+            <Label>Log Level</Label>
+            <Select value={logLevel} onValueChange={setLogLevel}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LOG_LEVEL_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Controls agent logging verbosity
+            </p>
           </div>
 
           {error && (
@@ -163,7 +180,7 @@ export function ConfigPushDialog({ agent, open, onOpenChange }: ConfigPushDialog
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={sending || enabledSegments.length === 0}>
+          <Button onClick={handleSubmit} disabled={sending}>
             {sending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

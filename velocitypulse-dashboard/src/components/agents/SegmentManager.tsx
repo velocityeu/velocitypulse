@@ -31,6 +31,7 @@ export function SegmentManager({
   const [newCidr, setNewCidr] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Delete dialog
   const [segmentToDelete, setSegmentToDelete] = useState<NetworkSegment | null>(null)
@@ -75,40 +76,48 @@ export function SegmentManager({
       onSegmentDeleted(segmentToDelete.id)
       setSegmentToDelete(null)
     } catch {
-      // Error handling
+      setError('Failed to delete segment')
     } finally {
       setDeleting(false)
     }
   }
 
   const handleToggleEnabled = async (segment: NetworkSegment) => {
+    setError(null)
     try {
       const res = await authFetch(`/api/segments/${segment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_enabled: !segment.is_enabled }),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        setError('Failed to toggle segment')
+        return
+      }
       const data = await res.json()
       onSegmentUpdated(data.segment || { ...segment, is_enabled: !segment.is_enabled })
     } catch {
-      // Silently fail
+      setError('Failed to toggle segment')
     }
   }
 
   const handleSaveEdit = async (segment: NetworkSegment) => {
+    setError(null)
     try {
       const res = await authFetch(`/api/segments/${segment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editName, cidr: editCidr }),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        setError('Failed to save segment')
+        return
+      }
       const data = await res.json()
       onSegmentUpdated(data.segment || { ...segment, name: editName, cidr: editCidr })
       setEditingId(null)
     } catch {
-      // Silently fail
+      setError('Failed to save segment')
     }
   }
 
@@ -158,6 +167,13 @@ export function SegmentManager({
           </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="px-4 py-2 bg-destructive/10 border-b border-destructive/20 flex items-center justify-between text-sm text-destructive">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-xs underline">Dismiss</button>
+        </div>
+      )}
 
       {/* Segment list */}
       <div className="divide-y">

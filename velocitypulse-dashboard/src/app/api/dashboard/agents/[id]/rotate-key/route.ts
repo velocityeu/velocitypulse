@@ -31,8 +31,8 @@ export async function POST(
     }
 
     // Check permission
-    const permissions = (membership.permissions as string[]) || []
-    const canManage = membership.role === 'owner' || membership.role === 'admin' || permissions.includes('can_manage_agents')
+    const canManage = membership.role === 'owner' || membership.role === 'admin' ||
+      (membership.permissions as { can_manage_agents?: boolean })?.can_manage_agents
     if (!canManage) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }

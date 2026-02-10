@@ -24,7 +24,7 @@ export interface AgentStatusReportPayload {
     ip_address: string
     status: 'online' | 'offline' | 'degraded' | 'unknown'
     response_time_ms: number | null
-    check_type: 'ping' | 'http' | 'tcp'
+    check_type: 'ping' | 'http' | 'tcp' | 'ssl' | 'dns'
     checked_at: string
     error?: string
   }>

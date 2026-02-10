@@ -128,7 +128,7 @@ export async function POST(request: Request) {
           .limit(1)
 
         if (!pendingUpgradeCommands || pendingUpgradeCommands.length === 0) {
-          console.log(`[AUTO-UPGRADE] Queuing upgrade for agent ${agentContext.agentName} (${agentVersion} -> ${LATEST_AGENT_VERSION})`)
+          logger.info(`[AUTO-UPGRADE] Queuing upgrade for agent ${agentContext.agentName} (${agentVersion} -> ${LATEST_AGENT_VERSION})`)
 
           await supabase.from('agent_commands').insert({
             agent_id: agentContext.agentId,

@@ -1,4 +1,5 @@
 import type { Socket, Server } from 'socket.io'
+import { logger } from '@/lib/logger'
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -27,6 +28,17 @@ async function getSupabase() {
 const LATEST_AGENT_VERSION = process.env.LATEST_AGENT_VERSION || '1.0.0'
 const AGENT_DOWNLOAD_URL = process.env.AGENT_DOWNLOAD_URL || 'https://github.com/velocityeu/velocitypulse-agent/releases/latest'
 
+/**
+ * Extract client IP from socket connection
+ */
+function getClientIp(socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>): string {
+  const forwarded = socket.handshake.headers['x-forwarded-for']
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim()
+  }
+  return socket.handshake.address || 'unknown'
+}
+
 // Connected agents map for tracking
 const connectedAgents = new Map<string, Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>>()
 
@@ -42,7 +54,7 @@ async function authenticateAgentByKey(apiKey: string): Promise<{
     const { verifyAgentApiKey } = await import('@/lib/api/agent-key')
     return await verifyAgentApiKey(apiKey)
   } catch (error) {
-    console.error('[Socket] Auth error:', error)
+    logger.error('[Socket] Auth error', error)
     return null
   }
 }
@@ -75,14 +87,14 @@ export function handleAgentConnection(
   socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>,
   io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>
 ) {
-  console.log(`[Socket] Agent connected: ${socket.id}`)
+  logger.info(`[Socket] Agent connected: ${socket.id}`)
 
   // Initialize socket data
   socket.data.authenticated = false
 
   // Handle authentication
   socket.on('authenticate', async (payload: AgentAuthenticatePayload, callback) => {
-    console.log(`[Socket] Auth attempt from ${socket.id}`)
+    logger.info(`[Socket] Auth attempt from ${socket.id}`)
 
     const authResult = await authenticateAgentByKey(payload.apiKey)
 
@@ -116,6 +128,7 @@ export function handleAgentConnection(
       .update({
         last_seen_at: new Date().toISOString(),
         version: payload.version,
+        last_ip_address: getClientIp(socket),
       })
       .eq('id', authResult.agentId)
 
@@ -139,7 +152,7 @@ export function handleAgentConnection(
     }
 
     callback(response)
-    console.log(`[Socket] Agent authenticated: ${authResult.agentName} (${authResult.agentId})`)
+    logger.info(`[Socket] Agent authenticated: ${authResult.agentName} (${authResult.agentId})`)
   })
 
   // Handle heartbeat
@@ -155,6 +168,7 @@ export function handleAgentConnection(
       .update({
         last_seen_at: new Date().toISOString(),
         version: payload.version,
+        last_ip_address: getClientIp(socket),
       })
       .eq('id', socket.data.agentId)
 
@@ -286,12 +300,12 @@ export function handleAgentConnection(
   // Handle pong (response to ping)
   socket.on('pong', () => {
     // Agent is responsive, no action needed
-    console.log(`[Socket] Pong from ${socket.data.agentName || socket.id}`)
+    logger.info(`[Socket] Pong from ${socket.data.agentName || socket.id}`)
   })
 
   // Handle disconnect
   socket.on('disconnect', (reason) => {
-    console.log(`[Socket] Agent disconnected: ${socket.data.agentName || socket.id} (${reason})`)
+    logger.info(`[Socket] Agent disconnected: ${socket.data.agentName || socket.id} (${reason})`)
     if (socket.data.agentId) {
       connectedAgents.delete(socket.data.agentId)
     }

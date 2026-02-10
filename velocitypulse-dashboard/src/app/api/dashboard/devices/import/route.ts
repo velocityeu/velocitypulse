@@ -5,7 +5,7 @@ import { PLAN_LIMITS } from '@/lib/constants'
 import { logger } from '@/lib/logger'
 
 const IP_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/
-const VALID_CHECK_TYPES = ['ping', 'http', 'tcp']
+const VALID_CHECK_TYPES = ['ping', 'http', 'tcp', 'ssl', 'dns']
 
 interface ImportError {
   row: number
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
 
       const checkType = checkTypeIdx >= 0 ? cells[checkTypeIdx]?.replace(/"/g, '').trim().toLowerCase() : 'ping'
       if (checkType && !VALID_CHECK_TYPES.includes(checkType)) {
-        errors.push({ row: rowNum, error: `Invalid check_type: ${checkType}. Must be ping, http, or tcp` })
+        errors.push({ row: rowNum, error: `Invalid check_type: ${checkType}. Must be ping, http, tcp, ssl, or dns` })
         continue
       }
 

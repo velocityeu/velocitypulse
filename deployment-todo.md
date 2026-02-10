@@ -16,8 +16,8 @@ One-time setup tasks to complete the deployment pipeline.
 
 ## Agent Release
 
-- [ ] Test agent release workflow by tagging `agent-v1.0.0` and pushing
-- [ ] Verify GitHub Release is created with the pre-built archive
+- [x] Test agent release workflow by tagging `agent-v1.0.0` and pushing — completed in 46s
+- [x] Verify GitHub Release is created with the pre-built archive — `velocitypulse-agent-1.0.0.tar.gz` attached, build ID `23e8dcd`
 - [ ] Test Linux installer downloads from the new monorepo release
 - [ ] Test Windows installer downloads from the new monorepo release
 

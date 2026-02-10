@@ -83,21 +83,45 @@ TEMP_ZIP="$TEMP_DIR/agent.tar.gz"
 
 # Try GitHub releases API (monorepo: filter for agent-v* tags)
 # Supports both public repos (unauthenticated) and private repos (with GITHUB_TOKEN)
-RELEASES_URL="https://api.github.com/repos/velocityeu/velocitypulse/releases"
+REPO="velocityeu/velocitypulse"
+RELEASES_URL="https://api.github.com/repos/$REPO/releases"
 DOWNLOAD_URL=""
-AUTH_HEADER=""
+AUTH_ARGS=""
 if [ -n "$GITHUB_TOKEN" ]; then
-    AUTH_HEADER="-H \"Authorization: token $GITHUB_TOKEN\""
+    AUTH_ARGS="-H Authorization:\ token\ $GITHUB_TOKEN"
 fi
 
 if command -v curl &>/dev/null; then
-    RELEASES_JSON=$(eval curl -sL -H \"User-Agent: VelocityPulse-Installer\" $AUTH_HEADER \"$RELEASES_URL\" 2>/dev/null || echo "")
-    AGENT_TAG=$(echo "$RELEASES_JSON" | grep -o '"tag_name":"agent-v[^"]*"' | head -1 | cut -d'"' -f4)
+    RELEASES_TMP=$(mktemp)
+    if [ -n "$GITHUB_TOKEN" ]; then
+        curl -sL -H "User-Agent: VelocityPulse-Installer" -H "Authorization: token $GITHUB_TOKEN" "$RELEASES_URL" -o "$RELEASES_TMP" 2>/dev/null
+    else
+        curl -sL -H "User-Agent: VelocityPulse-Installer" "$RELEASES_URL" -o "$RELEASES_TMP" 2>/dev/null
+    fi
+    # Parse JSON using node (already required as a prerequisite)
+    PARSED=$(node -e "
+      const d=require('fs').readFileSync('$RELEASES_TMP','utf8');
+      try {
+        const releases=JSON.parse(d);
+        const r=releases.find(r=>r.tag_name&&r.tag_name.startsWith('agent-v'));
+        if(!r)process.exit(0);
+        const a=r.assets.find(a=>a.name.endsWith('.tar.gz'));
+        console.log(r.tag_name);
+        console.log(a?a.id:'');
+        console.log(a?a.browser_download_url:'');
+      }catch(e){}
+    " 2>/dev/null || echo "")
+    rm -f "$RELEASES_TMP"
+    AGENT_TAG=$(echo "$PARSED" | sed -n '1p')
+    ASSET_ID=$(echo "$PARSED" | sed -n '2p')
+    ASSET_BROWSER_URL=$(echo "$PARSED" | sed -n '3p')
     if [ -n "$AGENT_TAG" ]; then
-        # Find the tarball asset for this release
-        ASSET_URL=$(echo "$RELEASES_JSON" | grep -o '"browser_download_url":"[^"]*velocitypulse-agent-[^"]*\.tar\.gz"' | head -1 | cut -d'"' -f4)
-        if [ -n "$ASSET_URL" ]; then
-            DOWNLOAD_URL="$ASSET_URL"
+        if [ -n "$ASSET_ID" ] && [ -n "$GITHUB_TOKEN" ]; then
+            # Private repo: use API asset endpoint (browser_download_url returns 404)
+            DOWNLOAD_URL="https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
+        elif [ -n "$ASSET_BROWSER_URL" ]; then
+            # Public repo: browser_download_url works
+            DOWNLOAD_URL="$ASSET_BROWSER_URL"
         fi
         VERSION="$AGENT_TAG"
         echo -e "${GREEN}  Version: $VERSION${NC}"
@@ -108,11 +132,15 @@ if [ -z "$DOWNLOAD_URL" ]; then
     echo -e "${YELLOW}  Could not find a release. Is the repo private?${NC}"
     echo -e "${YELLOW}  For private repos, set GITHUB_TOKEN before running the installer.${NC}"
     echo -e "${YELLOW}  Falling back to main branch archive...${NC}"
-    DOWNLOAD_URL="https://github.com/velocityeu/velocitypulse/archive/refs/heads/main.tar.gz"
+    DOWNLOAD_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
     VERSION="latest"
 fi
 
-eval curl -sL $AUTH_HEADER \"$DOWNLOAD_URL\" -o \"$TEMP_ZIP\"
+if [ -n "$GITHUB_TOKEN" ]; then
+    curl -sL -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/octet-stream" "$DOWNLOAD_URL" -o "$TEMP_ZIP"
+else
+    curl -sL "$DOWNLOAD_URL" -o "$TEMP_ZIP"
+fi
 if [ ! -s "$TEMP_ZIP" ]; then
     echo -e "${RED}  ERROR: Download failed. Check network or GITHUB_TOKEN.${NC}"
     exit 1

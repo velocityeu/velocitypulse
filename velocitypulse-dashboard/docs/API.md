@@ -202,7 +202,7 @@ Auto-register a network segment detected by the agent.
   }
   ```
 - **Status codes**: `200` OK, `400` Invalid body / invalid CIDR, `401` Invalid API key, `409` Overlapping segment, `500` Server error
-- **Notes**: Validates CIDR format and checks for overlap with existing segments. Returns existing segment if exact match found.
+- **Notes**: Validates CIDR format and checks for overlap with existing segments. Returns existing segment if CIDR matches an existing segment (matched on CIDR alone, regardless of segment name). This enables idempotent multi-adapter registration — agents with multiple NICs register each detected CIDR, and re-registrations are safely deduplicated.
 
 ---
 

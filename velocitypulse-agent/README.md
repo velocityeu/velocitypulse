@@ -1,5 +1,7 @@
 # VelocityPulse Agent
 
+> **v1.1.0** — Multi-adapter network scanning
+
 Network monitoring agent for the VelocityPulse SaaS platform. Discovers devices on your network and reports their status in real-time to your VelocityPulse dashboard.
 
 ## Features
@@ -7,7 +9,7 @@ Network monitoring agent for the VelocityPulse SaaS platform. Discovers devices 
 - **Automatic Device Discovery**: Scans network segments using ARP (local) or ICMP ping sweep (remote)
 - **Real-time Status Monitoring**: Continuously monitors devices using ping, TCP, or HTTP checks
 - **Status Hysteresis**: Prevents flapping by requiring multiple consecutive failures before marking offline
-- **Auto-registration**: Automatically detects and registers local network segments
+- **Multi-Adapter Detection**: Detects all physical NICs, deduplicates by CIDR, and filters virtual/container interfaces (Docker, VMware, Hyper-V, WSL)
 - **Cross-platform**: Runs on Windows, Linux, and macOS
 - **Service Mode**: Installs as a system service for automatic startup
 
@@ -78,7 +80,7 @@ LOG_LEVEL=info
 | `STATUS_FAILURE_THRESHOLD` | No | 2 | Consecutive failures before offline |
 | `LOG_LEVEL` | No | info | Log level (debug/info/warn/error) |
 | `ENABLE_REALTIME` | No | true | Enable WebSocket real-time updates |
-| `ENABLE_AUTO_SCAN` | No | true | Auto-detect local network |
+| `ENABLE_AUTO_SCAN` | No | true | Auto-detect and register all physical local networks |
 
 ## API Key Format
 
@@ -157,20 +159,25 @@ npm test
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    VelocityPulse Agent                      │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │  Heartbeat  │  │   Scanner   │  │   Status Checker    │  │
-│  │    Loop     │  │    Loop     │  │       Loop          │  │
-│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │
-│         │                │                     │             │
-│         ▼                ▼                     ▼             │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │                   Dashboard Client                       ││
-│  │         (REST API + WebSocket Real-time)                ││
-│  └─────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                   VelocityPulse Agent v1.1.0                     │
+├──────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐                                            │
+│  │  Multi-Adapter    │  Detects physical NICs, filters virtual   │
+│  │  Detection        │  interfaces, deduplicates by CIDR         │
+│  └────────┬─────────┘                                            │
+│           ▼                                                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐      │
+│  │  Heartbeat  │  │   Scanner   │  │   Status Checker    │      │
+│  │    Loop     │  │    Loop     │  │       Loop          │      │
+│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘      │
+│         │                │                     │                 │
+│         ▼                ▼                     ▼                 │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                   Dashboard Client                        │    │
+│  │         (REST API + WebSocket Real-time)                  │    │
+│  └──────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────┘
                               │
                               ▼
                 ┌─────────────────────────┐
@@ -178,6 +185,14 @@ npm test
                 │    (SaaS Platform)       │
                 └─────────────────────────┘
 ```
+
+## What's New in v1.1.0
+
+- **Multi-adapter detection** — The agent now calls `os.networkInterfaces()` and discovers all physical NICs, not just the primary one. Each detected network segment is registered with the dashboard automatically.
+- **CIDR deduplication** — If two adapters share the same subnet (e.g. bonded NICs), the agent deduplicates by CIDR before registering, preventing duplicate segments.
+- **Virtual interface filtering** — Docker (`docker0`, `br-*`, `veth*`), VMware (`vmnet*`), Hyper-V (`vEthernet*`), WSL, `utun`, `llw`, `bridge`, and loopback interfaces are automatically excluded.
+- **Idempotent registration** — Segment registration matches on CIDR alone (regardless of segment name), so re-registrations are safely deduplicated on the server side.
+- **Graceful per-segment error handling** — If one segment fails to register or scan, the agent logs the error and continues with the remaining segments.
 
 ## Troubleshooting
 
@@ -193,6 +208,13 @@ npm test
 1. Verify agent has network access to target segments
 2. For remote networks, ensure ICMP is allowed through firewalls
 3. Check if segments are assigned in the dashboard
+
+### Multi-adapter: some segments not registering
+
+1. Run with `LOG_LEVEL=debug` to see which interfaces are detected and which are filtered
+2. Virtual interfaces (Docker, VMware, Hyper-V, WSL) are excluded by default
+3. Verify the interface has a valid IPv4 address with a subnet mask
+4. Check that the CIDR isn't already registered under a different name (CIDR-based dedup)
 
 ### Status always shows offline
 

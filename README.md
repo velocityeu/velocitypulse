@@ -31,7 +31,7 @@ velocitypulse/
 | Validation | Zod | 4.3 |
 | Observability | Sentry | 10.38 |
 | Testing | Vitest + Playwright | 4.0 / 1.58 |
-| Agent Runtime | Node.js + Express 5 + Socket.IO 4 | — |
+| Agent Runtime | Node.js + Express 5 + Socket.IO 4 | 1.1.0 |
 
 ## Quick Start
 
@@ -88,6 +88,7 @@ npm test             # Run Vitest unit tests
 
 - **Multi-tenant SaaS** — Organizations with RBAC (Owner/Admin/Editor/Viewer), invite flow, plan-based limits
 - **Network Auto-Discovery** — ARP, ping sweep, SNMP, mDNS, SSDP/UPnP scanning with device deduplication
+- **Multi-Adapter Scanning** — Detects all physical network segments across multiple NICs; CIDR-deduplicated, virtual interfaces filtered (v1.1.0)
 - **Real-time Monitoring** — Live device status, response time tracking, status hysteresis, segment grouping
 - **Notifications** — Email, Slack, Teams, webhooks with rules and cooldowns
 - **White-label Branding** — Custom display name, logo, primary color (Unlimited tier)

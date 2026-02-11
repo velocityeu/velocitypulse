@@ -4,10 +4,10 @@ Professional network monitoring from $50/year. Your network's heartbeat, at a gl
 
 ## Tech Stack
 
-- **Framework:** Next.js 14 (App Router)
-- **Language:** TypeScript 5.3
-- **Styling:** Tailwind CSS 3.4
-- **Animations:** Framer Motion 11
+- **Framework:** Next.js 16.1 (App Router)
+- **Language:** TypeScript 5.7
+- **Styling:** Tailwind CSS 4.1
+- **Animations:** Framer Motion 12
 - **Payments:** Stripe
 - **Validation:** Zod
 - **Icons:** Lucide React

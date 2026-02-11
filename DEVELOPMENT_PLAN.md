@@ -4,7 +4,7 @@
 
 VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard project. This document provides a comprehensive comparison of what has been implemented versus what remains from the original project, plus what additional SaaS features have been added.
 
-**Current Status: All Tiers Complete (1-5 + Operational Hardening + Production Cleanup + Production Launch)**
+**Current Status: All Tiers Complete (1-5 + Operational Hardening + Production Cleanup + Production Launch + v1.1.0 Post-Launch)**
 
 ---
 
@@ -428,6 +428,16 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - [x] Hide Start Free Trial button on mobile navbar
 - [x] Aligned pricing card buttons to consistent bottom position
 
+### Phase 13: Post-Launch Enhancements - COMPLETE
+
+#### 13.1 Multi-Adapter Network Scanning (v1.1.0) - COMPLETE
+- [x] `getPhysicalLocalNetworks()` detects all physical NICs via `os.networkInterfaces()`
+- [x] `autoScanCheck` loop registers each detected CIDR with the dashboard
+- [x] Virtual/container interface filtering (Docker, vEthernet, VMware, Hyper-V, WSL, utun, llw, bridge, veth)
+- [x] CIDR-only idempotent match — re-registrations are safely deduplicated regardless of segment name
+- [x] Graceful per-segment error handling — one failing segment does not block others
+- [x] Version bump to 1.1.0
+
 ---
 
 ## Part 5: File Reference
@@ -475,6 +485,9 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 - `velocitypulse-agent/src/ui/public/index.html` (MODIFIED - full dashboard UI)
 - `velocitypulse-agent/scripts/install.ps1` (MODIFIED - uninstall, upgrade, UI port)
 - `velocitypulse-agent/scripts/install.sh` (MODIFIED - uninstall, upgrade, unattended mode)
+- `velocitypulse-agent/src/network-detect.ts` (CREATED - multi-adapter physical NIC detection)
+- `velocitypulse-agent/src/index.ts` (MODIFIED - multi-adapter autoScanCheck loop)
+- `velocitypulse-dashboard/src/app/api/agent/segments/register/route.ts` (MODIFIED - CIDR-only idempotent match)
 
 **Billing & Webhooks:**
 - `velocitypulse-dashboard/src/app/api/internal/organizations/[id]/actions/route.ts` (MODIFIED - Stripe cancellation)
@@ -623,4 +636,4 @@ VelocityPulse is a commercial SaaS version of the open-source IT-Dashboard proje
 
 ---
 
-*Last Updated: February 7, 2026 - All Phases Complete (Tiers 1-5 + Operational Hardening + Production Cleanup + Production Launch).*
+*Last Updated: February 11, 2026 - All Phases Complete (Tiers 1-5 + Operational Hardening + Production Cleanup + Production Launch + v1.1.0 Multi-Adapter Scanning).*

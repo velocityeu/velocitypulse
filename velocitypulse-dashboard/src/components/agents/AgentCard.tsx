@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Trash2, ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AgentStatusBadge } from '@/components/agents/AgentStatusBadge'
 import { AgentVersionBadge } from '@/components/agents/AgentVersionBadge'
 import { AgentCommandBar } from '@/components/agents/AgentCommandBar'
 import { SegmentManager } from '@/components/agents/SegmentManager'
+import { AgentSetupDialog } from '@/components/agents/AgentSetupDialog'
 import type { Agent, NetworkSegment } from '@/types'
 
 interface AgentWithSegments extends Agent {
@@ -38,7 +39,9 @@ export function AgentCard({
   onSegmentUpdated,
 }: AgentCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showSetup, setShowSetup] = useState(false)
   const segments = agent.network_segments || []
+  const isNeverConnected = agent.is_enabled && !agent.last_seen_at
 
   const formatLastSeen = (lastSeenAt?: string) => {
     if (!lastSeenAt) return 'Never'
@@ -108,6 +111,19 @@ export function AgentCard({
             onUpgrade={() => onSendCommand('upgrade')}
           />
 
+          {/* Setup button for never-connected agents */}
+          {isNeverConnected && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 text-blue-600 border-blue-600/30 hover:bg-blue-600/10 hover:text-blue-600"
+              onClick={() => setShowSetup(true)}
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Setup</span>
+            </Button>
+          )}
+
           {/* Expand segments */}
           <Button
             variant="ghost"
@@ -149,6 +165,13 @@ export function AgentCard({
           />
         )}
       </CardContent>
+
+      {/* Setup dialog for never-connected agents */}
+      <AgentSetupDialog
+        agent={agent}
+        open={showSetup}
+        onOpenChange={setShowSetup}
+      />
     </Card>
   )
 }

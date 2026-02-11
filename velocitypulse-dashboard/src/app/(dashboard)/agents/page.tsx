@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SonarPingButton } from '@/components/dashboard/SonarPingButton'
 import { AgentCard } from '@/components/agents/AgentCard'
+import { AgentInstallInstructions } from '@/components/agents/AgentInstallInstructions'
 import { useSonarPing } from '@/lib/hooks/useSonarPing'
 import type { Agent, NetworkSegment } from '@/types'
 
@@ -30,6 +31,7 @@ export default function AgentsPage() {
   const [newAgentDescription, setNewAgentDescription] = useState('')
   const [creatingAgent, setCreatingAgent] = useState(false)
   const [createdApiKey, setCreatedApiKey] = useState<string | null>(null)
+  const [createdAgentName, setCreatedAgentName] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [copiedKey, setCopiedKey] = useState(false)
 
@@ -76,6 +78,7 @@ export default function AgentsPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create agent')
       setCreatedApiKey(data.agent.api_key)
+      setCreatedAgentName(newAgentName.trim())
       setAgents(prev => [...prev, data.agent])
       setNewAgentName('')
       setNewAgentDescription('')
@@ -170,6 +173,7 @@ export default function AgentsPage() {
   const closeCreateDialog = () => {
     setShowCreateAgent(false)
     setCreatedApiKey(null)
+    setCreatedAgentName('')
     setShowApiKey(false)
     setNewAgentName('')
     setNewAgentDescription('')
@@ -256,7 +260,7 @@ export default function AgentsPage() {
 
       {/* Create Agent Dialog */}
       <Dialog open={showCreateAgent} onOpenChange={closeCreateDialog}>
-        <DialogContent>
+        <DialogContent className={createdApiKey ? 'max-w-2xl max-h-[85vh] overflow-y-auto' : undefined}>
           <DialogHeader>
             <DialogTitle>{createdApiKey ? 'Agent Created' : 'Create New Agent'}</DialogTitle>
             <DialogDescription>
@@ -288,6 +292,18 @@ export default function AgentsPage() {
                   Copy this API key now. You won&apos;t be able to see it again.
                 </p>
               </div>
+
+              {/* Installation instructions */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Installation</span>
+                </div>
+              </div>
+
+              <AgentInstallInstructions apiKey={createdApiKey} agentName={createdAgentName} />
             </div>
           ) : (
             <div className="space-y-4">

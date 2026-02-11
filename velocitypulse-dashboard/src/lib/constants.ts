@@ -11,6 +11,11 @@ export const LATEST_AGENT_VERSION = process.env.LATEST_AGENT_VERSION || '1.0.0'
 export const AGENT_DOWNLOAD_URL = process.env.AGENT_DOWNLOAD_URL || 'https://github.com/velocityeu/velocitypulse-agent/releases/latest'
 export const ENFORCE_AGENT_UPDATES = process.env.ENFORCE_AGENT_UPDATES === 'true'
 
+// Agent installer URLs
+export const AGENT_INSTALL_URL_WINDOWS = 'https://get.velocitypulse.io/agent'
+export const AGENT_INSTALL_URL_LINUX = 'https://get.velocitypulse.io/agent.sh'
+export const DASHBOARD_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.velocitypulse.io'
+
 // Trial duration
 export const TRIAL_DURATION_DAYS = 14
 

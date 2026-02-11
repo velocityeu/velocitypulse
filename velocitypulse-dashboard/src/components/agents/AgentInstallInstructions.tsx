@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Monitor, Terminal, CheckCircle2 } from 'lucide-react'
+import { Monitor, Terminal, Laptop, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CopyBlock } from '@/components/agents/CopyBlock'
 import {
@@ -10,7 +10,7 @@ import {
   DASHBOARD_URL,
 } from '@/lib/constants'
 
-type Platform = 'windows' | 'linux'
+type Platform = 'windows' | 'linux' | 'macos'
 
 interface AgentInstallInstructionsProps {
   apiKey?: string | null
@@ -27,6 +27,11 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
     : `irm ${AGENT_INSTALL_URL_WINDOWS} | iex`
 
   const linuxInstallCommand = apiKey
+    ? `export VP_API_KEY='${apiKey}'\nexport VELOCITYPULSE_URL='${DASHBOARD_URL}'\ncurl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo -E bash`
+    : `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash`
+
+  // macOS uses the same shell script as Linux (auto-detects OS)
+  const macosInstallCommand = apiKey
     ? `export VP_API_KEY='${apiKey}'\nexport VELOCITYPULSE_URL='${DASHBOARD_URL}'\ncurl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo -E bash`
     : `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash`
 
@@ -52,9 +57,18 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
           <Terminal className="h-4 w-4" />
           Linux
         </Button>
+        <Button
+          variant={platform === 'macos' ? 'default' : 'ghost'}
+          size="sm"
+          className="flex-1 gap-2"
+          onClick={() => setPlatform('macos')}
+        >
+          <Laptop className="h-4 w-4" />
+          macOS
+        </Button>
       </div>
 
-      {platform === 'windows' ? (
+      {platform === 'windows' && (
         <div className="space-y-4">
           {/* Prerequisites */}
           <div>
@@ -79,15 +93,16 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
             </p>
           </div>
         </div>
-      ) : (
+      )}
+
+      {platform === 'linux' && (
         <div className="space-y-4">
           {/* Prerequisites */}
           <div>
             <h4 className="text-sm font-medium mb-1">Prerequisites</h4>
-            <p className="text-sm text-muted-foreground mb-2">
-              Node.js 18+ must be installed. If not already installed:
+            <p className="text-sm text-muted-foreground">
+              Run as root (sudo). The installer will automatically install Node.js if not found.
             </p>
-            <CopyBlock code="curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs" language="Bash" />
           </div>
 
           {/* Install command */}
@@ -102,6 +117,33 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
             <CopyBlock code="sudo systemctl status velocitypulse-agent" language="Bash" />
             <p className="text-xs text-muted-foreground mt-2">
               View logs: <code className="bg-muted px-1 py-0.5 rounded">journalctl -u velocitypulse-agent -f</code>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {platform === 'macos' && (
+        <div className="space-y-4">
+          {/* Prerequisites */}
+          <div>
+            <h4 className="text-sm font-medium mb-1">Prerequisites</h4>
+            <p className="text-sm text-muted-foreground">
+              Run in Terminal with sudo. The installer will automatically install Node.js via Homebrew or the official pkg installer.
+            </p>
+          </div>
+
+          {/* Install command */}
+          <div>
+            <h4 className="text-sm font-medium mb-2">Install command</h4>
+            <CopyBlock code={macosInstallCommand} language="Bash" />
+          </div>
+
+          {/* Verify */}
+          <div>
+            <h4 className="text-sm font-medium mb-2">Verify installation</h4>
+            <CopyBlock code="sudo launchctl list | grep velocitypulse" language="Bash" />
+            <p className="text-xs text-muted-foreground mt-2">
+              View logs: <code className="bg-muted px-1 py-0.5 rounded">tail -f /opt/velocitypulse-agent/logs/service.log</code>
             </p>
           </div>
         </div>

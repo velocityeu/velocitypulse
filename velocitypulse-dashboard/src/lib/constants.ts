@@ -13,7 +13,7 @@ export const ENFORCE_AGENT_UPDATES = process.env.ENFORCE_AGENT_UPDATES === 'true
 
 // Agent installer URLs
 export const AGENT_INSTALL_URL_WINDOWS = 'https://get.velocitypulse.io/agent'
-export const AGENT_INSTALL_URL_LINUX = 'https://get.velocitypulse.io/agent.sh'
+export const AGENT_INSTALL_URL_LINUX = 'https://get.velocitypulse.io/agent.sh' // Also used for macOS
 export const DASHBOARD_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.velocitypulse.io'
 
 // Trial duration

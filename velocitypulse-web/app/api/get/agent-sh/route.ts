@@ -160,7 +160,7 @@ TEMP_DIR=$(mktemp -d)
 TEMP_ZIP="$TEMP_DIR/agent.tar.gz"
 DOWNLOADED_OK=false
 
-# First try dashboard-hosted download endpoint (works even when GitHub repo is private).
+# First try dashboard-hosted download endpoint (primary path).
 DASHBOARD_DOWNLOAD_URL="\${DASHBOARD_URL%/}/api/agent/download?format=tgz"
 if curl -fsSL "$DASHBOARD_DOWNLOAD_URL" -o "$TEMP_ZIP" 2>/dev/null && tar -tzf "$TEMP_ZIP" &>/dev/null; then
     DOWNLOADED_OK=true
@@ -172,7 +172,6 @@ if [ "\${DOWNLOADED_OK}" != "true" ]; then
     echo -e "\${YELLOW}  Dashboard download unavailable. Falling back to GitHub release source...\${NC}"
 
     # Try GitHub releases API (monorepo: filter for agent-v* tags)
-    # Supports both public repos (unauthenticated) and private repos (with GITHUB_TOKEN)
     REPO="velocityeu/velocitypulse"
     RELEASES_URL="https://api.github.com/repos/$REPO/releases"
     DOWNLOAD_URL=""
@@ -202,10 +201,10 @@ if [ "\${DOWNLOADED_OK}" != "true" ]; then
         ASSET_BROWSER_URL=$(echo "$PARSED" | sed -n '3p')
         if [ -n "$AGENT_TAG" ]; then
             if [ -n "$ASSET_ID" ] && [ -n "$GITHUB_TOKEN" ]; then
-                # Private repo: use API asset endpoint (browser_download_url returns 404)
+                # Tokened fallback path for API-asset download.
                 DOWNLOAD_URL="https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
             elif [ -n "$ASSET_BROWSER_URL" ]; then
-                # Public repo: browser_download_url works
+                # Public release asset URL
                 DOWNLOAD_URL="$ASSET_BROWSER_URL"
             fi
             VERSION="$AGENT_TAG"
@@ -233,13 +232,13 @@ if [ "\${DOWNLOADED_OK}" != "true" ]; then
         rm -rf "$TEMP_DIR"
         exit 1
     fi
-    # Verify the download is a valid archive (private repos return HTML without auth)
+    # Verify the download is a valid archive.
     if ! tar -tzf "$TEMP_ZIP" &>/dev/null; then
         echo -e "\${RED}  ERROR: Downloaded file is not a valid archive.\${NC}"
-        echo -e "\${RED}  If your GitHub repo is private, either:\${NC}"
-        echo -e "\${RED}    1) configure dashboard endpoint \${DASHBOARD_URL%/}/api/agent/download\${NC}"
-        echo -e "\${RED}    2) or set GITHUB_TOKEN and retry:\${NC}"
-        echo -e "\${RED}       export GITHUB_TOKEN='ghp_your_token_here'\${NC}"
+        echo -e "\${RED}  Checked sources:\${NC}"
+        echo -e "\${RED}    1) \${DASHBOARD_URL%/}/api/agent/download\${NC}"
+        echo -e "\${RED}    2) GitHub release archive for $REPO\${NC}"
+        echo -e "\${RED}  Retry shortly, or set GITHUB_TOKEN for authenticated API fallback if rate-limited.\${NC}"
         rm -rf "$TEMP_DIR"
         exit 1
     fi

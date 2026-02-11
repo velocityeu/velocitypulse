@@ -6,6 +6,10 @@
 
 Professional network monitoring from $50/year. Auto-discovery, real-time dashboards, multi-tenant SaaS. All development tiers complete.
 
+## Repository Visibility
+
+`velocityeu/velocitypulse` is public so agent releases are downloadable without GitHub credentials.
+
 ## Project Structure
 
 ```
@@ -81,6 +85,8 @@ npm test             # Run Vitest unit tests
 **Cron:** Lifecycle automation runs every 6 hours (`0 */6 * * *`) via Vercel Cron at `/api/cron/lifecycle`.
 
 **Migrations:** `npx supabase db push` (requires `SUPABASE_ACCESS_TOKEN` in `.env.local` at project root).
+
+**Agent releases:** published at [github.com/velocityeu/velocitypulse/releases](https://github.com/velocityeu/velocitypulse/releases) (`agent-v*` tags, public download).
 
 ## Features
 

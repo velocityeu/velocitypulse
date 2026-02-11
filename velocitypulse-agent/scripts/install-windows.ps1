@@ -831,7 +831,7 @@ $tempExtract = Join-Path $env:TEMP "vp-agent-extract"
 $downloadedFromDashboard = $false
 $dashboardDownloadUrl = "$DashboardUrl/api/agent/download?format=zip"
 
-# First try dashboard-hosted endpoint (works even when GitHub repo is private).
+# First try dashboard-hosted endpoint (primary path).
 try {
     Invoke-WebRequest -Uri $dashboardDownloadUrl -OutFile $tempZip -Headers @{ "User-Agent" = "VelocityPulse-Installer" } -ErrorAction Stop
     $probeDir = Join-Path $env:TEMP "vp-agent-probe-$([guid]::NewGuid().ToString('N').Substring(0,8))"
@@ -851,7 +851,6 @@ try {
 
 if (-not $downloadedFromDashboard) {
 # Monorepo releases: filter for agent-v* tags
-# Supports private repos via GITHUB_TOKEN env var
 $releasesUrl = "https://api.github.com/repos/velocityeu/velocitypulse/releases"
 $apiHeaders = @{ "User-Agent" = "VelocityPulse-Installer" }
 if ($env:GITHUB_TOKEN) {
@@ -870,7 +869,7 @@ try {
         }
 
         if ($asset) {
-            # For private repos, use API asset endpoint (browser_download_url returns 404)
+            # Tokened fallback path for API-asset download.
             if ($env:GITHUB_TOKEN) {
                 $downloadUrl = "https://api.github.com/repos/velocityeu/velocitypulse/releases/assets/$($asset.id)"
                 $useApiDownload = $true
@@ -888,9 +887,6 @@ try {
     }
 } catch {
     Write-Host "  WARNING: Could not fetch latest release." -ForegroundColor Yellow
-    if (-not $env:GITHUB_TOKEN) {
-        Write-Host "  For private repos, set GITHUB_TOKEN env var before running." -ForegroundColor Yellow
-    }
     Write-Host "  Falling back to main branch archive." -ForegroundColor Yellow
     $version = "latest"
     $downloadUrl = "https://github.com/velocityeu/velocitypulse/archive/refs/heads/main.zip"

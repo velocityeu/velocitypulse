@@ -10,6 +10,10 @@ velocitypulse/                    # Monorepo (velocityeu/velocitypulse)
   supabase/                       # Database migrations -> Supabase CI
 ```
 
+## Repository Visibility
+
+`velocityeu/velocitypulse` is public. Agent release assets are publicly downloadable from GitHub Releases.
+
 ## Automatic Deployment Pipeline
 
 ### On push to `main`:
@@ -86,6 +90,7 @@ This triggers `.github/workflows/agent-release.yml` which:
 
 ### GitHub Actions (Agent Release)
 - No additional secrets required (uses `GITHUB_TOKEN` with `contents: write`)
+- Agent install scripts do not require user-provided GitHub tokens in normal operation
 
 ### Auto-injected by Vercel
 - `VERCEL_GIT_COMMIT_SHA` - Used to derive `NEXT_PUBLIC_BUILD_ID`
@@ -96,10 +101,10 @@ After deployment, verify version strings appear correctly:
 
 | Location | Where to check |
 |----------|---------------|
-| Dashboard sidebar | Bottom of sidebar: `v0.1.0 (abc1234)` |
-| Marketing footer | Bottom bar: `v0.1.1 (abc1234)` |
-| Agent header badge | Header: `v1.0.0 (abc1234)` |
-| Agent footer | Footer: `VelocityPulse Agent v1.0.0 (abc1234)` |
+| Dashboard sidebar | Bottom of sidebar: `v<dashboard-package-version> (<build-id>)` |
+| Marketing footer | Bottom bar: `v<web-package-version> (<build-id>)` |
+| Agent header badge | Header: `v<agent-version> (<build-id>)` |
+| Agent footer | Footer: `VelocityPulse Agent v<agent-version> (<build-id>)` |
 
 The build ID should match the first 7 chars of the deployed git commit SHA.
 

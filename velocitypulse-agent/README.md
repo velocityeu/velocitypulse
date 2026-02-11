@@ -1,6 +1,6 @@
 # VelocityPulse Agent
 
-> **v1.1.0** — Multi-adapter network scanning
+> **v1.2.2** — Multi-adapter scanning + secure local Agent UI login
 
 Network monitoring agent for the VelocityPulse SaaS platform. Discovers devices on your network and reports their status in real-time to your VelocityPulse dashboard.
 
@@ -26,6 +26,13 @@ irm https://get.velocitypulse.io/agent | iex
 ```bash
 curl -fsSL https://get.velocitypulse.io/agent.sh | sudo bash
 ```
+
+## Public Release Source
+
+Agent release artifacts are published publicly under:
+
+- https://github.com/velocityeu/velocitypulse/releases (tags: `agent-v*`)
+- Installers pull the latest `agent-v*` release automatically.
 
 ## Manual Installation
 
@@ -160,7 +167,7 @@ npm test
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                   VelocityPulse Agent v1.1.0                     │
+│                     VelocityPulse Agent                          │
 ├──────────────────────────────────────────────────────────────────┤
 │  ┌──────────────────┐                                            │
 │  │  Multi-Adapter    │  Detects physical NICs, filters virtual   │
@@ -186,7 +193,7 @@ npm test
                 └─────────────────────────┘
 ```
 
-## What's New in v1.1.0
+## v1.1.0 Highlights
 
 - **Multi-adapter detection** — The agent now calls `os.networkInterfaces()` and discovers all physical NICs, not just the primary one. Each detected network segment is registered with the dashboard automatically.
 - **CIDR deduplication** — If two adapters share the same subnet (e.g. bonded NICs), the agent deduplicates by CIDR before registering, preventing duplicate segments.

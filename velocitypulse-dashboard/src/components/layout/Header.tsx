@@ -5,9 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { AgentStatusIndicator } from '@/components/dashboard/AgentStatusIndicator'
-import { UserMenu } from '@/components/layout/UserMenu'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Image from 'next/image'
+
+const UserMenu = dynamic(
+  () => import('@/components/layout/UserMenu').then(mod => mod.UserMenu),
+  { ssr: false, loading: () => <div className="h-8 w-8 rounded-full bg-muted animate-pulse" /> }
+)
 
 interface HeaderProps {
   onRefresh?: () => void

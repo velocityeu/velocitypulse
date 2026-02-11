@@ -12,9 +12,14 @@ import { useOrganization } from '@/lib/contexts/OrganizationContext'
 import { useCurrentUser } from '@/lib/contexts/UserContext'
 import { useBranding } from '@/lib/hooks/useBranding'
 import { formatTrialStatus, getTrialDaysRemaining } from '@/lib/utils'
-import { UserMenu } from '@/components/layout/UserMenu'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Image from 'next/image'
+
+const UserMenu = dynamic(
+  () => import('@/components/layout/UserMenu').then(mod => mod.UserMenu),
+  { ssr: false, loading: () => <div className="h-8 w-8 rounded-full bg-muted animate-pulse" /> }
+)
 
 interface DashboardShellProps {
   children: React.ReactNode

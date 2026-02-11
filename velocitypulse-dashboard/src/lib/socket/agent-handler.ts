@@ -26,7 +26,10 @@ async function getSupabase() {
 }
 
 // Constants
-const LATEST_AGENT_VERSION = process.env.LATEST_AGENT_VERSION || '1.0.0'
+const LATEST_AGENT_VERSION =
+  process.env.LATEST_AGENT_VERSION ||
+  process.env.NEXT_PUBLIC_LATEST_AGENT_VERSION ||
+  '0.0.0'
 const AGENT_DOWNLOAD_URL_TEMPLATE = process.env.AGENT_DOWNLOAD_URL || ''
 
 /**

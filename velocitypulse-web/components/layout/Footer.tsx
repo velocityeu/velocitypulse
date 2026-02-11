@@ -137,7 +137,7 @@ export default function Footer() {
                 <span>All systems operational</span>
               </span>
               <span className="font-mono text-xs opacity-60">
-                v{process.env.NEXT_PUBLIC_APP_VERSION || '0.1.1'} ({process.env.NEXT_PUBLIC_BUILD_ID || 'dev'})
+                v{process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'} ({process.env.NEXT_PUBLIC_BUILD_ID || 'dev'})
               </span>
             </div>
           </div>

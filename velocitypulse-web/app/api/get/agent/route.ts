@@ -51,7 +51,7 @@ $ProgressPreference = "SilentlyContinue"
 
 $ServiceName = "VelocityPulseAgent"
 $ServiceDisplay = "VelocityPulse Agent"
-$InstallerVersion = "3.0.0"
+$InstallerVersion = "3.1.0"
 
 # ============================================
 # Self-elevation (replaces "run as admin" error)
@@ -102,6 +102,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 Write-Host ""
 Write-Host "  ============================================" -ForegroundColor Cyan
 Write-Host "   VelocityPulse Agent Installer v$InstallerVersion" -ForegroundColor Cyan
+Write-Host "   Velocity Technology Group  |  velocitypulse.io" -ForegroundColor Cyan
 Write-Host "  ============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -601,6 +602,23 @@ function Remove-UpgradeBackup {
     }
 }
 
+function Get-SetupCodeFromLocalApi {
+    param([int]$Attempts = 8)
+
+    for ($i = 0; $i -lt $Attempts; $i++) {
+        try {
+            $payload = Invoke-RestMethod -Uri "http://127.0.0.1:3001/api/auth/local/setup-code" -Method GET -TimeoutSec 2 -ErrorAction Stop
+            if ($payload -and $payload.setup_code) {
+                return [string]$payload.setup_code
+            }
+        } catch {
+            Start-Sleep -Milliseconds 900
+        }
+    }
+
+    return $null
+}
+
 # ============================================
 # Detect existing installation
 # ============================================
@@ -631,7 +649,7 @@ if ($Uninstall) {
         Write-Host "  What would you like to do?" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "    1. Upgrade        (keep .env config, update files)" -ForegroundColor White
-        Write-Host "    2. Clean Install  (remove everything, start fresh)" -ForegroundColor White
+        Write-Host "    2. Fresh install  (remove everything, start fresh)" -ForegroundColor White
         Write-Host "    3. Uninstall      (remove agent completely)" -ForegroundColor White
         Write-Host "    4. Cancel" -ForegroundColor White
         Write-Host ""
@@ -1175,7 +1193,12 @@ Write-Host ""
 Write-Host "  Install Dir:  $InstallDir" -ForegroundColor Cyan
 Write-Host "  Service Name: $ServiceName" -ForegroundColor Cyan
 Write-Host "  Agent UI:     http://localhost:3001" -ForegroundColor Cyan
-Write-Host "  Setup code:  Get-Content '$InstallDir\\logs\\service.log' -Tail 200 | Select-String 'setup code' | Select-Object -Last 1" -ForegroundColor Cyan
+$setupCode = Get-SetupCodeFromLocalApi
+if ($setupCode) {
+    Write-Host "  Setup code:  $setupCode" -ForegroundColor Cyan
+} else {
+    Write-Host "  Setup code:  Get-Content '$InstallDir\\logs\\service.log' -Tail 200 | Select-String 'setup code' | Select-Object -Last 1" -ForegroundColor Cyan
+}
 Write-Host ""
 Write-Host "  Commands:" -ForegroundColor Yellow
 Write-Host "    Start:     Start-Service $ServiceName" -ForegroundColor White

@@ -25,15 +25,24 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
   const windowsInstallCommand = apiKey
     ? `irm ${AGENT_INSTALL_URL_WINDOWS} -OutFile $env:TEMP\\vp-install.ps1\n& $env:TEMP\\vp-install.ps1 -ApiKey '${apiKey}' -AgentName '${safeName}'`
     : `irm ${AGENT_INSTALL_URL_WINDOWS} | iex`
+  const windowsUpgradeCommand = `irm ${AGENT_INSTALL_URL_WINDOWS} -OutFile $env:TEMP\\vp-install.ps1\n& $env:TEMP\\vp-install.ps1 -Upgrade`
+  const windowsFreshInstallCommand = `irm ${AGENT_INSTALL_URL_WINDOWS} -OutFile $env:TEMP\\vp-install.ps1\n& $env:TEMP\\vp-install.ps1 -CleanInstall`
+  const windowsUninstallCommand = `irm ${AGENT_INSTALL_URL_WINDOWS} -OutFile $env:TEMP\\vp-install.ps1\n& $env:TEMP\\vp-install.ps1 -Uninstall`
 
   const linuxInstallCommand = apiKey
     ? `export VP_API_KEY='${apiKey}'\nexport VELOCITYPULSE_URL='${DASHBOARD_URL}'\ncurl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo -E bash`
     : `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash`
+  const linuxUpgradeCommand = `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash -s -- --upgrade`
+  const linuxFreshInstallCommand = `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash -s -- --fresh`
+  const linuxUninstallCommand = `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash -s -- --uninstall`
 
   // macOS uses the same shell script as Linux (auto-detects OS)
   const macosInstallCommand = apiKey
     ? `export VP_API_KEY='${apiKey}'\nexport VELOCITYPULSE_URL='${DASHBOARD_URL}'\ncurl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo -E bash`
     : `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash`
+  const macosUpgradeCommand = `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash -s -- --upgrade`
+  const macosFreshInstallCommand = `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash -s -- --fresh`
+  const macosUninstallCommand = `curl -sSL ${AGENT_INSTALL_URL_LINUX} | sudo bash -s -- --uninstall`
 
   return (
     <div className="space-y-4">
@@ -84,6 +93,13 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
             <CopyBlock code={windowsInstallCommand} language="PowerShell" />
           </div>
 
+          <div>
+            <h4 className="text-sm font-medium mb-2">Maintenance commands</h4>
+            <CopyBlock code={windowsUpgradeCommand} language="PowerShell" />
+            <CopyBlock code={windowsFreshInstallCommand} language="PowerShell" />
+            <CopyBlock code={windowsUninstallCommand} language="PowerShell" />
+          </div>
+
           {/* Verify */}
           <div>
             <h4 className="text-sm font-medium mb-2">Verify installation</h4>
@@ -109,6 +125,13 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
           <div>
             <h4 className="text-sm font-medium mb-2">Install command</h4>
             <CopyBlock code={linuxInstallCommand} language="Bash" />
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium mb-2">Maintenance commands</h4>
+            <CopyBlock code={linuxUpgradeCommand} language="Bash" />
+            <CopyBlock code={linuxFreshInstallCommand} language="Bash" />
+            <CopyBlock code={linuxUninstallCommand} language="Bash" />
           </div>
 
           {/* Verify */}
@@ -138,6 +161,13 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
             <CopyBlock code={macosInstallCommand} language="Bash" />
           </div>
 
+          <div>
+            <h4 className="text-sm font-medium mb-2">Maintenance commands</h4>
+            <CopyBlock code={macosUpgradeCommand} language="Bash" />
+            <CopyBlock code={macosFreshInstallCommand} language="Bash" />
+            <CopyBlock code={macosUninstallCommand} language="Bash" />
+          </div>
+
           {/* Verify */}
           <div>
             <h4 className="text-sm font-medium mb-2">Verify installation</h4>
@@ -161,7 +191,7 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
       <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm text-muted-foreground space-y-2">
         <p className="font-medium text-foreground">Access the local Agent UI</p>
         <p>1. Open <code className="bg-muted px-1 py-0.5 rounded">http://localhost:3001</code> on the machine running the agent.</p>
-        <p>2. Enter the one-time setup code from agent logs (printed at startup).</p>
+        <p>2. Use the setup code shown directly on the login screen (or from logs if needed).</p>
         <p>3. Optional: if your organization enables dashboard SSO, use “Sign in with dashboard”.</p>
       </div>
     </div>

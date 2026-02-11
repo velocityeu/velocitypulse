@@ -106,6 +106,12 @@ interface AuthResult {
   viaTokenFallback?: boolean
 }
 
+interface SetupCodePayload {
+  setup_code: string
+  expires_at: string
+  expires_in_seconds: number
+}
+
 export class AgentUIServer {
   private app: express.Application
   private httpServer: ReturnType<typeof createServer>
@@ -271,6 +277,29 @@ export class AgentUIServer {
         acc[key] = decodeURIComponent(value)
         return acc
       }, {})
+  }
+
+  private isLoopbackAddress(address?: string | null): boolean {
+    if (!address) return false
+    if (address === '::1' || address === '127.0.0.1') return true
+    if (address.startsWith('::ffff:')) {
+      return address.slice('::ffff:'.length) === '127.0.0.1'
+    }
+    return false
+  }
+
+  private isLoopbackRequest(req: express.Request): boolean {
+    const remoteAddress = req.socket?.remoteAddress
+    return this.isLoopbackAddress(remoteAddress)
+  }
+
+  private getSetupCodePayload(): SetupCodePayload {
+    const expiresInMs = Math.max(0, this.setupCodeExpiresAt - Date.now())
+    return {
+      setup_code: this.setupCode,
+      expires_at: new Date(this.setupCodeExpiresAt).toISOString(),
+      expires_in_seconds: Math.floor(expiresInMs / 1000),
+    }
   }
 
   private extractBearerToken(headerValue?: string): string | null {
@@ -498,6 +527,17 @@ export class AgentUIServer {
         sso_url: ssoAvailable ? '/api/auth/sso/start' : null,
         session_ttl_minutes: Math.floor(this.sessionTtlMs / 60000),
       })
+    })
+
+    this.app.get('/api/auth/local/setup-code', (req, res) => {
+      this.cleanupExpiredAuthState()
+
+      if (!this.isLoopbackRequest(req)) {
+        res.status(403).json({ error: 'loopback_only' })
+        return
+      }
+
+      res.json(this.getSetupCodePayload())
     })
 
     this.app.get('/api/auth/session', (req, res) => {

@@ -27,6 +27,19 @@ irm https://get.velocitypulse.io/agent | iex
 curl -fsSL https://get.velocitypulse.io/agent.sh | sudo bash
 ```
 
+Installer modes (Linux/macOS):
+
+```bash
+# Upgrade existing install (preserve config)
+curl -fsSL https://get.velocitypulse.io/agent.sh | sudo bash -s -- --upgrade
+
+# Fresh install (remove old install and reconfigure)
+curl -fsSL https://get.velocitypulse.io/agent.sh | sudo bash -s -- --fresh
+
+# Uninstall
+curl -fsSL https://get.velocitypulse.io/agent.sh | sudo bash -s -- --uninstall
+```
+
 ## Public Release Source
 
 Agent release artifacts are published publicly under:

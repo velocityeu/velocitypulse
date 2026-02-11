@@ -413,6 +413,55 @@
             color: var(--text-secondary);
         }
 
+        .setup-code-panel {
+            margin-top: 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.75rem;
+            background: var(--bg-secondary);
+        }
+
+        .setup-code-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.3rem;
+        }
+
+        .setup-code-value {
+            font-family: monospace;
+            letter-spacing: 0.08em;
+            font-size: 0.92rem;
+            font-weight: 600;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.35rem 0.55rem;
+            min-width: 8.2rem;
+            text-align: center;
+        }
+
+        .setup-code-meta {
+            margin-top: 0.45rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .btn-inline {
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            font-size: 0.72rem;
+            padding: 0.35rem 0.45rem;
+            cursor: pointer;
+        }
+
+        .btn-inline:hover {
+            color: var(--text-primary);
+            border-color: var(--accent);
+        }
+
         @media (max-width: 768px) {
             .stat-grid { grid-template-columns: repeat(3, 1fr); }
             .header { padding: 1rem; }
@@ -425,13 +474,22 @@
     <div id="login-shell" class="login-shell hidden">
         <div class="login-card">
             <div class="login-title">Agent UI Login</div>
-            <div class="login-subtitle">Enter the one-time setup code from the agent logs, or sign in with the dashboard.</div>
+            <div class="login-subtitle">Enter the one-time setup code shown below, or sign in with the dashboard.</div>
             <div id="login-error" class="login-error"></div>
             <label class="login-label" for="setup-code">Setup code</label>
             <input id="setup-code" class="login-input" type="text" placeholder="ABCD-EFGH" autocomplete="off" />
             <div class="login-actions">
                 <button id="login-btn" class="btn btn-primary" type="button">Sign in with setup code</button>
                 <button id="sso-btn" class="btn btn-secondary hidden" type="button">Sign in with dashboard</button>
+            </div>
+            <div class="setup-code-panel">
+                <div class="login-label" style="margin-bottom: 0;">Current setup code</div>
+                <div class="setup-code-row">
+                    <span id="setup-code-current" class="setup-code-value">Loading...</span>
+                    <button id="setup-code-use-btn" type="button" class="btn-inline">Use</button>
+                    <button id="setup-code-refresh-btn" type="button" class="btn-inline">Refresh</button>
+                </div>
+                <div id="setup-code-meta" class="setup-code-meta"></div>
             </div>
             <div class="login-help">
                 Tip: on Linux use <code>journalctl -u velocitypulse-agent -n 200 | grep \"setup code\"</code>
@@ -680,7 +738,12 @@
         const loginBtn = document.getElementById('login-btn');
         const ssoBtn = document.getElementById('sso-btn');
         const setupCodeInput = document.getElementById('setup-code');
+        const setupCodeCurrent = document.getElementById('setup-code-current');
+        const setupCodeMeta = document.getElementById('setup-code-meta');
+        const setupCodeUseBtn = document.getElementById('setup-code-use-btn');
+        const setupCodeRefreshBtn = document.getElementById('setup-code-refresh-btn');
         const logoutBtn = document.getElementById('logout-btn');
+        let setupCodeRefreshTimer = null;
 
         // Sonar ping audio
         let sonarAudio = null;
@@ -696,12 +759,54 @@
             appShell.classList.add('hidden');
             loginShell.classList.remove('hidden');
             loginError.textContent = message;
+            startSetupCodeRefresh();
         }
 
         function showApp() {
             loginShell.classList.add('hidden');
             appShell.classList.remove('hidden');
             logoutBtn.classList.remove('hidden');
+            stopSetupCodeRefresh();
+        }
+
+        function stopSetupCodeRefresh() {
+            if (setupCodeRefreshTimer) {
+                clearInterval(setupCodeRefreshTimer);
+                setupCodeRefreshTimer = null;
+            }
+        }
+
+        function formatCodeExpiry(seconds) {
+            if (seconds <= 0) return 'expired'
+            if (seconds < 60) return `${seconds}s`
+            const mins = Math.floor(seconds / 60)
+            const rem = seconds % 60
+            return rem === 0 ? `${mins}m` : `${mins}m ${rem}s`
+        }
+
+        async function refreshSetupCodeDisplay() {
+            try {
+                const res = await fetch('/api/auth/local/setup-code', { credentials: 'include' });
+                if (!res.ok) throw new Error('setup_code_unavailable');
+
+                const payload = await res.json();
+                const code = payload.setup_code || 'Unavailable';
+                const expiresInRaw = Number(payload.expires_in_seconds);
+                const expiresIn = Number.isFinite(expiresInRaw) ? Math.max(0, Math.floor(expiresInRaw)) : 0;
+                setupCodeCurrent.textContent = code;
+                setupCodeMeta.textContent = `Valid for ${formatCodeExpiry(expiresIn)} (until ${new Date(payload.expires_at).toLocaleTimeString()})`;
+                setupCodeUseBtn.disabled = !payload.setup_code;
+            } catch {
+                setupCodeCurrent.textContent = 'Unavailable';
+                setupCodeMeta.textContent = 'Could not read setup code from local agent API. Use service logs if needed.';
+                setupCodeUseBtn.disabled = true;
+            }
+        }
+
+        function startSetupCodeRefresh() {
+            stopSetupCodeRefresh();
+            refreshSetupCodeDisplay();
+            setupCodeRefreshTimer = setInterval(refreshSetupCodeDisplay, 30000);
         }
 
         async function fetchAuthMethods() {
@@ -778,6 +883,7 @@
                 if (!res.ok) {
                     const payload = await res.json().catch(() => ({}));
                     loginError.textContent = payload.error || 'Setup code login failed.';
+                    refreshSetupCodeDisplay();
                     return;
                 }
 
@@ -1140,6 +1246,13 @@
                 loginWithSetupCode();
             }
         });
+        setupCodeUseBtn.addEventListener('click', () => {
+            const code = (setupCodeCurrent.textContent || '').trim();
+            if (!code || code === 'Loading...' || code === 'Unavailable') return;
+            setupCodeInput.value = code;
+            setupCodeInput.focus();
+        });
+        setupCodeRefreshBtn.addEventListener('click', refreshSetupCodeDisplay);
         ssoBtn.addEventListener('click', startSsoLogin);
         logoutBtn.addEventListener('click', logout);
 

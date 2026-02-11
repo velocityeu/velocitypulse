@@ -23,24 +23,25 @@ velocitypulse/                    # Monorepo (velocityeu/velocitypulse)
 | Marketing website | GitHub Actions (`main-build-deploy.yml`) -> Vercel CLI | Every push to `main` |
 | Dashboard app | GitHub Actions (`main-build-deploy.yml`) -> Vercel CLI | Every push to `main` |
 | Agent build/test | GitHub Actions (`main-build-deploy.yml`) | Every push to `main` |
-| Agent release tag | GitHub Actions (`main-build-deploy.yml`) | Every push to `main` (auto-tags `agent-vX.Y.Z` if missing) |
-| Agent release archives | GitHub Actions (`agent-release.yml`) | Triggered by pushed `agent-v*` tag |
+| Agent release archives | GitHub Actions (`main-build-deploy.yml`) | Every push to `main` if release `agent-vX.Y.Z` does not already exist |
 | Database migrations | GitHub Actions (`supabase-migrate.yml`) | Push to `main` (if `supabase/` changed) |
 
 `main-build-deploy.yml` gates deployment on successful rebuilds of all three components and then deploys dashboard + marketing web to Vercel production.
 
-### Agent Releases (auto tag from `main`):
+### Agent Releases (from `main` pipeline):
 
-The agent release workflow remains tag-based (`agent-v*`), but tags are now created automatically from `main-build-deploy.yml` when:
+`main-build-deploy.yml` publishes the agent release when:
 1. `velocitypulse-agent/package.json` version matches `velocitypulse-agent/src/utils/version.ts`
-2. matching tag `agent-vX.Y.Z` does not already exist
+2. release `agent-vX.Y.Z` does not already exist
 
-When tag is created, `.github/workflows/agent-release.yml`:
+The release step:
 1. Verifies tag matches `package.json` and `version.ts`
 2. Injects the git SHA as build ID
 3. Builds and tests the agent
 4. Creates a pre-built archive (`velocitypulse-agent-X.Y.Z.tar.gz`)
 5. Publishes a GitHub Release with the archive attached
+
+Manual tag-based release (`agent-release.yml`) is still available if you intentionally push `agent-v*` tags.
 
 ## Vercel Project Configuration
 

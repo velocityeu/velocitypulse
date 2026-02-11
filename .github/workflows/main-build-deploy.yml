@@ -176,49 +176,96 @@ jobs:
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Marketing web deployed to: $URL"
 
-  agent-release-tag:
+  agent-release:
     runs-on: ubuntu-latest
     needs: [build-agent]
+    defaults:
+      run:
+        working-directory: velocitypulse-agent
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Validate agent version sync
-        id: version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: velocitypulse-agent/package-lock.json
+      - name: Detect agent release state
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          PKG_VERSION="$(node -p 'require("./velocitypulse-agent/package.json").version')"
-          TS_VERSION="$(node -e "const fs=require('fs'); const m=fs.readFileSync('./velocitypulse-agent/src/utils/version.ts','utf8').match(/export const VERSION = '([^']+)'/); if(!m){process.exit(1)} process.stdout.write(m[1])")"
+          PKG_VERSION="$(node -p 'require("./package.json").version')"
+          TS_VERSION="$(node -e "const fs=require('fs'); const m=fs.readFileSync('./src/utils/version.ts','utf8').match(/export const VERSION = '([^']+)'/); if(!m){process.exit(1)} process.stdout.write(m[1])")"
           if [ "$PKG_VERSION" != "$TS_VERSION" ]; then
             echo "Agent version mismatch: package.json=$PKG_VERSION version.ts=$TS_VERSION"
             exit 1
           fi
           TAG="agent-v$PKG_VERSION"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            TAG_EXISTS="true"
+          else
+            TAG_EXISTS="false"
+          fi
+
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            RELEASE_EXISTS="true"
+          else
+            RELEASE_EXISTS="false"
+          fi
+
           echo "agent_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-      - name: Check if release tag already exists
-        id: tagcheck
+          echo "tag_exists=$TAG_EXISTS" >> "$GITHUB_OUTPUT"
+          echo "release_exists=$RELEASE_EXISTS" >> "$GITHUB_OUTPUT"
+
+      - name: Build release artifacts
+        if: steps.detect.outputs.release_exists == 'false'
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag already exists: ${{ steps.version.outputs.tag }}"
+          SHORT_SHA="$(git rev-parse --short "$GITHUB_SHA")"
+          sed -i "s/__BUILD_ID__/$SHORT_SHA/g" src/utils/version.ts
+          npm ci
+          npm run build
+          npm test
+
+          VER="${{ steps.detect.outputs.agent_version }}"
+          STAGE_DIR="../velocitypulse-agent-${VER}"
+          mkdir -p "$STAGE_DIR/src/ui"
+          cp -r dist/ package.json package-lock.json "$STAGE_DIR/"
+          cp -r src/ui/public/ "$STAGE_DIR/src/ui/"
+          tar -czf "../velocitypulse-agent-${VER}.tar.gz" -C .. "velocitypulse-agent-${VER}"
+          (cd .. && zip -rq "velocitypulse-agent-${VER}.zip" "velocitypulse-agent-${VER}")
+
+      - name: Publish agent GitHub release
+        if: steps.detect.outputs.release_exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.detect.outputs.tag }}"
+          VER="${{ steps.detect.outputs.agent_version }}"
+
+          if [ "${{ steps.detect.outputs.tag_exists }}" = "true" ]; then
+            TAG_ARGS="--verify-tag"
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+            TAG_ARGS="--target ${GITHUB_SHA}"
           fi
-      - name: Create and push agent release tag
-        if: steps.tagcheck.outputs.exists == 'false'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.version.outputs.tag }}" "${GITHUB_SHA}"
-          git push origin "${{ steps.version.outputs.tag }}"
-          echo "Created tag ${{ steps.version.outputs.tag }} (triggers agent-release workflow)."
+
+          gh release create "$TAG" \
+            ../velocitypulse-agent-"$VER".tar.gz \
+            ../velocitypulse-agent-"$VER".zip \
+            --repo "${{ github.repository }}" \
+            --title "VelocityPulse Agent v$VER" \
+            --notes "## VelocityPulse Agent v$VER\n\nBuilt from \`${GITHUB_SHA::7}\` by \`main-build-deploy.yml\`." \
+            $TAG_ARGS
 
   deployment-summary:
     runs-on: ubuntu-latest
-    needs: [deploy-dashboard, deploy-web, agent-release-tag]
+    needs: [deploy-dashboard, deploy-web, agent-release]
     steps:
       - name: Summary
         run: |
           echo "Dashboard deployment: ${{ needs.deploy-dashboard.outputs.deployment_url }}"
           echo "Web deployment: ${{ needs.deploy-web.outputs.deployment_url }}"
-          echo "Agent release tag step completed."
+          echo "Agent release step completed."

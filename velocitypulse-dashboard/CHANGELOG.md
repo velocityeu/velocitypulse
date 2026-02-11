@@ -122,8 +122,8 @@ All notable changes to VelocityPulse Dashboard will be documented in this file.
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Client-side Clerk key
 - `NEXT_PUBLIC_CLERK_SIGN_IN_URL` - Sign-in route
 - `NEXT_PUBLIC_CLERK_SIGN_UP_URL` - Sign-up route
-- `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` - Post sign-in redirect
-- `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL` - Post sign-up redirect
+- `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` - Post sign-in redirect
+- `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` - Post sign-up redirect
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
 - `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key

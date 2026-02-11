@@ -10,6 +10,7 @@ const isPublicRoute = createRouteMatcher([
   '/onboarding(.*)',
   '/account-blocked(.*)',
   '/trial-expired(.*)',
+  '/manifest.json',
   '/api/webhook/stripe',
   '/api/webhook/clerk',
   '/api/agent/(.*)',

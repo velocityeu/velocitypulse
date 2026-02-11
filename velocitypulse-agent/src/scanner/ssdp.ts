@@ -14,7 +14,8 @@ export async function ssdpScan(
   timeout = 5000
 ): Promise<DiscoveredDevice[]> {
   try {
-    const { Client } = await import('node-ssdp')
+    const mod = await import('node-ssdp')
+    const Client = mod.Client ?? (mod.default as Record<string, unknown>)?.Client as { new(): any }
     const client = new Client()
 
     const devices = new Map<string, DiscoveredDevice>()

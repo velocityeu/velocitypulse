@@ -7,7 +7,7 @@ import {
   Loader2, AlertCircle, RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SonarPingButton } from '@/components/dashboard/SonarPingButton'
@@ -219,6 +219,20 @@ export default function AgentsPage() {
           </Button>
         </div>
       )}
+
+      {/* Persistent install instructions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Install Agent</CardTitle>
+          <CardDescription>
+            Use these commands any time to install or reinstall on Windows, Linux, or macOS.
+            These instructions stay available here after setup.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AgentInstallInstructions agentName="VelocityPulse Agent" />
+        </CardContent>
+      </Card>
 
       {/* Content */}
       {isLoading ? (

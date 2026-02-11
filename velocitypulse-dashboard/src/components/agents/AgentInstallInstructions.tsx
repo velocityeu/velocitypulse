@@ -89,7 +89,7 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
             <h4 className="text-sm font-medium mb-2">Verify installation</h4>
             <CopyBlock code="Get-Service VelocityPulseAgent" language="PowerShell" />
             <p className="text-xs text-muted-foreground mt-2">
-              View logs: <code className="bg-muted px-1 py-0.5 rounded">Get-Content &quot;C:\ProgramData\VelocityPulse\agent.log&quot; -Tail 50</code>
+              View logs: <code className="bg-muted px-1 py-0.5 rounded">Get-Content &quot;C:\ProgramData\VelocityPulse\logs\service.log&quot; -Tail 50</code>
             </p>
           </div>
         </div>
@@ -155,6 +155,14 @@ export function AgentInstallInstructions({ apiKey, agentName }: AgentInstallInst
         <p className="text-sm text-muted-foreground">
           Your agent will appear as <span className="font-medium text-foreground">Online</span> in the dashboard within 60 seconds.
         </p>
+      </div>
+
+      {/* UI access callout */}
+      <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm text-muted-foreground space-y-2">
+        <p className="font-medium text-foreground">Access the local Agent UI</p>
+        <p>1. Open <code className="bg-muted px-1 py-0.5 rounded">http://localhost:3001</code> on the machine running the agent.</p>
+        <p>2. Enter the one-time setup code from agent logs (printed at startup).</p>
+        <p>3. Optional: if your organization enables dashboard SSO, use “Sign in with dashboard”.</p>
       </div>
     </div>
   )

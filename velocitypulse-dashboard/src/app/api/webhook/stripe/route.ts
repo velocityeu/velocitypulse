@@ -206,11 +206,39 @@ async function safeInsertAuditLog(
 }
 
 async function sendWebhookLifecycleEmail(
+  supabase: ReturnType<typeof createServiceClient>,
+  organizationId: string,
+  templateKey: string,
+  recipients: string[],
+  eventId: string,
   sendFn: () => Promise<boolean>,
   context: Record<string, unknown>
 ): Promise<void> {
   try {
     const sent = await sendFn()
+    const { error: deliveryLogError } = await supabase
+      .from('outbound_email_deliveries')
+      .insert({
+        organization_id: organizationId,
+        source: 'stripe_webhook',
+        template_key: templateKey,
+        event_id: eventId,
+        recipients,
+        provider: 'resend',
+        status: sent ? 'sent' : 'failed',
+        error_message: sent ? null : 'Provider returned unsuccessful send result',
+        metadata: context,
+      })
+
+    if (deliveryLogError) {
+      logger.error('Failed to persist webhook lifecycle email delivery record', deliveryLogError, {
+        route: 'api/webhook/stripe',
+        organizationId,
+        templateKey,
+        eventId,
+      })
+    }
+
     if (!sent) {
       logger.warn('Webhook lifecycle email was not delivered', {
         route: 'api/webhook/stripe',
@@ -218,6 +246,30 @@ async function sendWebhookLifecycleEmail(
       })
     }
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown email error'
+    const { error: deliveryLogError } = await supabase
+      .from('outbound_email_deliveries')
+      .insert({
+        organization_id: organizationId,
+        source: 'stripe_webhook',
+        template_key: templateKey,
+        event_id: eventId,
+        recipients,
+        provider: 'resend',
+        status: 'failed',
+        error_message: errorMessage,
+        metadata: context,
+      })
+
+    if (deliveryLogError) {
+      logger.error('Failed to persist webhook lifecycle email error record', deliveryLogError, {
+        route: 'api/webhook/stripe',
+        organizationId,
+        templateKey,
+        eventId,
+      })
+    }
+
     logger.error('Webhook lifecycle email send failed', error, {
       route: 'api/webhook/stripe',
       ...context,
@@ -560,6 +612,11 @@ export async function POST(request: Request) {
         const recipients = await getOrgRecipients(supabase, org.id)
         if (recipients.length > 0) {
           await sendWebhookLifecycleEmail(
+            supabase,
+            org.id,
+            'subscription_activated',
+            recipients,
+            event.id,
             () => sendSubscriptionActivatedEmail(org.name, plan, recipients),
             {
               eventId: event.id,
@@ -747,6 +804,11 @@ export async function POST(request: Request) {
         const recipients = await getOrgRecipients(supabase, org.id)
         if (recipients.length > 0) {
           await sendWebhookLifecycleEmail(
+            supabase,
+            org.id,
+            'subscription_cancelled',
+            recipients,
+            event.id,
             () => sendSubscriptionCancelledEmail(org.name, recipients),
             {
               eventId: event.id,
@@ -821,6 +883,11 @@ export async function POST(request: Request) {
           const currency = (invoice.currency ?? 'gbp').toUpperCase()
 
           await sendWebhookLifecycleEmail(
+            supabase,
+            org.id,
+            'payment_failed',
+            failRecipients,
+            event.id,
             () => sendPaymentFailedEmail(org.name, amountFormatted, currency, failRecipients),
             {
               eventId: event.id,

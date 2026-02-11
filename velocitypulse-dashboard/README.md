@@ -184,7 +184,10 @@ Deployed on Vercel with root directory set to `velocitypulse-dashboard`.
 
 **Deploy:** Run `vercel --prod` from the **repo root** (`C:\Projects\velocitypulse`). Do NOT run from inside this subdirectory.
 
-**Cron schedule:** `0 */6 * * *` — Lifecycle automation (trial warnings, expiry enforcement, grace periods, data retention cleanup).
+**Cron schedules:**
+
+- `0 */6 * * *` — `/api/cron/lifecycle` (trial warnings, expiry enforcement, grace periods, data retention cleanup).
+- `*/10 * * * *` — `/api/cron/notifications` (retry queue processing + dead-letter promotion for failed notifications).
 
 ## API Documentation
 

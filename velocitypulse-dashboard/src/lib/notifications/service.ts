@@ -10,6 +10,28 @@ import { sendTeamsNotification } from './senders/teams'
 import { sendWebhookNotification } from './senders/webhook'
 
 const NOTIFICATION_MAX_ATTEMPTS = 3
+const NOTIFICATION_QUEUE_MAX_ATTEMPTS = 5
+const NOTIFICATION_QUEUE_BASE_DELAY_SECONDS = 120
+
+interface NotificationRetryQueueRow {
+  id: string
+  organization_id: string
+  rule_id: string | null
+  channel_id: string | null
+  event_type: NotificationEvent['type']
+  event_data: Record<string, unknown>
+  attempt_count: number
+  max_attempts: number
+  status: 'queued' | 'processing' | 'sent' | 'dead_letter'
+}
+
+interface NotificationRetryQueueResult {
+  processed: number
+  sent: number
+  requeued: number
+  dead_lettered: number
+  errors: number
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -132,6 +154,9 @@ export class NotificationService {
 
       // Log to history
       await this.logNotification(event, rule, channel, result)
+      if (!result.success) {
+        await this.enqueueNotificationRetry(rule, channel, event, result.error)
+      }
     }
 
     // Update cooldown
@@ -279,6 +304,221 @@ export class NotificationService {
       error: result.error,
       sent_at: result.success ? new Date().toISOString() : null,
     })
+  }
+
+  private async enqueueNotificationRetry(
+    rule: NotificationRule,
+    channel: NotificationChannel,
+    event: NotificationEvent,
+    errorMessage?: string
+  ): Promise<void> {
+    const firstRetryAt = new Date(Date.now() + NOTIFICATION_QUEUE_BASE_DELAY_SECONDS * 1000).toISOString()
+    const { error } = await this.supabase
+      .from('notification_retry_queue')
+      .insert({
+        organization_id: event.organizationId,
+        rule_id: rule.id,
+        channel_id: channel.id,
+        event_type: event.type,
+        event_data: {
+          resource_type: event.resourceType,
+          resource_id: event.resourceId,
+          resource_name: event.resourceName,
+          ...event.data,
+        },
+        attempt_count: 0,
+        max_attempts: NOTIFICATION_QUEUE_MAX_ATTEMPTS,
+        next_attempt_at: firstRetryAt,
+        status: 'queued',
+        last_error: errorMessage || null,
+      })
+
+    if (error) {
+      console.error('[NotificationService] Failed to enqueue notification retry:', error)
+    }
+  }
+
+  private parseRetryEvent(row: NotificationRetryQueueRow): NotificationEvent | null {
+    const resourceType = row.event_data.resource_type
+    const resourceId = row.event_data.resource_id
+    const resourceName = row.event_data.resource_name
+
+    if (
+      typeof resourceType !== 'string' ||
+      typeof resourceId !== 'string' ||
+      typeof resourceName !== 'string'
+    ) {
+      return null
+    }
+
+    if (!['device', 'agent', 'segment'].includes(resourceType)) {
+      return null
+    }
+
+    const eventData = { ...row.event_data }
+    delete eventData.resource_type
+    delete eventData.resource_id
+    delete eventData.resource_name
+
+    return {
+      type: row.event_type,
+      organizationId: row.organization_id,
+      resourceType: resourceType as NotificationEvent['resourceType'],
+      resourceId,
+      resourceName,
+      data: eventData,
+      timestamp: new Date().toISOString(),
+    }
+  }
+
+  /**
+   * Process queued notification retries and move exhausted records to dead-letter.
+   */
+  async processRetryQueue(limit = 50): Promise<NotificationRetryQueueResult> {
+    const result: NotificationRetryQueueResult = {
+      processed: 0,
+      sent: 0,
+      requeued: 0,
+      dead_lettered: 0,
+      errors: 0,
+    }
+
+    const nowIso = new Date().toISOString()
+    const { data: queuedRows, error: fetchError } = await this.supabase
+      .from('notification_retry_queue')
+      .select('id, organization_id, rule_id, channel_id, event_type, event_data, attempt_count, max_attempts, status')
+      .eq('status', 'queued')
+      .lte('next_attempt_at', nowIso)
+      .order('next_attempt_at', { ascending: true })
+      .limit(limit)
+
+    if (fetchError) {
+      console.error('[NotificationService] Failed to fetch retry queue:', fetchError)
+      result.errors++
+      return result
+    }
+
+    for (const row of (queuedRows || []) as NotificationRetryQueueRow[]) {
+      const { data: claimedRow, error: claimError } = await this.supabase
+        .from('notification_retry_queue')
+        .update({
+          status: 'processing',
+          locked_at: new Date().toISOString(),
+        })
+        .eq('id', row.id)
+        .eq('status', 'queued')
+        .select('id, organization_id, rule_id, channel_id, event_type, event_data, attempt_count, max_attempts, status')
+        .maybeSingle<NotificationRetryQueueRow>()
+
+      if (claimError) {
+        console.error('[NotificationService] Failed to claim retry queue record:', claimError)
+        result.errors++
+        continue
+      }
+
+      if (!claimedRow) {
+        continue
+      }
+
+      result.processed++
+
+      const event = this.parseRetryEvent(claimedRow)
+      if (!event || !claimedRow.rule_id || !claimedRow.channel_id) {
+        await this.supabase
+          .from('notification_retry_queue')
+          .update({
+            status: 'dead_letter',
+            processed_at: new Date().toISOString(),
+            locked_at: null,
+            last_error: 'Invalid retry payload: missing event/rule/channel references',
+          })
+          .eq('id', claimedRow.id)
+        result.dead_lettered++
+        continue
+      }
+
+      const { data: rule } = await this.supabase
+        .from('notification_rules')
+        .select('*')
+        .eq('id', claimedRow.rule_id)
+        .maybeSingle<NotificationRule>()
+
+      const { data: channel } = await this.supabase
+        .from('notification_channels')
+        .select('*')
+        .eq('id', claimedRow.channel_id)
+        .eq('is_enabled', true)
+        .maybeSingle<NotificationChannel>()
+
+      if (!rule || !channel) {
+        await this.supabase
+          .from('notification_retry_queue')
+          .update({
+            status: 'dead_letter',
+            processed_at: new Date().toISOString(),
+            locked_at: null,
+            last_error: 'Retry target rule/channel no longer exists or is disabled',
+          })
+          .eq('id', claimedRow.id)
+        result.dead_lettered++
+        continue
+      }
+
+      const sendResult = await this.sendNotification(channel, rule, event)
+      await this.logNotification(event, rule, channel, sendResult)
+
+      const nextAttemptCount = claimedRow.attempt_count + 1
+      if (sendResult.success) {
+        await this.supabase
+          .from('notification_retry_queue')
+          .update({
+            status: 'sent',
+            attempt_count: nextAttemptCount,
+            processed_at: new Date().toISOString(),
+            locked_at: null,
+            last_error: null,
+          })
+          .eq('id', claimedRow.id)
+        result.sent++
+        continue
+      }
+
+      const isFinalAttempt = nextAttemptCount >= claimedRow.max_attempts
+      if (isFinalAttempt) {
+        await this.supabase
+          .from('notification_retry_queue')
+          .update({
+            status: 'dead_letter',
+            attempt_count: nextAttemptCount,
+            processed_at: new Date().toISOString(),
+            locked_at: null,
+            last_error: sendResult.error || 'Retry delivery failed',
+          })
+          .eq('id', claimedRow.id)
+        result.dead_lettered++
+        continue
+      }
+
+      const backoffSeconds = Math.min(
+        60 * 60,
+        NOTIFICATION_QUEUE_BASE_DELAY_SECONDS * 2 ** claimedRow.attempt_count
+      )
+      const nextAttemptAt = new Date(Date.now() + backoffSeconds * 1000).toISOString()
+
+      await this.supabase
+        .from('notification_retry_queue')
+        .update({
+          status: 'queued',
+          attempt_count: nextAttemptCount,
+          next_attempt_at: nextAttemptAt,
+          locked_at: null,
+          last_error: sendResult.error || 'Retry delivery failed',
+        })
+        .eq('id', claimedRow.id)
+      result.requeued++
+    }
+
+    return result
   }
 }
 

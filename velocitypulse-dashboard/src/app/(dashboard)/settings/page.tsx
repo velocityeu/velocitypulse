@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { authFetch } from '@/lib/auth-fetch'
 import { useTheme } from 'next-themes'
 import { AccountSettings } from '@/components/settings/AccountSettings'
@@ -16,12 +16,7 @@ type TabType = 'appearance' | 'account' | 'branding' | 'sso'
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('appearance')
   const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
   const { organization, refetch } = useOrganization()
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const plan = (organization?.plan || 'trial') as OrganizationPlan
   const canWhiteLabel = PLAN_LIMITS[plan]?.whiteLabel ?? false
@@ -39,20 +34,6 @@ export default function SettingsPage() {
     { value: 'dark', label: 'Dark', icon: Moon, description: 'Easy on the eyes' },
     { value: 'system', label: 'System', icon: Monitor, description: 'Match your device' },
   ]
-
-  if (!mounted) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your account and preferences
-          </p>
-        </div>
-        <div className="h-64 bg-muted animate-pulse rounded-lg" />
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">

@@ -412,7 +412,7 @@ export default function AdminsPage() {
           <DialogHeader>
             <DialogTitle>Add Admin User</DialogTitle>
             <DialogDescription>
-              Grant admin access to a VelocityPulse user. If they don't have an account yet, they'll receive an email invitation to sign up.
+              Grant admin access to a VelocityPulse user. If they don&apos;t have an account yet, they&apos;ll receive an email invitation to sign up.
             </DialogDescription>
           </DialogHeader>
 

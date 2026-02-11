@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AlertTriangle, LogIn, RefreshCw } from 'lucide-react'
@@ -32,7 +33,7 @@ export default function DashboardError({
               Your session has expired. Please sign in again to continue.
             </p>
             <Button asChild>
-              <a href="/sign-in">Sign In</a>
+              <Link href="/sign-in">Sign In</Link>
             </Button>
           </CardContent>
         </Card>

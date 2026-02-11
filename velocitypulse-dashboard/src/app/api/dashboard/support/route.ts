@@ -40,7 +40,7 @@ export async function GET() {
 
     // Get comment counts per ticket
     const ticketIds = (tickets || []).map(t => t.id)
-    let commentCounts: Record<string, number> = {}
+    const commentCounts: Record<string, number> = {}
     if (ticketIds.length > 0) {
       const { data: counts } = await supabase
         .rpc('get_ticket_comment_counts', { ticket_ids: ticketIds })

@@ -53,7 +53,7 @@ export async function GET(
 
     // Resolve author names from users table
     const authorIds = [...new Set((comments || []).map(c => c.author_id))]
-    let authorMap: Record<string, { email: string; first_name: string | null; last_name: string | null }> = {}
+    const authorMap: Record<string, { email: string; first_name: string | null; last_name: string | null }> = {}
 
     if (authorIds.length > 0) {
       const { data: users } = await supabase

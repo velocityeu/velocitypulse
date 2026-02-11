@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/db/client'
 import { PLAN_LIMITS } from '@/lib/constants'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 import { generateInvitationToken, getInvitationExpiry } from '@/lib/invitations'
+import { logger } from '@/lib/logger'
 import {
   sendMemberInvitationEmail,
   sendMemberAddedNotificationEmail,
@@ -248,8 +249,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to add member' }, { status: 500 })
       }
 
-      // Send notification email
-      await sendMemberAddedNotificationEmail(org.name, role, existingDbUser.email)
+      // Send notification email and surface degraded delivery explicitly
+      const memberAddedEmailSent = await sendMemberAddedNotificationEmail(org.name, role, existingDbUser.email)
+      if (!memberAddedEmailSent) {
+        logger.warn('member.added_directly email delivery failed', {
+          route: 'api/dashboard/members',
+          organizationId,
+          memberId: member.id,
+          email: existingDbUser.email,
+        })
+      }
 
       // Audit log
       await supabase.from('audit_logs').insert({
@@ -274,6 +283,7 @@ export async function POST(request: NextRequest) {
             imageUrl: existingDbUser.image_url,
           },
         },
+        notification_email_sent: memberAddedEmailSent,
       }, { status: 201 })
     } else {
       // ===== Path B: User not found → create invitation =====
@@ -312,7 +322,24 @@ export async function POST(request: NextRequest) {
         : 'A team member'
 
       const acceptUrl = `${APP_URL}/accept-invite?token=${token}`
-      await sendMemberInvitationEmail(inviterName, org.name, role, acceptUrl, email)
+      const invitationEmailSent = await sendMemberInvitationEmail(inviterName, org.name, role, acceptUrl, email)
+      if (!invitationEmailSent) {
+        await supabase
+          .from('invitations')
+          .delete()
+          .eq('id', invitation.id)
+
+        logger.warn('member.invitation email delivery failed', {
+          route: 'api/dashboard/members',
+          organizationId,
+          invitationId: invitation.id,
+          email,
+        })
+        return NextResponse.json(
+          { error: 'Invitation created but email delivery failed. Please retry.' },
+          { status: 502 }
+        )
+      }
 
       // Audit log
       await supabase.from('audit_logs').insert({

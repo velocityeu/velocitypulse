@@ -57,7 +57,11 @@ Blocking themes:
 
 ## Execution Tracker
 
-Baseline date: 2026-02-11
+Baseline date: 2026-02-11  
+Last updated: 2026-02-11  
+Update owner: Program lead (or delegated PM/EM)  
+Overall program health: `Red`  
+Health last updated: 2026-02-11
 
 Status values:
 
@@ -66,18 +70,42 @@ Status values:
 - `Blocked`
 - `Done`
 
-| Workstream | Owner | Target Start | Target End | Status | Notes / Current Blocker |
-|---|---|---|---|---|---|
-| WS-01 Stripe core correctness | Backend Lead (Billing) | 2026-02-12 | 2026-02-20 | Not Started | Prerequisite for WS-02 and Stripe launch gate LG-01 |
-| WS-02 Stripe financial edge handling | Backend Lead (Billing) + Billing Ops | 2026-02-18 | 2026-02-25 | Not Started | Starts after WS-01 design decisions on event model |
-| WS-03 Email delivery contract hardening | Backend Lead + Growth Eng | 2026-02-12 | 2026-02-19 | Not Started | Unblocks WS-04 and LG-02 reliability evidence |
-| WS-04 Notification parity + reliability | Backend Lead (Monitoring) | 2026-02-20 | 2026-02-28 | Not Started | Depends on WS-03 contract and schema choices |
-| WS-05 Agent installer + upgrade hardening | Agent Lead + DevOps Lead | 2026-02-12 | 2026-02-24 | Not Started | Includes installer source alignment + upgrade rollback safety |
-| WS-06 Agent runtime security hardening | Agent Lead + Security Lead | 2026-02-12 | 2026-02-21 | Not Started | Local UI auth/binding is launch blocker |
-| WS-07 Marketing claim/pricing parity | Product Lead + Web Lead | 2026-02-16 | 2026-02-20 | Not Started | Requires final WS-01 billing policy confirmation |
-| WS-08 Multi-org context correctness | Backend Lead | 2026-02-26 | 2026-03-06 | Not Started | Wave B stabilization |
-| WS-09 Env validation fail-fast | Platform Lead | 2026-02-24 | 2026-02-27 | Not Started | Wave B stabilization, low dependency |
-| WS-10 Test matrix + release gates | QA Lead + Eng Leads | 2026-02-21 | 2026-03-07 | Not Started | Should begin once WS-01/03/05 changes are in PR |
+`% Complete` guidance:
+
+- `0%`: not started
+- `10-30%`: design/in-progress implementation
+- `40-70%`: implementation mostly complete, validation pending
+- `80-90%`: validation in progress
+- `100%`: done with evidence linked
+
+`Overall program health` guidance:
+
+| Health | Rule |
+|---|---|
+| Green | No blocked P1 workstreams and all in-flight Wave A items are on schedule |
+| Amber | At least one P1 workstream is at risk (slippage <= 3 days) but mitigated |
+| Red | Any P1 workstream is blocked, or slippage > 3 days, or launch gates cannot be met in current window |
+
+| Workstream | Owner | Target Start | Target End | Status | % Complete | Last Update | Next Update | Notes / Current Blocker |
+|---|---|---|---|---|---|---|---|---|
+| WS-01 Stripe core correctness | Backend Lead (Billing) | 2026-02-12 | 2026-02-20 | In Progress | 65% | 2026-02-11 | 2026-02-18 | Implemented: strict `priceId` allow-listing, webhook event ledger + retry semantics, monotonic event freshness columns/guards, safer Stripe status mapping, payment recovery audit, and core webhook write error handling. Remaining: end-to-end replay/order matrix rerun + atomicity hardening via DB transaction/RPC path. |
+| WS-02 Stripe financial edge handling | Backend Lead (Billing) + Billing Ops | 2026-02-18 | 2026-02-25 | In Progress | 35% | 2026-02-11 | 2026-02-18 | Implemented webhook handlers for `charge.refunded` and dispute lifecycle (`charge.dispute.created`/`charge.dispute.closed`) with deterministic org status + audit actions. Remaining: finalize explicit product policy (refund consequences, dispute-lost handling), add customer comms templates, and complete matrix retest evidence. |
+| WS-03 Email delivery contract hardening | Backend Lead + Growth Eng | 2026-02-12 | 2026-02-19 | In Progress | 60% | 2026-02-11 | 2026-02-18 | Implemented delivery-result enforcement for member/admin invitation paths, onboarding delivery visibility, lifecycle cron send-result checks, and marketing contact/partner sink-level success contract (no false-success on full sink failure). Remaining: standardize all remaining dashboard lifecycle routes to common delivery result type + operational metrics. |
+| WS-04 Notification parity + reliability | Backend Lead (Monitoring) | 2026-02-20 | 2026-02-28 | In Progress | 45% | 2026-02-11 | 2026-02-18 | Implemented `scan.complete` producer, `agent.online` transition producer, `agent.offline` cron transition producer, strict notification channel config validation (create/update), and in-process retry attempts for channel sends. Remaining: queue-backed retry/DLQ strategy + operator history/alerting views. |
+| WS-05 Agent installer + upgrade hardening | Agent Lead + DevOps Lead | 2026-02-12 | 2026-02-24 | Not Started | 0% | 2026-02-11 | 2026-02-18 | Includes installer source alignment + upgrade rollback safety |
+| WS-06 Agent runtime security hardening | Agent Lead + Security Lead | 2026-02-12 | 2026-02-21 | Not Started | 0% | 2026-02-11 | 2026-02-18 | Local UI auth/binding is launch blocker |
+| WS-07 Marketing claim/pricing parity | Product Lead + Web Lead | 2026-02-16 | 2026-02-20 | Not Started | 0% | 2026-02-11 | 2026-02-18 | Requires final WS-01 billing policy confirmation |
+| WS-08 Multi-org context correctness | Backend Lead | 2026-02-26 | 2026-03-06 | Not Started | 0% | 2026-02-11 | 2026-03-04 | Wave B stabilization |
+| WS-09 Env validation fail-fast | Platform Lead | 2026-02-24 | 2026-02-27 | Not Started | 0% | 2026-02-11 | 2026-03-04 | Wave B stabilization, low dependency |
+| WS-10 Test matrix + release gates | QA Lead + Eng Leads | 2026-02-21 | 2026-03-07 | Not Started | 0% | 2026-02-11 | 2026-03-04 | Should begin once WS-01/03/05 changes are in PR |
+
+### Tracker Update Protocol
+
+1. On each checkpoint date, update `Last updated` and each row’s `Status`, `% Complete`, `Last Update`, `Next Update`, and blocker notes.
+2. Update `Overall program health` and `Health last updated` using the health guidance table.
+3. If any workstream slips by more than 3 calendar days, set note prefix to `SLIPPAGE:` and add revised end date rationale.
+4. If a workstream becomes blocked by dependency, set `Status` to `Blocked` and cite blocking workstream ID.
+5. A workstream can be set to `Done` only when its evidence artifact is updated and launch gate criteria are met.
 
 ## Weekly Checkpoint Cadence
 

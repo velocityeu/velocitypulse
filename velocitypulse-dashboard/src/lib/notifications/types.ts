@@ -8,7 +8,7 @@ import type {
 export interface NotificationEvent {
   type: NotificationEventType
   organizationId: string
-  resourceType: 'device' | 'agent'
+  resourceType: 'device' | 'agent' | 'segment'
   resourceId: string
   resourceName: string
   data: Record<string, unknown>

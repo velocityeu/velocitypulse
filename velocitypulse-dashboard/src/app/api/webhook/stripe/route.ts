@@ -4,11 +4,22 @@ import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/db/client'
 import { PLAN_LIMITS } from '@/lib/constants'
 import { logger } from '@/lib/logger'
+import { resolvePaidPlanFromPriceId } from '@/lib/stripe-pricing'
 import {
   sendSubscriptionActivatedEmail,
   sendSubscriptionCancelledEmail,
   sendPaymentFailedEmail,
 } from '@/lib/emails/lifecycle'
+import {
+  acquireStripeWebhookEventProcessing,
+  markStripeWebhookEventFailed,
+  markStripeWebhookEventProcessed,
+} from '@/lib/stripe-webhook-events'
+import {
+  isStripeEventStale,
+  mapStripeSubscriptionStatus,
+  type LocalSubscriptionStatus,
+} from '@/lib/stripe-webhook-lifecycle'
 
 // Force Node.js runtime (not Edge) - required for Stripe
 export const runtime = 'nodejs'
@@ -49,6 +60,356 @@ function getCustomerId(
   return typeof customer === 'string' ? customer : customer.id
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+
+  const code = (error as { code?: string }).code
+  if (code === '23505') return true
+
+  const message = (error as { message?: string }).message || ''
+  return /duplicate key/i.test(message)
+}
+
+interface OrganizationStripeState {
+  id: string
+  name: string
+  plan: string
+  status: string
+  stripe_last_event_created: number | null
+}
+
+interface SubscriptionStripeState {
+  id: string
+  stripe_last_event_created: number | null
+}
+
+async function getOrganizationByCustomerId(
+  supabase: ReturnType<typeof createServiceClient>,
+  customerId: string
+): Promise<OrganizationStripeState | null> {
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id, name, plan, status, stripe_last_event_created')
+    .eq('stripe_customer_id', customerId)
+    .maybeSingle<OrganizationStripeState>()
+
+  if (error) {
+    throw error
+  }
+
+  return data ?? null
+}
+
+async function getSubscriptionState(
+  supabase: ReturnType<typeof createServiceClient>,
+  stripeSubscriptionId: string
+): Promise<SubscriptionStripeState | null> {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('id, stripe_last_event_created')
+    .eq('stripe_subscription_id', stripeSubscriptionId)
+    .maybeSingle<SubscriptionStripeState>()
+
+  if (error) {
+    throw error
+  }
+
+  return data ?? null
+}
+
+async function updateOrganizationForEvent(
+  supabase: ReturnType<typeof createServiceClient>,
+  organizationId: string,
+  event: Stripe.Event,
+  payload: Record<string, unknown>
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('organizations')
+    .update({
+      ...payload,
+      stripe_last_event_created: event.created,
+      stripe_last_event_id: event.id,
+    })
+    .eq('id', organizationId)
+    .lte('stripe_last_event_created', event.created)
+    .select('id')
+
+  if (error) {
+    throw error
+  }
+
+  return (data?.length ?? 0) > 0
+}
+
+async function upsertSubscriptionForEvent(
+  supabase: ReturnType<typeof createServiceClient>,
+  stripeSubscriptionId: string,
+  event: Stripe.Event,
+  payload: Record<string, unknown>
+): Promise<boolean> {
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('subscriptions')
+    .update({
+      ...payload,
+      stripe_last_event_created: event.created,
+      stripe_last_event_id: event.id,
+    })
+    .eq('stripe_subscription_id', stripeSubscriptionId)
+    .lte('stripe_last_event_created', event.created)
+    .select('id')
+
+  if (updateError) {
+    throw updateError
+  }
+
+  if ((updatedRows?.length ?? 0) > 0) {
+    return true
+  }
+
+  const existing = await getSubscriptionState(supabase, stripeSubscriptionId)
+  if (existing) {
+    return !isStripeEventStale(event.created, existing.stripe_last_event_created)
+  }
+
+  const { error: insertError } = await supabase
+    .from('subscriptions')
+    .insert({
+      stripe_subscription_id: stripeSubscriptionId,
+      ...payload,
+      stripe_last_event_created: event.created,
+      stripe_last_event_id: event.id,
+    })
+
+  if (!insertError) {
+    return true
+  }
+
+  if (isUniqueViolation(insertError)) {
+    return true
+  }
+
+  throw insertError
+}
+
+async function safeInsertAuditLog(
+  supabase: ReturnType<typeof createServiceClient>,
+  payload: Record<string, unknown>
+): Promise<void> {
+  const { error } = await supabase.from('audit_logs').insert(payload)
+  if (error) {
+    logger.error('Failed to insert Stripe webhook audit log', error, {
+      route: 'api/webhook/stripe',
+      action: payload.action,
+      organizationId: payload.organization_id,
+    })
+  }
+}
+
+async function sendWebhookLifecycleEmail(
+  sendFn: () => Promise<boolean>,
+  context: Record<string, unknown>
+): Promise<void> {
+  try {
+    const sent = await sendFn()
+    if (!sent) {
+      logger.warn('Webhook lifecycle email was not delivered', {
+        route: 'api/webhook/stripe',
+        ...context,
+      })
+    }
+  } catch (error) {
+    logger.error('Webhook lifecycle email send failed', error, {
+      route: 'api/webhook/stripe',
+      ...context,
+    })
+  }
+}
+
+function getSubscriptionItem(subscription: Stripe.Subscription) {
+  return subscription.items.data[0]
+}
+
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const subscription = (
+    invoice as Stripe.Invoice & {
+      subscription?: string | Stripe.Subscription | null
+    }
+  ).subscription
+  if (!subscription) return null
+  return typeof subscription === 'string' ? subscription : subscription.id
+}
+
+async function handleRefundEvent(
+  supabase: ReturnType<typeof createServiceClient>,
+  event: Stripe.Event,
+  stripeClient: Stripe,
+  charge: Stripe.Charge
+): Promise<void> {
+  const customerId = getCustomerId(charge.customer)
+  if (!customerId) {
+    logger.warn('Refund event without customer id', {
+      route: 'api/webhook/stripe',
+      eventId: event.id,
+      chargeId: charge.id,
+    })
+    return
+  }
+
+  const org = await getOrganizationByCustomerId(supabase, customerId)
+  if (!org) {
+    logger.warn('Refund event ignored - organization not found', {
+      route: 'api/webhook/stripe',
+      eventId: event.id,
+      customerId,
+    })
+    return
+  }
+
+  if (isStripeEventStale(event.created, org.stripe_last_event_created)) {
+    logger.info('Skipping stale refund event', {
+      route: 'api/webhook/stripe',
+      eventId: event.id,
+      organizationId: org.id,
+    })
+    return
+  }
+
+  await updateOrganizationForEvent(supabase, org.id, event, {
+    status: org.status,
+  })
+
+  await safeInsertAuditLog(supabase, {
+    organization_id: org.id,
+    actor_type: 'webhook',
+    actor_id: 'stripe',
+    action: 'subscription.refund_recorded',
+    resource_type: 'charge',
+    resource_id: charge.id,
+    metadata: {
+      amount_refunded: charge.amount_refunded,
+      charge_amount: charge.amount,
+      currency: charge.currency,
+      refunded: charge.refunded,
+    },
+  })
+
+  const chargeInvoice = (
+    charge as Stripe.Charge & {
+      invoice?: string | Stripe.Invoice | null
+    }
+  ).invoice
+
+  if (chargeInvoice) {
+    const invoiceId = typeof chargeInvoice === 'string' ? chargeInvoice : chargeInvoice.id
+    try {
+      const invoice = await stripeClient.invoices.retrieve(invoiceId)
+      const subscriptionId = getInvoiceSubscriptionId(invoice)
+      if (subscriptionId) {
+        await upsertSubscriptionForEvent(supabase, subscriptionId, event, {
+          organization_id: org.id,
+          plan: org.plan,
+          status: (charge.refunded ? 'cancelled' : 'active') as LocalSubscriptionStatus,
+          current_period_start: new Date().toISOString(),
+          current_period_end: new Date().toISOString(),
+          amount_cents: invoice.amount_paid || 0,
+        })
+      }
+    } catch (invoiceError) {
+      logger.error('Failed to load invoice for refund event', invoiceError, {
+        route: 'api/webhook/stripe',
+        eventId: event.id,
+        chargeId: charge.id,
+      })
+    }
+  }
+}
+
+async function handleDisputeEvent(
+  supabase: ReturnType<typeof createServiceClient>,
+  event: Stripe.Event,
+  stripeClient: Stripe,
+  dispute: Stripe.Dispute
+): Promise<void> {
+  const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id
+  const charge = await stripeClient.charges.retrieve(chargeId)
+  const customerId = getCustomerId(charge.customer)
+  if (!customerId) {
+    logger.warn('Dispute event without customer id', {
+      route: 'api/webhook/stripe',
+      eventId: event.id,
+      disputeId: dispute.id,
+    })
+    return
+  }
+
+  const org = await getOrganizationByCustomerId(supabase, customerId)
+  if (!org) {
+    logger.warn('Dispute event ignored - organization not found', {
+      route: 'api/webhook/stripe',
+      eventId: event.id,
+      customerId,
+    })
+    return
+  }
+
+  if (isStripeEventStale(event.created, org.stripe_last_event_created)) {
+    logger.info('Skipping stale dispute event', {
+      route: 'api/webhook/stripe',
+      eventId: event.id,
+      organizationId: org.id,
+    })
+    return
+  }
+
+  if (event.type === 'charge.dispute.created') {
+    await updateOrganizationForEvent(supabase, org.id, event, {
+      status: 'suspended',
+      suspended_at: new Date().toISOString(),
+    })
+
+    await safeInsertAuditLog(supabase, {
+      organization_id: org.id,
+      actor_type: 'webhook',
+      actor_id: 'stripe',
+      action: 'subscription.dispute_opened',
+      resource_type: 'dispute',
+      resource_id: dispute.id,
+      metadata: {
+        amount: dispute.amount,
+        currency: dispute.currency,
+        reason: dispute.reason,
+        status: dispute.status,
+        charge_id: charge.id,
+      },
+    })
+
+    return
+  }
+
+  const disputeWon = dispute.status === 'won' || dispute.status === 'warning_closed'
+  const disputeLost = dispute.status === 'lost'
+
+  await updateOrganizationForEvent(supabase, org.id, event, {
+    status: disputeWon ? 'active' : org.status,
+  })
+
+  await safeInsertAuditLog(supabase, {
+    organization_id: org.id,
+    actor_type: 'webhook',
+    actor_id: 'stripe',
+    action: 'subscription.dispute_closed',
+    resource_type: 'dispute',
+    resource_id: dispute.id,
+    metadata: {
+      amount: dispute.amount,
+      currency: dispute.currency,
+      status: dispute.status,
+      outcome: disputeWon ? 'won' : disputeLost ? 'lost' : 'closed',
+      charge_id: charge.id,
+    },
+  })
+}
+
 export async function POST(request: Request) {
   const body = await request.text()
   const headersList = await headers()
@@ -70,90 +431,142 @@ export async function POST(request: Request) {
   }
 
   const supabase = createServiceClient()
+  let eventTrackingStarted = false
 
   try {
+    const acquireResult = await acquireStripeWebhookEventProcessing(supabase, event.id, event.type)
+    if (acquireResult === 'processed') {
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+    if (acquireResult === 'processing') {
+      return NextResponse.json({ received: true, in_progress: true })
+    }
+    eventTrackingStarted = true
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
 
-        if (session.mode === 'subscription' && session.subscription) {
-          const subscriptionId = typeof session.subscription === 'string'
-            ? session.subscription
-            : session.subscription.id
-          const subscriptionResponse = await stripeClient.subscriptions.retrieve(subscriptionId)
-          const subscription = subscriptionResponse as unknown as Stripe.Subscription
-          const customerId = getCustomerId(session.customer)
-          if (!customerId) break
+        if (session.mode !== 'subscription' || !session.subscription) {
+          break
+        }
 
-          const priceId = subscription.items.data[0]?.price.id
+        const subscriptionId = typeof session.subscription === 'string'
+          ? session.subscription
+          : session.subscription.id
 
-          // Determine plan from price ID
-          const plan = priceId === process.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited' : 'starter'
-          const limits = plan === 'unlimited' ? PLAN_LIMITS.unlimited : PLAN_LIMITS.starter
+        const subscriptionResponse = await stripeClient.subscriptions.retrieve(subscriptionId)
+        const subscription = subscriptionResponse as unknown as Stripe.Subscription
 
-          // Get organization ID first
-          const { data: orgData } = await supabase
-            .from('organizations')
-            .select('id')
-            .eq('stripe_customer_id', customerId)
-            .single()
+        const customerId = getCustomerId(session.customer)
+        if (!customerId) {
+          logger.warn('checkout.session.completed missing customer id', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+          })
+          break
+        }
 
-          const orgId = orgData?.id
+        const org = await getOrganizationByCustomerId(supabase, customerId)
+        if (!org) {
+          logger.warn('checkout.session.completed organization not found', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            customerId,
+          })
+          break
+        }
 
-          // Update organization
-          const { error: updateError } = await supabase
-            .from('organizations')
-            .update({
-              stripe_subscription_id: subscription.id,
-              plan,
-              status: 'active',
-              device_limit: limits.devices,
-              agent_limit: limits.agents,
-              user_limit: limits.users,
-              trial_ends_at: null,
-            })
-            .eq('stripe_customer_id', customerId)
+        if (isStripeEventStale(event.created, org.stripe_last_event_created)) {
+          logger.info('Skipping stale checkout.session.completed event', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+          })
+          break
+        }
 
-          if (updateError) {
-            logger.error('Failed to update organization', updateError, { route: 'api/webhook/stripe' })
-          }
+        const item = getSubscriptionItem(subscription)
+        const priceId = item?.price.id
+        if (!priceId) {
+          logger.error('Missing Stripe price ID in checkout.session.completed', undefined, {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            subscriptionId: subscription.id,
+          })
+          break
+        }
 
-          // Create subscription record
-          if (orgId) {
-            await supabase.from('subscriptions').insert({
-              organization_id: orgId,
-              stripe_subscription_id: subscription.id,
-              plan,
-              status: 'active',
-              current_period_start: new Date((subscription.items.data[0]?.current_period_start ?? 0) * 1000).toISOString(),
-              current_period_end: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toISOString(),
-              amount_cents: subscription.items.data[0]?.price.unit_amount || 0,
-            })
+        const plan = resolvePaidPlanFromPriceId(priceId)
+        if (!plan) {
+          logger.error('Unsupported Stripe price ID in checkout.session.completed', undefined, {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            subscriptionId: subscription.id,
+            priceId,
+          })
+          break
+        }
 
-            // Create audit log
-            await supabase.from('audit_logs').insert({
-              organization_id: orgId,
-              actor_type: 'webhook',
-              actor_id: 'stripe',
-              action: 'subscription.created',
-              resource_type: 'subscription',
-              resource_id: subscription.id,
-              metadata: { plan, price_id: priceId },
-            })
+        const limits = PLAN_LIMITS[plan]
 
-            // Send subscription activated email
-            const recipients = await getOrgRecipients(supabase, orgId)
-            const { data: orgForEmail } = await supabase
-              .from('organizations')
-              .select('name')
-              .eq('id', orgId)
-              .single()
-            if (orgForEmail && recipients.length > 0) {
-              sendSubscriptionActivatedEmail(orgForEmail.name, plan, recipients).catch(err =>
-                logger.error('[Webhook] Failed to send activation email', err, { route: 'api/webhook/stripe' })
-              )
+        const orgApplied = await updateOrganizationForEvent(supabase, org.id, event, {
+          stripe_subscription_id: subscription.id,
+          plan,
+          status: 'active',
+          device_limit: limits.devices,
+          agent_limit: limits.agents,
+          user_limit: limits.users,
+          trial_ends_at: null,
+        })
+
+        if (!orgApplied) {
+          logger.info('Skipped checkout.session.completed due to stale organization state', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+          })
+          break
+        }
+
+        const subscriptionApplied = await upsertSubscriptionForEvent(supabase, subscription.id, event, {
+          organization_id: org.id,
+          plan,
+          status: 'active',
+          current_period_start: new Date((item?.current_period_start ?? 0) * 1000).toISOString(),
+          current_period_end: new Date((item?.current_period_end ?? 0) * 1000).toISOString(),
+          amount_cents: item?.price.unit_amount || 0,
+        })
+
+        if (!subscriptionApplied) {
+          logger.info('Skipped checkout.session.completed due to stale subscription state', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            subscriptionId: subscription.id,
+          })
+          break
+        }
+
+        await safeInsertAuditLog(supabase, {
+          organization_id: org.id,
+          actor_type: 'webhook',
+          actor_id: 'stripe',
+          action: 'subscription.created',
+          resource_type: 'subscription',
+          resource_id: subscription.id,
+          metadata: { plan, price_id: priceId },
+        })
+
+        const recipients = await getOrgRecipients(supabase, org.id)
+        if (recipients.length > 0) {
+          await sendWebhookLifecycleEmail(
+            () => sendSubscriptionActivatedEmail(org.name, plan, recipients),
+            {
+              eventId: event.id,
+              organizationId: org.id,
+              emailType: 'subscription_activated',
             }
-          }
+          )
         }
         break
       }
@@ -161,196 +574,357 @@ export async function POST(request: Request) {
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription
         const customerId = getCustomerId(subscription.customer)
-        if (!customerId) break
-
-        // Get organization
-        const { data: org } = await supabase
-          .from('organizations')
-          .select('id, plan')
-          .eq('stripe_customer_id', customerId)
-          .single()
-
-        if (org) {
-          // Update subscription status
-          const status = subscription.status === 'active' ? 'active' :
-                        subscription.status === 'past_due' ? 'past_due' :
-                        subscription.status === 'canceled' ? 'cancelled' : 'incomplete'
-
-          // Detect plan change from price ID
-          const priceId = subscription.items.data[0]?.price.id
-          const newPlan = priceId === process.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited' : 'starter'
-
-          await supabase
-            .from('subscriptions')
-            .update({
-              status,
-              plan: newPlan,
-              current_period_start: new Date((subscription.items.data[0]?.current_period_start ?? 0) * 1000).toISOString(),
-              current_period_end: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toISOString(),
-              amount_cents: subscription.items.data[0]?.price.unit_amount || 0,
-            })
-            .eq('stripe_subscription_id', subscription.id)
-
-          // Update organization status + plan/limits if plan changed
-          const orgUpdate: Record<string, unknown> = {
-            status: status === 'cancelled' ? 'cancelled' : status,
-          }
-
-          if (newPlan !== org.plan && (status === 'active' || status === 'past_due')) {
-            const limits = newPlan === 'unlimited' ? PLAN_LIMITS.unlimited : PLAN_LIMITS.starter
-            orgUpdate.plan = newPlan
-            orgUpdate.device_limit = limits.devices
-            orgUpdate.agent_limit = limits.agents
-            orgUpdate.user_limit = limits.users
-          }
-
-          await supabase
-            .from('organizations')
-            .update(orgUpdate)
-            .eq('id', org.id)
-
-          // Audit log if plan changed
-          if (newPlan !== org.plan) {
-            await supabase.from('audit_logs').insert({
-              organization_id: org.id,
-              actor_type: 'webhook',
-              actor_id: 'stripe',
-              action: 'subscription.plan_changed',
-              resource_type: 'subscription',
-              resource_id: subscription.id,
-              metadata: { old_plan: org.plan, new_plan: newPlan, price_id: priceId },
-            })
-          }
+        if (!customerId) {
+          logger.warn('customer.subscription.updated missing customer id', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+          })
+          break
         }
+
+        const org = await getOrganizationByCustomerId(supabase, customerId)
+        if (!org) {
+          logger.warn('customer.subscription.updated organization not found', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            customerId,
+          })
+          break
+        }
+
+        if (isStripeEventStale(event.created, org.stripe_last_event_created)) {
+          logger.info('Skipping stale customer.subscription.updated event', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+          })
+          break
+        }
+
+        const mappedStatus = mapStripeSubscriptionStatus(subscription.status)
+
+        const item = getSubscriptionItem(subscription)
+        const priceId = item?.price.id
+        const newPlan = priceId ? resolvePaidPlanFromPriceId(priceId) : null
+        if (priceId && !newPlan) {
+          logger.warn('Unsupported Stripe price ID in customer.subscription.updated', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            subscriptionId: subscription.id,
+            priceId,
+          })
+        }
+
+        const subscriptionPayload: Record<string, unknown> = {
+          organization_id: org.id,
+          status: mappedStatus.subscriptionStatus,
+          current_period_start: new Date((item?.current_period_start ?? 0) * 1000).toISOString(),
+          current_period_end: new Date((item?.current_period_end ?? 0) * 1000).toISOString(),
+          amount_cents: item?.price.unit_amount || 0,
+          plan: newPlan || org.plan,
+        }
+
+        const subscriptionApplied = await upsertSubscriptionForEvent(
+          supabase,
+          subscription.id,
+          event,
+          subscriptionPayload
+        )
+
+        if (!subscriptionApplied) {
+          logger.info('Skipped customer.subscription.updated due to stale subscription state', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            subscriptionId: subscription.id,
+          })
+          break
+        }
+
+        const orgUpdate: Record<string, unknown> = {
+          status: mappedStatus.organizationStatus,
+          stripe_subscription_id: subscription.id,
+        }
+
+        if (
+          newPlan &&
+          newPlan !== org.plan &&
+          (mappedStatus.organizationStatus === 'active' || mappedStatus.organizationStatus === 'past_due')
+        ) {
+          const limits = PLAN_LIMITS[newPlan]
+          orgUpdate.plan = newPlan
+          orgUpdate.device_limit = limits.devices
+          orgUpdate.agent_limit = limits.agents
+          orgUpdate.user_limit = limits.users
+        }
+
+        const orgApplied = await updateOrganizationForEvent(supabase, org.id, event, orgUpdate)
+        if (!orgApplied) {
+          logger.info('Skipped customer.subscription.updated due to stale organization state', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+          })
+          break
+        }
+
+        if (newPlan && newPlan !== org.plan) {
+          await safeInsertAuditLog(supabase, {
+            organization_id: org.id,
+            actor_type: 'webhook',
+            actor_id: 'stripe',
+            action: 'subscription.plan_changed',
+            resource_type: 'subscription',
+            resource_id: subscription.id,
+            metadata: { old_plan: org.plan, new_plan: newPlan, price_id: priceId },
+          })
+        }
+
         break
       }
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
         const customerId = getCustomerId(subscription.customer)
-        if (!customerId) break
-
-        // Get organization
-        const { data: org } = await supabase
-          .from('organizations')
-          .select('id')
-          .eq('stripe_customer_id', customerId)
-          .single()
-
-        if (org) {
-          await supabase
-            .from('organizations')
-            .update({
-              status: 'cancelled',
-              cancelled_at: new Date().toISOString(),
-            })
-            .eq('id', org.id)
-
-          await supabase
-            .from('subscriptions')
-            .update({ status: 'cancelled' })
-            .eq('stripe_subscription_id', subscription.id)
-
-          // Audit log
-          await supabase.from('audit_logs').insert({
-            organization_id: org.id,
-            actor_type: 'webhook',
-            actor_id: 'stripe',
-            action: 'subscription.cancelled',
-            resource_type: 'subscription',
-            resource_id: subscription.id,
+        if (!customerId) {
+          logger.warn('customer.subscription.deleted missing customer id', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
           })
-
-          // Send cancellation email
-          const cancelRecipients = await getOrgRecipients(supabase, org.id)
-          const { data: cancelOrg } = await supabase
-            .from('organizations')
-            .select('name')
-            .eq('id', org.id)
-            .single()
-          if (cancelOrg && cancelRecipients.length > 0) {
-            sendSubscriptionCancelledEmail(cancelOrg.name, cancelRecipients).catch(err =>
-              logger.error('[Webhook] Failed to send cancellation email', err, { route: 'api/webhook/stripe' })
-            )
-          }
+          break
         }
+
+        const org = await getOrganizationByCustomerId(supabase, customerId)
+        if (!org) {
+          logger.warn('customer.subscription.deleted organization not found', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            customerId,
+          })
+          break
+        }
+
+        if (isStripeEventStale(event.created, org.stripe_last_event_created)) {
+          logger.info('Skipping stale customer.subscription.deleted event', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+          })
+          break
+        }
+
+        const orgApplied = await updateOrganizationForEvent(supabase, org.id, event, {
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+        })
+
+        if (!orgApplied) {
+          logger.info('Skipped customer.subscription.deleted due to stale organization state', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+          })
+          break
+        }
+
+        await upsertSubscriptionForEvent(supabase, subscription.id, event, {
+          organization_id: org.id,
+          plan: org.plan,
+          status: 'cancelled',
+          current_period_start: new Date().toISOString(),
+          current_period_end: new Date().toISOString(),
+          amount_cents: 0,
+        })
+
+        await safeInsertAuditLog(supabase, {
+          organization_id: org.id,
+          actor_type: 'webhook',
+          actor_id: 'stripe',
+          action: 'subscription.cancelled',
+          resource_type: 'subscription',
+          resource_id: subscription.id,
+        })
+
+        const recipients = await getOrgRecipients(supabase, org.id)
+        if (recipients.length > 0) {
+          await sendWebhookLifecycleEmail(
+            () => sendSubscriptionCancelledEmail(org.name, recipients),
+            {
+              eventId: event.id,
+              organizationId: org.id,
+              emailType: 'subscription_cancelled',
+            }
+          )
+        }
+
         break
       }
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
         const customerId = getCustomerId(invoice.customer)
-        if (!customerId) break
-
-        // Get organization
-        const { data: org } = await supabase
-          .from('organizations')
-          .select('id')
-          .eq('stripe_customer_id', customerId)
-          .single()
-
-        if (org) {
-          await supabase
-            .from('organizations')
-            .update({ status: 'past_due' })
-            .eq('id', org.id)
-
-          // Audit log
-          await supabase.from('audit_logs').insert({
-            organization_id: org.id,
-            actor_type: 'webhook',
-            actor_id: 'stripe',
-            action: 'subscription.payment_failed',
-            resource_type: 'invoice',
-            resource_id: invoice.id ?? '',
-            metadata: { amount: invoice.amount_due },
+        if (!customerId) {
+          logger.warn('invoice.payment_failed missing customer id', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
           })
-
-          // Send payment failure notification email
-          const failRecipients = await getOrgRecipients(supabase, org.id)
-          const { data: failOrg } = await supabase
-            .from('organizations')
-            .select('name')
-            .eq('id', org.id)
-            .single()
-          if (failOrg && failRecipients.length > 0) {
-            const amountFormatted = invoice.amount_due
-              ? `${(invoice.amount_due / 100).toFixed(2)}`
-              : 'unknown'
-            const currency = (invoice.currency ?? 'gbp').toUpperCase()
-            sendPaymentFailedEmail(failOrg.name, amountFormatted, currency, failRecipients).catch(err =>
-              logger.error('[Webhook] Failed to send payment failed email', err, { route: 'api/webhook/stripe' })
-            )
-          }
+          break
         }
+
+        const org = await getOrganizationByCustomerId(supabase, customerId)
+        if (!org) {
+          logger.warn('invoice.payment_failed organization not found', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            customerId,
+          })
+          break
+        }
+
+        if (isStripeEventStale(event.created, org.stripe_last_event_created)) {
+          logger.info('Skipping stale invoice.payment_failed event', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+          })
+          break
+        }
+
+        await updateOrganizationForEvent(supabase, org.id, event, { status: 'past_due' })
+
+        const stripeSubscriptionId = getInvoiceSubscriptionId(invoice)
+        if (stripeSubscriptionId) {
+          await upsertSubscriptionForEvent(supabase, stripeSubscriptionId, event, {
+            organization_id: org.id,
+            plan: org.plan,
+            status: 'past_due',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            amount_cents: invoice.amount_due || 0,
+          })
+        }
+
+        await safeInsertAuditLog(supabase, {
+          organization_id: org.id,
+          actor_type: 'webhook',
+          actor_id: 'stripe',
+          action: 'subscription.payment_failed',
+          resource_type: 'invoice',
+          resource_id: invoice.id ?? '',
+          metadata: { amount: invoice.amount_due, currency: invoice.currency },
+        })
+
+        const failRecipients = await getOrgRecipients(supabase, org.id)
+        if (failRecipients.length > 0) {
+          const amountFormatted = invoice.amount_due
+            ? `${(invoice.amount_due / 100).toFixed(2)}`
+            : 'unknown'
+          const currency = (invoice.currency ?? 'gbp').toUpperCase()
+
+          await sendWebhookLifecycleEmail(
+            () => sendPaymentFailedEmail(org.name, amountFormatted, currency, failRecipients),
+            {
+              eventId: event.id,
+              organizationId: org.id,
+              emailType: 'payment_failed',
+            }
+          )
+        }
+
         break
       }
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice
         const customerId = getCustomerId(invoice.customer)
-        if (!customerId) break
-
-        // Get organization
-        const { data: org } = await supabase
-          .from('organizations')
-          .select('id, status')
-          .eq('stripe_customer_id', customerId)
-          .single()
-
-        if (org && org.status === 'past_due') {
-          await supabase
-            .from('organizations')
-            .update({ status: 'active' })
-            .eq('id', org.id)
+        if (!customerId) {
+          logger.warn('invoice.payment_succeeded missing customer id', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+          })
+          break
         }
+
+        const org = await getOrganizationByCustomerId(supabase, customerId)
+        if (!org) {
+          logger.warn('invoice.payment_succeeded organization not found', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            customerId,
+          })
+          break
+        }
+
+        if (isStripeEventStale(event.created, org.stripe_last_event_created)) {
+          logger.info('Skipping stale invoice.payment_succeeded event', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+          })
+          break
+        }
+
+        await updateOrganizationForEvent(supabase, org.id, event, {
+          status: 'active',
+          suspended_at: null,
+        })
+
+        const stripeSubscriptionId = getInvoiceSubscriptionId(invoice)
+        if (stripeSubscriptionId) {
+          await upsertSubscriptionForEvent(supabase, stripeSubscriptionId, event, {
+            organization_id: org.id,
+            plan: org.plan,
+            status: 'active',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date().toISOString(),
+            amount_cents: invoice.amount_paid || 0,
+          })
+        }
+
+        await safeInsertAuditLog(supabase, {
+          organization_id: org.id,
+          actor_type: 'webhook',
+          actor_id: 'stripe',
+          action: 'subscription.payment_recovered',
+          resource_type: 'invoice',
+          resource_id: invoice.id ?? '',
+          metadata: {
+            amount_paid: invoice.amount_paid,
+            currency: invoice.currency,
+          },
+        })
+
         break
       }
+
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge
+        await handleRefundEvent(supabase, event, stripeClient, charge)
+        break
+      }
+
+      case 'charge.dispute.created':
+      case 'charge.dispute.closed': {
+        const dispute = event.data.object as Stripe.Dispute
+        await handleDisputeEvent(supabase, event, stripeClient, dispute)
+        break
+      }
+
+      default:
+        logger.info('Unhandled Stripe event type received', {
+          route: 'api/webhook/stripe',
+          eventId: event.id,
+          eventType: event.type,
+        })
     }
 
+    await markStripeWebhookEventProcessed(supabase, event.id)
     return NextResponse.json({ received: true })
   } catch (error) {
-    logger.error('Webhook error', error, { route: 'api/webhook/stripe' })
+    if (eventTrackingStarted) {
+      const errorMessage = error instanceof Error ? error.message : 'Webhook handler failed'
+      await markStripeWebhookEventFailed(supabase, event.id, errorMessage)
+    }
+    logger.error('Webhook error', error, { route: 'api/webhook/stripe', eventId: event.id })
     return NextResponse.json(
       { error: 'Webhook handler failed' },
       { status: 500 }

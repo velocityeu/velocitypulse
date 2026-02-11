@@ -4,6 +4,7 @@ import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/db/client'
 import { ensureUserInDb } from '@/lib/api/ensure-user'
 import { logger } from '@/lib/logger'
+import { resolvePaidPlanFromPriceId } from '@/lib/stripe-pricing'
 
 // Force Node.js runtime (not Edge) - required for Stripe
 export const runtime = 'nodejs'
@@ -41,6 +42,13 @@ export async function POST(request: Request) {
     if (!priceId || !organizationId) {
       return NextResponse.json(
         { error: 'Missing priceId or organizationId' },
+        { status: 400 }
+      )
+    }
+
+    if (!resolvePaidPlanFromPriceId(priceId)) {
+      return NextResponse.json(
+        { error: 'Invalid priceId. Only starter and unlimited plans are allowed.' },
         { status: 400 }
       )
     }

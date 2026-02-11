@@ -4,6 +4,7 @@ export {
   getNotificationService,
   triggerDeviceNotification,
   triggerAgentNotification,
+  triggerScanCompleteNotification,
 } from './service'
 
 export type {

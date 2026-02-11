@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { authenticateAgent } from '@/lib/api/agent-auth'
 import { createServiceClient } from '@/lib/db/client'
 import { logger } from '@/lib/logger'
+import { triggerScanCompleteNotification } from '@/lib/notifications'
 import { checkAgentRateLimit, checkOrgMonthlyLimit, incrementUsage } from '@/lib/api/rate-limit'
 import { rateLimited } from '@/lib/api/errors'
 import type { AgentDiscoveryRequest, AgentDiscoveryResponse, DiscoveredDevice, DiscoveryMethod } from '@/types'
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
     // Verify segment belongs to this agent and organization
     const { data: segment, error: segmentError } = await supabase
       .from('network_segments')
-      .select('id, agent_id, organization_id')
+      .select('id, name, agent_id, organization_id')
       .eq('id', body.segment_id)
       .eq('agent_id', agentContext.agentId)
       .eq('organization_id', agentContext.organizationId)
@@ -133,6 +134,27 @@ export async function POST(request: Request) {
       updated,
       unchanged,
     }
+
+    // Fire scan.complete notifications without blocking agent responses
+    triggerScanCompleteNotification(
+      agentContext.organizationId,
+      body.segment_id,
+      segment.name || body.segment_id,
+      {
+        agent_id: agentContext.agentId,
+        scan_timestamp: body.scan_timestamp || new Date().toISOString(),
+        discovered_count: body.devices.length,
+        created_count: created,
+        updated_count: updated,
+        unchanged_count: unchanged,
+        segment_id: body.segment_id,
+      }
+    ).catch((notifyError) => {
+      logger.error('Scan complete notification failed', notifyError, {
+        route: 'api/agent/devices/discovered',
+        segmentId: body.segment_id,
+      })
+    })
 
     return NextResponse.json(response)
   } catch (error) {

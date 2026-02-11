@@ -154,17 +154,30 @@ export async function POST(request: Request) {
       // Non-fatal: organization is still usable without audit log
     }
 
-    // Send welcome email (non-fatal)
+    // Send welcome email with explicit delivery visibility (non-fatal)
     const ownerEmail = dbUser?.email
+    let welcomeEmailSent: boolean | null = null
     if (ownerEmail) {
-      sendWelcomeEmail(name, ownerEmail).catch(err =>
-        logger.error('Failed to send welcome email', err, { route: 'api/onboarding' })
-      )
+      try {
+        welcomeEmailSent = await sendWelcomeEmail(name, ownerEmail)
+        if (!welcomeEmailSent) {
+          logger.warn('Welcome email delivery failed', {
+            route: 'api/onboarding',
+            organizationId: newOrg.id,
+            ownerEmail,
+          })
+        }
+      } catch (emailError) {
+        logger.error('Failed to send welcome email', emailError, { route: 'api/onboarding' })
+      }
     }
 
     return NextResponse.json({
       organization: newOrg,
       isNew: true,
+      email: {
+        welcome_sent: welcomeEmailSent,
+      },
     })
   } catch (error) {
     logger.error('Onboarding error', error, { route: 'api/onboarding' })

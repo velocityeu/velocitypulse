@@ -7,6 +7,7 @@ import {
   sendTrialExpiredEmail,
   sendAccountSuspendedEmail,
 } from '@/lib/emails/lifecycle'
+import { triggerAgentNotification } from '@/lib/notifications'
 
 export const runtime = 'nodejs'
 
@@ -33,8 +34,12 @@ async function handleLifecycle(request: NextRequest) {
   const supabase = createServiceClient()
   const results = {
     warnings_sent: 0,
+    warning_email_failures: 0,
     trials_expired: 0,
+    trial_expired_email_failures: 0,
     orgs_suspended: 0,
+    suspension_email_failures: 0,
+    agent_offline_notifications: 0,
     orgs_purged: 0,
     audit_logs_pruned: 0,
     usage_records_pruned: 0,
@@ -76,19 +81,27 @@ async function handleLifecycle(request: NextRequest) {
         (new Date(org.trial_ends_at!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
       ))
 
-      await sendTrialExpiringEmail(org.name, daysLeft, recipients)
+      const warningSent = await sendTrialExpiringEmail(org.name, daysLeft, recipients)
+      if (!warningSent) {
+        logger.warn('[Lifecycle] Trial warning email delivery failed', {
+          route: 'api/cron/lifecycle',
+          organizationId: org.id,
+          daysLeft,
+        })
+        results.warning_email_failures++
+      } else {
+        await supabase.from('audit_logs').insert({
+          organization_id: org.id,
+          actor_type: 'system',
+          actor_id: 'cron-lifecycle',
+          action: 'organization.trial_warning_sent',
+          resource_type: 'organization',
+          resource_id: org.id,
+          metadata: { days_left: daysLeft },
+        })
 
-      await supabase.from('audit_logs').insert({
-        organization_id: org.id,
-        actor_type: 'system',
-        actor_id: 'cron-lifecycle',
-        action: 'organization.trial_warning_sent',
-        resource_type: 'organization',
-        resource_id: org.id,
-        metadata: { days_left: daysLeft },
-      })
-
-      results.warnings_sent++
+        results.warnings_sent++
+      }
     }
 
     // ===== Job 2: Trial Expiry =====
@@ -110,7 +123,14 @@ async function handleLifecycle(request: NextRequest) {
 
       const recipients = await getOrgRecipients(supabase, org.id)
       if (recipients.length > 0) {
-        await sendTrialExpiredEmail(org.name, recipients)
+        const expiredSent = await sendTrialExpiredEmail(org.name, recipients)
+        if (!expiredSent) {
+          logger.warn('[Lifecycle] Trial expired email delivery failed', {
+            route: 'api/cron/lifecycle',
+            organizationId: org.id,
+          })
+          results.trial_expired_email_failures++
+        }
       }
 
       await supabase.from('audit_logs').insert({
@@ -160,7 +180,15 @@ async function handleLifecycle(request: NextRequest) {
 
       const recipients = await getOrgRecipients(supabase, org.id)
       if (recipients.length > 0) {
-        await sendAccountSuspendedEmail(org.name, 'grace_period_exceeded', recipients)
+        const suspensionSent = await sendAccountSuspendedEmail(org.name, 'grace_period_exceeded', recipients)
+        if (!suspensionSent) {
+          logger.warn('[Lifecycle] Account suspended email delivery failed', {
+            route: 'api/cron/lifecycle',
+            organizationId: org.id,
+            reason: 'grace_period_exceeded',
+          })
+          results.suspension_email_failures++
+        }
       }
 
       await supabase.from('audit_logs').insert({
@@ -176,7 +204,47 @@ async function handleLifecycle(request: NextRequest) {
       results.orgs_suspended++
     }
 
-    // ===== Job 4: Data Retention Cleanup (30 days after cancellation) =====
+    // ===== Job 4: Agent offline transition notifications =====
+    const offlineThreshold = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    const { data: offlineAgents } = await supabase
+      .from('agents')
+      .select('id, organization_id, name, last_seen_at')
+      .eq('is_enabled', true)
+      .not('last_seen_at', 'is', null)
+      .lt('last_seen_at', offlineThreshold)
+
+    for (const agent of offlineAgents ?? []) {
+      const { data: state } = await supabase
+        .from('agent_notification_state')
+        .select('last_notified_state')
+        .eq('agent_id', agent.id)
+        .maybeSingle<{ last_notified_state: 'online' | 'offline' }>()
+
+      if (state?.last_notified_state === 'offline') continue
+
+      await triggerAgentNotification(
+        agent.organization_id,
+        agent.id,
+        agent.name || agent.id,
+        'agent.offline',
+        {
+          last_seen_at: agent.last_seen_at,
+        }
+      )
+
+      await supabase
+        .from('agent_notification_state')
+        .upsert({
+          agent_id: agent.id,
+          organization_id: agent.organization_id,
+          last_notified_state: 'offline',
+          last_transition_at: new Date().toISOString(),
+        })
+
+      results.agent_offline_notifications++
+    }
+
+    // ===== Job 5: Data Retention Cleanup (30 days after cancellation) =====
     const retentionThreshold = new Date()
     retentionThreshold.setDate(retentionThreshold.getDate() - GRACE_PERIODS.dataRetention)
 
@@ -204,7 +272,7 @@ async function handleLifecycle(request: NextRequest) {
       results.orgs_purged++
     }
 
-    // ===== Job 5: Prune Old Audit Logs (365 days retention) =====
+    // ===== Job 6: Prune Old Audit Logs (365 days retention) =====
     try {
       const { data: auditPruneCount } = await supabase.rpc('prune_audit_logs', { retention_days: 365 })
       results.audit_logs_pruned = auditPruneCount ?? 0
@@ -212,7 +280,7 @@ async function handleLifecycle(request: NextRequest) {
       logger.error('[Lifecycle] Audit log pruning failed', pruneError, { route: 'api/cron/lifecycle' })
     }
 
-    // ===== Job 6: Expire Pending Invitations =====
+    // ===== Job 7: Expire Pending Invitations =====
     try {
       const { count: expiredCount } = await supabase
         .from('invitations')
@@ -224,7 +292,7 @@ async function handleLifecycle(request: NextRequest) {
       logger.error('[Lifecycle] Invitation expiry failed', expireError, { route: 'api/cron/lifecycle' })
     }
 
-    // ===== Job 7: Prune Old Hourly API Usage Records (7 days) =====
+    // ===== Job 8: Prune Old Hourly API Usage Records (7 days) =====
     try {
       const { data: usagePruneCount } = await supabase.rpc('prune_api_usage')
       results.usage_records_pruned = usagePruneCount ?? 0

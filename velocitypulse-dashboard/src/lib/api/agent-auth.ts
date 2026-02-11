@@ -4,6 +4,10 @@ import crypto from 'crypto'
 import type { AgentContext } from '@/types'
 import { API_KEY_PREFIX } from '@/lib/constants'
 import { verifyAgentApiKey } from '@/lib/api/agent-key'
+import { logger } from '@/lib/logger'
+import { triggerAgentNotification } from '@/lib/notifications'
+
+const AGENT_ONLINE_THRESHOLD_MS = 5 * 60 * 1000
 
 /**
  * Authenticates an agent via API key in Authorization header, X-Agent-Key, or X-API-Key header
@@ -61,13 +65,55 @@ export async function authenticateAgent(): Promise<AgentContext | null> {
                    'unknown'
 
   const supabase = createServiceClient()
+  const { data: existingAgent } = await supabase
+    .from('agents')
+    .select('id, name, last_seen_at')
+    .eq('id', agentContext.agentId)
+    .maybeSingle<{
+      id: string
+      name: string
+      last_seen_at: string | null
+    }>()
+
+  const now = new Date()
+  const wasOnline = existingAgent?.last_seen_at
+    ? (now.getTime() - new Date(existingAgent.last_seen_at).getTime()) < AGENT_ONLINE_THRESHOLD_MS
+    : false
+
   await supabase
     .from('agents')
     .update({
-      last_seen_at: new Date().toISOString(),
+      last_seen_at: now.toISOString(),
       last_ip_address: clientIp,
     })
     .eq('id', agentContext.agentId)
+
+  if (!wasOnline) {
+    triggerAgentNotification(
+      agentContext.organizationId,
+      agentContext.agentId,
+      existingAgent?.name || agentContext.agentName,
+      'agent.online',
+      {
+        ip_address: clientIp,
+        last_seen_at: existingAgent?.last_seen_at || null,
+      }
+    ).catch((notifyError) => {
+      logger.error('Failed to emit agent.online notification', notifyError, {
+        route: 'lib/api/agent-auth',
+        agentId: agentContext.agentId,
+      })
+    })
+
+    await supabase
+      .from('agent_notification_state')
+      .upsert({
+        agent_id: agentContext.agentId,
+        organization_id: agentContext.organizationId,
+        last_notified_state: 'online',
+        last_transition_at: now.toISOString(),
+      })
+  }
 
   return agentContext
 }

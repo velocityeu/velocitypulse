@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { generateInvitationToken, getInvitationExpiry } from '@/lib/invitations'
 import { sendMemberInvitationEmail } from '@/lib/emails/lifecycle'
+import { logger } from '@/lib/logger'
 import type { MemberPermissions } from '@/types'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.velocitypulse.io'
@@ -89,7 +90,26 @@ export async function POST(
       : 'A team member'
 
     const acceptUrl = `${APP_URL}/accept-invite?token=${newToken}`
-    await sendMemberInvitationEmail(inviterName, org?.name || 'your organization', invitation.role, acceptUrl, invitation.email)
+    const sent = await sendMemberInvitationEmail(
+      inviterName,
+      org?.name || 'your organization',
+      invitation.role,
+      acceptUrl,
+      invitation.email
+    )
+
+    if (!sent) {
+      logger.warn('member.invitation resend email delivery failed', {
+        route: 'api/dashboard/invitations/[id]/resend',
+        invitationId: id,
+        organizationId: membership.organization_id,
+        email: invitation.email,
+      })
+      return NextResponse.json(
+        { error: 'Invitation token refreshed but email delivery failed. Please retry.' },
+        { status: 502 }
+      )
+    }
 
     // Audit log
     await supabase.from('audit_logs').insert({

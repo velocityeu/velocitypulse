@@ -36,8 +36,8 @@ export async function POST(request: Request) {
       console.log('Partner application:', { companyName, contactName, email })
     }
 
-    // Deliver via email and store in Supabase
-    await deliverPartnerForm({
+    // Deliver via configured sinks with explicit success contract
+    const delivery = await deliverPartnerForm({
       companyName,
       website,
       contactName,
@@ -51,10 +51,21 @@ export async function POST(request: Request) {
       taxId,
       businessDescription,
     })
+    if (!delivery.success) {
+      const status = delivery.configured_sinks === 0 ? 503 : 502
+      return NextResponse.json(
+        {
+          error: 'Failed to deliver your application. Please try again later.',
+          ...(isDevelopment() ? { delivery } : {}),
+        },
+        { status }
+      )
+    }
 
     return NextResponse.json({
       success: true,
       message: 'Thank you for your application. We will review it and get back to you within 2-3 business days.',
+      degraded: delivery.failed_sinks > 0,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { getOrganizationForUser } from '@/lib/api/organization'
+import { validateNotificationChannelConfig } from '@/lib/notifications/channel-validation'
+import type { NotificationChannelType } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,7 +53,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
 
-    const body = await request.json()
+    let body: { name?: string; channel_type?: NotificationChannelType; config?: unknown }
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
     const { name, channel_type, config } = body
 
     if (!name || !channel_type || !config) {
@@ -61,15 +69,29 @@ export async function POST(request: Request) {
       )
     }
 
+    if (!['email', 'slack', 'teams', 'webhook'].includes(channel_type)) {
+      return NextResponse.json({ error: 'Invalid channel_type' }, { status: 400 })
+    }
+
+    const normalizedName = name.trim()
+    if (normalizedName.length === 0 || normalizedName.length > 120) {
+      return NextResponse.json({ error: 'name must be between 1 and 120 characters' }, { status: 400 })
+    }
+
+    const validatedConfig = validateNotificationChannelConfig(channel_type, config)
+    if (!validatedConfig.success) {
+      return NextResponse.json(validatedConfig.error, { status: 400 })
+    }
+
     const supabase = createServiceClient()
 
     const { data: channel, error } = await supabase
       .from('notification_channels')
       .insert({
         organization_id: org.id,
-        name,
+        name: normalizedName,
         channel_type,
-        config,
+        config: validatedConfig.data,
         is_enabled: true,
       })
       .select()

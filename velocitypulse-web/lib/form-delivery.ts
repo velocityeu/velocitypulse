@@ -24,62 +24,106 @@ interface PartnerSubmission {
   businessDescription?: string
 }
 
+type DeliverySink = 'email' | 'storage' | 'zoho'
+
+interface DeliverySinkResult {
+  sink: DeliverySink
+  configured: boolean
+  success: boolean
+  error?: string
+}
+
+export interface FormDeliveryResult {
+  success: boolean
+  configured_sinks: number
+  successful_sinks: number
+  failed_sinks: number
+  sinks: DeliverySinkResult[]
+}
+
+function summarizeDeliveryResults(sinks: DeliverySinkResult[]): FormDeliveryResult {
+  const configured = sinks.filter((result) => result.configured)
+  const successful = configured.filter((result) => result.success)
+  const failed = configured.filter((result) => !result.success)
+
+  return {
+    success: successful.length > 0,
+    configured_sinks: configured.length,
+    successful_sinks: successful.length,
+    failed_sinks: failed.length,
+    sinks,
+  }
+}
+
 /**
- * Deliver a contact form submission via email and Supabase
+ * Deliver a contact form submission via email and Supabase/Zoho.
+ * Success requires at least one configured sink to succeed.
  */
-export async function deliverContactForm(data: ContactSubmission): Promise<void> {
-  const results = await Promise.allSettled([
+export async function deliverContactForm(data: ContactSubmission): Promise<FormDeliveryResult> {
+  const results = await Promise.all([
     emailContactForm(data),
     storeContactForm(data),
     zohoContactTicket(data),
   ])
 
   for (const result of results) {
-    if (result.status === 'rejected') {
-      console.error('[FormDelivery] Contact form delivery error:', result.reason)
+    if (result.configured && !result.success) {
+      console.error('[FormDelivery] Contact form delivery error:', {
+        sink: result.sink,
+        error: result.error,
+      })
     }
   }
+
+  return summarizeDeliveryResults(results)
 }
 
 /**
- * Deliver a partner form submission via email and Supabase
+ * Deliver a partner form submission via email and Supabase/Zoho.
+ * Success requires at least one configured sink to succeed.
  */
-export async function deliverPartnerForm(data: PartnerSubmission): Promise<void> {
-  const results = await Promise.allSettled([
+export async function deliverPartnerForm(data: PartnerSubmission): Promise<FormDeliveryResult> {
+  const results = await Promise.all([
     emailPartnerForm(data),
     storePartnerForm(data),
     zohoPartnerTicket(data),
   ])
 
   for (const result of results) {
-    if (result.status === 'rejected') {
-      console.error('[FormDelivery] Partner form delivery error:', result.reason)
+    if (result.configured && !result.success) {
+      console.error('[FormDelivery] Partner form delivery error:', {
+        sink: result.sink,
+        error: result.error,
+      })
     }
   }
+
+  return summarizeDeliveryResults(results)
 }
 
 // --- Email delivery via Resend ---
 
-async function emailContactForm(data: ContactSubmission): Promise<void> {
+async function emailContactForm(data: ContactSubmission): Promise<DeliverySinkResult> {
   if (!isResendConfigured()) {
     if (isDevelopment()) console.log('[FormDelivery] Resend not configured, skipping email')
-    return
+    return { sink: 'email', configured: false, success: false }
   }
 
   const teamEmail = process.env.RESEND_TEAM_EMAIL || 'sales@velocitypulse.io'
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'VelocityPulse <noreply@velocitypulse.io>'
 
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: [teamEmail],
-      subject: `[Contact Form] ${data.subject} - ${data.name}`,
-      html: `
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [teamEmail],
+        subject: `[Contact Form] ${data.subject} - ${data.name}`,
+        html: `
 <h2>New Contact Form Submission</h2>
 <table style="border-collapse: collapse; width: 100%;">
   <tr><td style="padding: 8px; font-weight: bold;">Name:</td><td style="padding: 8px;">${escapeHtml(data.name)}</td></tr>
@@ -91,30 +135,51 @@ async function emailContactForm(data: ContactSubmission): Promise<void> {
 <p style="white-space: pre-wrap;">${escapeHtml(data.message)}</p>
 <hr>
 <p style="color: #666; font-size: 12px;">Submitted at ${new Date().toISOString()}</p>`,
-    }),
-  })
+      }),
+    })
+
+    if (!response.ok) {
+      const body = await response.text()
+      return {
+        sink: 'email',
+        configured: true,
+        success: false,
+        error: `Resend API returned ${response.status}: ${body}`,
+      }
+    }
+
+    return { sink: 'email', configured: true, success: true }
+  } catch (error) {
+    return {
+      sink: 'email',
+      configured: true,
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown email error',
+    }
+  }
 }
 
-async function emailPartnerForm(data: PartnerSubmission): Promise<void> {
+async function emailPartnerForm(data: PartnerSubmission): Promise<DeliverySinkResult> {
   if (!isResendConfigured()) {
     if (isDevelopment()) console.log('[FormDelivery] Resend not configured, skipping email')
-    return
+    return { sink: 'email', configured: false, success: false }
   }
 
   const teamEmail = process.env.RESEND_TEAM_EMAIL || 'partners@velocitypulse.io'
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'VelocityPulse <noreply@velocitypulse.io>'
 
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: [teamEmail],
-      subject: `[Partner Application] ${data.companyName}`,
-      html: `
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [teamEmail],
+        subject: `[Partner Application] ${data.companyName}`,
+        html: `
 <h2>New Partner Application</h2>
 <table style="border-collapse: collapse; width: 100%;">
   <tr><td style="padding: 8px; font-weight: bold;">Company:</td><td style="padding: 8px;">${escapeHtml(data.companyName)}</td></tr>
@@ -132,8 +197,28 @@ async function emailPartnerForm(data: PartnerSubmission): Promise<void> {
 ${data.businessDescription ? `<h3>Business Description</h3><p style="white-space: pre-wrap;">${escapeHtml(data.businessDescription)}</p>` : ''}
 <hr>
 <p style="color: #666; font-size: 12px;">Submitted at ${new Date().toISOString()}</p>`,
-    }),
-  })
+      }),
+    })
+
+    if (!response.ok) {
+      const body = await response.text()
+      return {
+        sink: 'email',
+        configured: true,
+        success: false,
+        error: `Resend API returned ${response.status}: ${body}`,
+      }
+    }
+
+    return { sink: 'email', configured: true, success: true }
+  } catch (error) {
+    return {
+      sink: 'email',
+      configured: true,
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown email error',
+    }
+  }
 }
 
 // --- Supabase storage ---
@@ -148,11 +233,11 @@ async function getSupabaseClient() {
   )
 }
 
-async function storeContactForm(data: ContactSubmission): Promise<void> {
+async function storeContactForm(data: ContactSubmission): Promise<DeliverySinkResult> {
   const supabase = await getSupabaseClient()
   if (!supabase) {
     if (isDevelopment()) console.log('[FormDelivery] Supabase not configured, skipping storage')
-    return
+    return { sink: 'storage', configured: false, success: false }
   }
 
   const { error } = await supabase.from('form_submissions').insert({
@@ -165,15 +250,22 @@ async function storeContactForm(data: ContactSubmission): Promise<void> {
   })
 
   if (error) {
-    console.error('[FormDelivery] Supabase insert error:', error.message)
+    return {
+      sink: 'storage',
+      configured: true,
+      success: false,
+      error: error.message,
+    }
   }
+
+  return { sink: 'storage', configured: true, success: true }
 }
 
-async function storePartnerForm(data: PartnerSubmission): Promise<void> {
+async function storePartnerForm(data: PartnerSubmission): Promise<DeliverySinkResult> {
   const supabase = await getSupabaseClient()
   if (!supabase) {
     if (isDevelopment()) console.log('[FormDelivery] Supabase not configured, skipping storage')
-    return
+    return { sink: 'storage', configured: false, success: false }
   }
 
   const { error } = await supabase.from('form_submissions').insert({
@@ -196,47 +288,74 @@ async function storePartnerForm(data: PartnerSubmission): Promise<void> {
   })
 
   if (error) {
-    console.error('[FormDelivery] Supabase insert error:', error.message)
+    return {
+      sink: 'storage',
+      configured: true,
+      success: false,
+      error: error.message,
+    }
   }
+
+  return { sink: 'storage', configured: true, success: true }
 }
 
 // --- Zoho ticket creation ---
 
-async function zohoContactTicket(data: ContactSubmission): Promise<void> {
+async function zohoContactTicket(data: ContactSubmission): Promise<DeliverySinkResult> {
   if (!isZohoConfigured()) {
     if (isDevelopment()) console.log('[FormDelivery] Zoho not configured, skipping ticket')
-    return
+    return { sink: 'zoho', configured: false, success: false }
   }
 
-  await createContactFormTicket({
-    name: data.name,
-    email: data.email,
-    organization: data.organization,
-    subject: data.subject,
-    message: data.message,
-  })
+  try {
+    await createContactFormTicket({
+      name: data.name,
+      email: data.email,
+      organization: data.organization,
+      subject: data.subject,
+      message: data.message,
+    })
+    return { sink: 'zoho', configured: true, success: true }
+  } catch (error) {
+    return {
+      sink: 'zoho',
+      configured: true,
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown Zoho error',
+    }
+  }
 }
 
-async function zohoPartnerTicket(data: PartnerSubmission): Promise<void> {
+async function zohoPartnerTicket(data: PartnerSubmission): Promise<DeliverySinkResult> {
   if (!isZohoConfigured()) {
     if (isDevelopment()) console.log('[FormDelivery] Zoho not configured, skipping ticket')
-    return
+    return { sink: 'zoho', configured: false, success: false }
   }
 
-  await createPartnerApplicationTicket({
-    companyName: data.companyName,
-    contactName: data.contactName,
-    email: data.email,
-    phone: data.phone,
-    country: data.country,
-    website: data.website,
-    clientCount: data.clientCount,
-    avgDevices: data.avgDevices,
-    tierPreference: data.tierPreference,
-    whiteLabel: data.whiteLabel,
-    taxId: data.taxId,
-    businessDescription: data.businessDescription,
-  })
+  try {
+    await createPartnerApplicationTicket({
+      companyName: data.companyName,
+      contactName: data.contactName,
+      email: data.email,
+      phone: data.phone,
+      country: data.country,
+      website: data.website,
+      clientCount: data.clientCount,
+      avgDevices: data.avgDevices,
+      tierPreference: data.tierPreference,
+      whiteLabel: data.whiteLabel,
+      taxId: data.taxId,
+      businessDescription: data.businessDescription,
+    })
+    return { sink: 'zoho', configured: true, success: true }
+  } catch (error) {
+    return {
+      sink: 'zoho',
+      configured: true,
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown Zoho error',
+    }
+  }
 }
 
 function escapeHtml(str: string): string {

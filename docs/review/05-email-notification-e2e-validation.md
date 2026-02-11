@@ -2,7 +2,12 @@
 
 Date: 2026-02-11  
 Scope: dashboard lifecycle/member/admin emails + dashboard alert notifications + marketing contact/partner form delivery  
-Method: static code path validation of trigger -> dispatch -> persistence -> observability.
+Method: static code path validation of trigger -> dispatch -> persistence -> observability, then post-remediation re-check.
+
+Revalidation notes (2026-02-11):
+
+- Remote DB now includes migration `015_agent_notification_state` supporting agent transition notification state.
+- Matrix updated after code changes in dashboard + marketing repos.
 
 Status legend:
 
@@ -14,104 +19,91 @@ Status legend:
 
 | Trigger | Expected Behavior | Current Behavior | Status | Evidence |
 |---|---|---|---|---|
-| Onboarding welcome email | New org owner gets welcome email with failure visibility | Email is sent fire-and-forget; failures can be silent | PARTIAL | `velocitypulse-dashboard/src/app/api/onboarding/route.ts:157`, `velocitypulse-dashboard/src/app/api/onboarding/route.ts:160`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:12` |
-| Trial expiring warning email | Sent once per policy window, with delivery confirmation | Cron sends email and writes audit marker regardless of send result | PARTIAL | `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:79`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:81`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:40` |
-| Trial expired email | Sent on suspension due to trial expiry | Trigger exists, but boolean send outcome is ignored | PARTIAL | `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:113`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:110` |
-| Account suspended email (grace period exceeded) | Sent when billing suspension occurs | Trigger exists, but send outcome is ignored | PARTIAL | `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:163`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:149` |
-| Subscription activated email | Sent after successful checkout lifecycle event | Triggered from Stripe webhook, fire-and-forget | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:145`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:152` |
-| Subscription cancelled email | Sent on cancellation lifecycle event | Triggered from Stripe webhook, fire-and-forget | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:265`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:272` |
-| Payment failed email | Sent to billing contacts on failed invoice | Trigger exists from webhook, but success/failure not persisted | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:309`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:321` |
-| Member invitation email | Invite email should be guaranteed/visible before reporting invite sent | Send function returns boolean but route does not validate it | PARTIAL | `velocitypulse-dashboard/src/app/api/dashboard/members/route.ts:315`, `velocitypulse-dashboard/src/app/api/dashboard/members/route.ts:318`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:196` |
-| Member invitation resend email | Resend should fail if email send fails | Same boolean outcome ignored | PARTIAL | `velocitypulse-dashboard/src/app/api/dashboard/invitations/[id]/resend/route.ts:92`, `velocitypulse-dashboard/src/app/api/dashboard/invitations/[id]/resend/route.ts:95` |
-| Member added notification email | Existing user added directly should receive notification | Send is awaited but result is ignored | PARTIAL | `velocitypulse-dashboard/src/app/api/dashboard/members/route.ts:252`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:233` |
-| Admin invitation email | Admin invite should be durable and auditable | Send outcome not checked before success response/audit | PARTIAL | `velocitypulse-dashboard/src/app/api/internal/admins/route.ts:223`, `velocitypulse-dashboard/src/app/api/internal/admins/route.ts:226` |
-| Device status alert notifications | Event -> matching rules -> channel sends -> history log | Implemented for device status changes with cooldown and history | PASS | `velocitypulse-dashboard/src/app/api/agent/devices/status/route.ts:137`, `velocitypulse-dashboard/src/lib/notifications/service.ts:29`, `velocitypulse-dashboard/src/lib/notifications/service.ts:145`, `velocitypulse-dashboard/src/lib/notifications/service.ts:238` |
-| Agent offline/online notifications | Agent events emitted when agent status changes | Event types exist in schema/UI but no producer emits them | FAIL | `velocitypulse-dashboard/src/lib/validations/index.ts:59`, `velocitypulse-dashboard/src/app/(dashboard)/notifications/page.tsx:52`, `velocitypulse-dashboard/src/lib/notifications/service.ts:292`, `velocitypulse-dashboard/src/app/api/agent/devices/status/route.ts:149` |
-| Scan complete notifications | Event emitted on scan completion | Event type exists but no producer path found | FAIL | `velocitypulse-dashboard/src/lib/validations/index.ts:59`, `velocitypulse-dashboard/src/app/(dashboard)/notifications/page.tsx:54`, `velocitypulse-dashboard/src/app/api/agent/devices/discovered/route.ts:94`, `velocitypulse-dashboard/src/app/api/agent/devices/discovered/route.ts:130` |
-| Notification channel config validation | Strong schema validation for create/update per channel type | Channels create/update accept raw config with minimal checks | PARTIAL | `velocitypulse-dashboard/src/app/api/notifications/channels/route.ts:57`, `velocitypulse-dashboard/src/app/api/notifications/channels/[channelId]/route.ts:60` |
-| Notification send retry/fallback | Retries/backoff/dead-letter for transient provider failures | Single-attempt sender calls; failures only logged to history | PARTIAL | `velocitypulse-dashboard/src/lib/notifications/service.ts:126`, `velocitypulse-dashboard/src/lib/notifications/service.ts:249`, `velocitypulse-dashboard/src/lib/notifications/senders/email.ts:36` |
-| Marketing contact form delivery | Success only when at least one durable sink succeeds | Route always returns success after delivery call | FAIL | `velocitypulse-web/app/api/contact/route.ts:27`, `velocitypulse-web/app/api/contact/route.ts:29`, `velocitypulse-web/lib/form-delivery.ts:31` |
-| Marketing partner form delivery | Same durability contract as contact form | Same always-success pattern | FAIL | `velocitypulse-web/app/api/partners/route.ts:40`, `velocitypulse-web/app/api/partners/route.ts:55`, `velocitypulse-web/lib/form-delivery.ts:48` |
-| Marketing email provider error handling | Resend non-2xx should be detected and surfaced | Fetch response status not checked in form-delivery email functions | FAIL | `velocitypulse-web/lib/form-delivery.ts:72`, `velocitypulse-web/lib/form-delivery.ts:107` |
-| Marketing form abuse control | API POST endpoints rate-limited in production architecture | In-memory limiter exists; not distributed across instances | PARTIAL | `velocitypulse-web/middleware.ts:4`, `velocitypulse-web/middleware.ts:14`, `velocitypulse-web/middleware.ts:91` |
+| Onboarding welcome email | New org owner gets welcome email with failure visibility | Route now awaits send and returns `welcome_sent` status in response payload | PASS | `velocitypulse-dashboard/src/app/api/onboarding/route.ts:162`, `velocitypulse-dashboard/src/app/api/onboarding/route.ts:179`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:12` |
+| Trial expiring warning email | Sent once per policy window, with delivery confirmation | Cron checks send result and only writes warning audit marker on successful delivery | PASS | `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:84`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:93`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:102` |
+| Trial expired email | Sent on suspension due to trial expiry | Send result is now checked/logged, but no durable retry queue exists | PARTIAL | `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:126`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:132`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:110` |
+| Account suspended email (grace period exceeded) | Sent when billing suspension occurs | Send result is checked/logged, but no durable retry queue exists | PARTIAL | `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:183`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:190`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:149` |
+| Subscription activated email | Sent after successful checkout lifecycle event | Webhook now uses send wrapper with explicit failure logging; failures are not persisted to dedicated delivery table | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:562`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:208` |
+| Subscription cancelled email | Sent on cancellation lifecycle event | Same wrapper pattern; no durable retry/dead-letter path | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:749`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:208` |
+| Payment failed email | Sent to billing contacts on failed invoice | Same wrapper pattern; no durable retry/dead-letter path | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:823`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:208` |
+| Member invitation email | Invite email should be guaranteed/visible before reporting invite sent | Route now blocks success and rolls back invite when send fails | PASS | `velocitypulse-dashboard/src/app/api/dashboard/members/route.ts:325`, `velocitypulse-dashboard/src/app/api/dashboard/members/route.ts:339`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:196` |
+| Member invitation resend email | Resend should fail if email send fails | Route now returns explicit error when resend delivery fails | PASS | `velocitypulse-dashboard/src/app/api/dashboard/invitations/[id]/resend/route.ts:93`, `velocitypulse-dashboard/src/app/api/dashboard/invitations/[id]/resend/route.ts:109` |
+| Member added notification email | Existing user added directly should receive notification | Route captures send result and surfaces `notification_email_sent` flag | PARTIAL | `velocitypulse-dashboard/src/app/api/dashboard/members/route.ts:255`, `velocitypulse-dashboard/src/app/api/dashboard/members/route.ts:286`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:233` |
+| Admin invitation email | Admin invite should be durable and auditable | Route now blocks success and removes invitation when email send fails | PASS | `velocitypulse-dashboard/src/app/api/internal/admins/route.ts:224`, `velocitypulse-dashboard/src/app/api/internal/admins/route.ts:238`, `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:212` |
+| Device status alert notifications | Event -> matching rules -> channel sends -> history log | Existing implementation remains in place | PASS | `velocitypulse-dashboard/src/app/api/agent/devices/status/route.ts:136`, `velocitypulse-dashboard/src/lib/notifications/service.ts:31`, `velocitypulse-dashboard/src/lib/notifications/service.ts:275` |
+| Agent offline/online notifications | Agent events emitted when agent status changes | Producers now implemented on heartbeat transition (`online`) and lifecycle cron (`offline`) with persistent transition state | PASS | `velocitypulse-dashboard/src/lib/api/agent-auth.ts:92`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:225`, `supabase/migrations/015_agent_notification_state.sql:5` |
+| Scan complete notifications | Event emitted on scan completion | Producer now triggers `scan.complete` after discovery ingestion | PASS | `velocitypulse-dashboard/src/app/api/agent/devices/discovered/route.ts:139`, `velocitypulse-dashboard/src/lib/notifications/service.ts:344` |
+| Notification channel config validation | Strong schema validation for create/update per channel type | Create/update routes now validate and normalize config per channel type | PASS | `velocitypulse-dashboard/src/lib/notifications/channel-validation.ts:42`, `velocitypulse-dashboard/src/app/api/notifications/channels/route.ts:81`, `velocitypulse-dashboard/src/app/api/notifications/channels/[channelId]/route.ts:92` |
+| Notification send retry/fallback | Retries/backoff/dead-letter for transient provider failures | In-process retries with backoff now exist, but no queue-backed retries or dead-letter capture | PARTIAL | `velocitypulse-dashboard/src/lib/notifications/service.ts:12`, `velocitypulse-dashboard/src/lib/notifications/service.ts:213`, `velocitypulse-dashboard/src/lib/notifications/service.ts:254` |
+| Marketing contact form delivery | Success only when at least one durable sink succeeds | API now fails when all configured sinks fail and returns degraded flag on partial success | PASS | `velocitypulse-web/lib/form-delivery.ts:62`, `velocitypulse-web/app/api/contact/route.ts:27`, `velocitypulse-web/app/api/contact/route.ts:42` |
+| Marketing partner form delivery | Same durability contract as contact form | Same sink-success contract as contact flow | PASS | `velocitypulse-web/lib/form-delivery.ts:85`, `velocitypulse-web/app/api/partners/route.ts:40`, `velocitypulse-web/app/api/partners/route.ts:68` |
+| Marketing email provider error handling | Resend non-2xx should be detected and surfaced | Resend HTTP failures now set explicit sink-level errors | PASS | `velocitypulse-web/lib/form-delivery.ts:147`, `velocitypulse-web/lib/form-delivery.ts:209` |
+| Marketing form abuse control | API POST endpoints rate-limited in production architecture | In-memory limiter remains; no distributed/shared limiter implementation yet | PARTIAL | `velocitypulse-web/middleware.ts:4`, `velocitypulse-web/middleware.ts:14`, `velocitypulse-web/middleware.ts:91` |
 
 ## Priority Findings
 
 ## P1
 
-### 1. Multiple email paths can report success when no email was actually delivered
-
-Scope:
-
-- Dashboard lifecycle/member/admin sends.
-- Marketing contact/partner form acknowledgements.
+### 1. Notification delivery still lacks durable queue/dead-letter semantics
 
 Why this matters:
 
-- Creates silent communication failures in customer-facing and revenue-adjacent workflows.
-- Operators cannot trust API success responses as proof of delivery.
+- Retries are currently process-local and short-lived.
+- Transient provider outages across deploys/restarts can still drop high-value notifications.
 
 Key evidence:
 
-- `velocitypulse-dashboard/src/lib/emails/lifecycle.ts:12`
-- `velocitypulse-dashboard/src/app/api/dashboard/members/route.ts:315`
-- `velocitypulse-dashboard/src/app/api/internal/admins/route.ts:223`
-- `velocitypulse-web/app/api/contact/route.ts:29`
-- `velocitypulse-web/lib/form-delivery.ts:72`
+- `velocitypulse-dashboard/src/lib/notifications/service.ts:12`
+- `velocitypulse-dashboard/src/lib/notifications/service.ts:213`
+- `docs/review/06-remediation-roadmap.md:196`
 
-### 2. Alert feature advertises agent/scan events that are never emitted
+### 2. Stripe lifecycle emails have failure visibility but no durable delivery persistence
 
 Why this matters:
 
-- Users can configure rules that never fire.
-- This is high risk for incident response expectations.
+- Webhook email failures are logged, but not persisted in a dedicated outbound-delivery record for support and audit workflows.
 
 Key evidence:
 
-- `velocitypulse-dashboard/src/lib/validations/index.ts:59`
-- `velocitypulse-dashboard/src/app/(dashboard)/notifications/page.tsx:52`
-- `velocitypulse-dashboard/src/lib/notifications/service.ts:292`
-- `velocitypulse-dashboard/src/app/api/agent/devices/status/route.ts:149`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:208`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:562`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:823`
 
 ## P2
 
-### 3. Notification channel mutation APIs lack strong config validation
-
-Evidence:
-
-- `velocitypulse-dashboard/src/app/api/notifications/channels/route.ts:57`
-- `velocitypulse-dashboard/src/app/api/notifications/channels/[channelId]/route.ts:60`
-
-### 4. No retry queue/dead-letter strategy for notification delivery
-
-Evidence:
-
-- `velocitypulse-dashboard/src/lib/notifications/service.ts:126`
-- `velocitypulse-dashboard/src/lib/notifications/service.ts:249`
-
-### 5. Marketing form rate-limiting is not horizontally durable
+### 3. Marketing form rate-limiting is still not horizontally durable
 
 Evidence:
 
 - `velocitypulse-web/middleware.ts:4`
-- `velocitypulse-web/middleware.ts:5`
+- `velocitypulse-web/middleware.ts:14`
+
+### 4. Some lifecycle email paths are visible but not yet standardized to a single delivery telemetry model
+
+Evidence:
+
+- `velocitypulse-dashboard/src/app/api/onboarding/route.ts:179`
+- `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:37`
+- `velocitypulse-dashboard/src/app/api/dashboard/members/route.ts:286`
 
 ## Commercial Readiness Verdict (Email/Notifications)
 
-Current status: **Not launch-ready for communication reliability guarantees.**
+Current status: **Improved, but still not launch-ready for communication reliability guarantees.**
 
 Launch blockers:
 
-1. Success responses without assured delivery (dashboard + marketing).
-2. Missing agent/scan notification event producers.
-3. No production-grade failure handling strategy for critical outbound communication.
+1. Add queue-backed retries + dead-letter capture for critical outbound notifications.
+2. Add durable outbound delivery history for Stripe lifecycle emails to support operations and auditability.
 
-## Remediation Plan (Email/Notifications)
+## Delta Since Previous Pass
 
-1. Define and enforce a delivery contract: API success requires at least one verified sink success (or explicit degraded response contract).
-2. In all dashboard email routes, check boolean send outcomes and record structured audit/log entries for failures.
-3. Implement agent offline/online and scan-complete event producers (or remove unsupported event types until implemented).
-4. Add strict per-channel schema validation for notification channel create/update routes.
-5. Add queued retries with exponential backoff and dead-letter capture for outbound email/webhook/slack/teams sends.
-6. Add operator observability: delivery metrics, alerting, and searchable history endpoints/views.
-7. Replace in-memory marketing API rate limiting with shared/distributed storage for production.
+Closed from previous P1 set:
+
+1. False-success responses for marketing contact/partner APIs.
+2. Missing `agent.offline/online` and `scan.complete` producers.
+3. Missing strict channel config validation on notification channel mutations.
+
+Still open (narrowed scope):
+
+1. Durable retry/dead-letter and operator telemetry depth.
+2. Distributed rate-limiter hardening for marketing POST endpoints.

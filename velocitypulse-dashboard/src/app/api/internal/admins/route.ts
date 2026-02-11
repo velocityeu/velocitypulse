@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/db/client'
 import { verifyInternalAccess, hasAdminRole } from '@/lib/api/internal-auth'
 import { generateInvitationToken, getInvitationExpiry } from '@/lib/invitations'
 import { sendAdminInvitationEmail } from '@/lib/emails/lifecycle'
+import { logger } from '@/lib/logger'
 import type { AdminRole } from '@/types'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.velocitypulse.io'
@@ -220,7 +221,24 @@ export async function POST(request: NextRequest) {
       : body.role
 
     const acceptUrl = `${APP_URL}/accept-invite?token=${token}`
-    await sendAdminInvitationEmail(inviterName, roleLabel, acceptUrl, email)
+    const sent = await sendAdminInvitationEmail(inviterName, roleLabel, acceptUrl, email)
+    if (!sent) {
+      await supabase
+        .from('invitations')
+        .delete()
+        .eq('id', invitation.id)
+
+      logger.warn('admin.invitation email delivery failed', {
+        route: 'api/internal/admins',
+        invitationId: invitation.id,
+        email,
+      })
+
+      return NextResponse.json(
+        { error: 'Invitation created but email delivery failed. Please retry.' },
+        { status: 502 }
+      )
+    }
 
     // Admin audit log
     await supabase.from('admin_audit_logs').insert({

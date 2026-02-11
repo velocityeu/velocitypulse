@@ -4,6 +4,7 @@ import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/db/client'
 import { logger } from '@/lib/logger'
 import { PLAN_LIMITS } from '@/lib/constants'
+import { resolvePaidPlanFromPriceId } from '@/lib/stripe-pricing'
 
 export const runtime = 'nodejs'
 
@@ -35,6 +36,14 @@ export async function POST(request: Request) {
 
     if (!priceId) {
       return NextResponse.json({ error: 'Missing priceId' }, { status: 400 })
+    }
+
+    const newPlan = resolvePaidPlanFromPriceId(priceId)
+    if (!newPlan) {
+      return NextResponse.json(
+        { error: 'Invalid priceId. Only starter and unlimited plans are allowed.' },
+        { status: 400 }
+      )
     }
 
     const supabase = createServiceClient()
@@ -74,8 +83,6 @@ export async function POST(request: Request) {
 
     const stripeClient = getStripe()
 
-    // Determine new plan from priceId
-    const newPlan = priceId === process.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited' : 'starter'
     const oldPlan = org.plan
 
     // Retrieve subscription to get the item ID

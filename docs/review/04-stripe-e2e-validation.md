@@ -2,7 +2,12 @@
 
 Date: 2026-02-11  
 Scope: `velocitypulse-dashboard` billing + webhook + lifecycle cron + internal subscription admin actions  
-Method: static code path validation against production SaaS billing scenarios.
+Method: static code path validation against production SaaS billing scenarios, then post-remediation re-check.
+
+Revalidation notes (2026-02-11):
+
+- Applied remote DB migrations `013`, `014`, `015` via `npx supabase db push`.
+- Verified remote/local migration parity through `npx supabase migration list` (both at `015`).
 
 Status legend:
 
@@ -14,102 +19,92 @@ Status legend:
 
 | Scenario | Expected Behavior | Current Behavior | Status | Evidence |
 |---|---|---|---|---|
-| Trial -> paid purchase (embedded checkout) | Server validates allowed price IDs and creates subscription checkout session | Embedded checkout flow exists, but `priceId` is accepted from client without whitelist | PARTIAL | `velocitypulse-dashboard/src/components/billing/EmbeddedCheckout.tsx:19`, `velocitypulse-dashboard/src/app/api/checkout/embedded/route.ts:35`, `velocitypulse-dashboard/src/app/api/checkout/embedded/route.ts:110` |
-| Paid plan purchase (hosted checkout) | Server validates allowed price IDs before Stripe session create | Hosted checkout route exists, but same client-supplied `priceId` trust | PARTIAL | `velocitypulse-dashboard/src/app/api/checkout/route.ts:39`, `velocitypulse-dashboard/src/app/api/checkout/route.ts:118` |
-| Billing portal access | Authorized billing users can open Stripe portal session | Implemented with role/permission checks and Stripe portal session creation | PASS | `velocitypulse-dashboard/src/app/api/billing/portal/route.ts:35`, `velocitypulse-dashboard/src/app/api/billing/portal/route.ts:69` |
-| `checkout.session.completed` webhook | Idempotent create/update of subscription + org sync | Handles event and updates org/subscription, but uses raw insert without idempotency | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:76`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:123`, `supabase/migrations/001_multi_tenant_schema.sql:231` |
-| `customer.subscription.updated` webhook | Safe status + plan reconciliation for all Stripe statuses | Handles event, but unknown statuses map to `incomplete` and can violate org status constraint | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:175`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:196`, `supabase/migrations/001_multi_tenant_schema.sql:24` |
-| `customer.subscription.deleted` webhook | Marks subscription/org cancelled with audit + communication | Implemented and sends cancellation email, but no idempotency guard | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:228`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:255`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:265` |
-| `invoice.payment_failed` webhook | Marks account `past_due`, records audit, notifies billing contacts | Implemented for status + audit + email | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:280`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:293`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:309` |
-| `invoice.payment_succeeded` webhook | Recovers from `past_due`, records recovery audit/notifications | Only flips org `past_due -> active`; no audit trail or communication | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:329`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:341` |
+| Trial -> paid purchase (embedded checkout) | Server validates allowed price IDs and creates subscription checkout session | Server rejects unknown `priceId` using strict paid-plan resolver | PASS | `velocitypulse-dashboard/src/app/api/checkout/embedded/route.ts:45`, `velocitypulse-dashboard/src/lib/stripe-pricing.ts:19` |
+| Paid plan purchase (hosted checkout) | Server validates allowed price IDs before Stripe session create | Same strict server-side allow-list enforcement as embedded flow | PASS | `velocitypulse-dashboard/src/app/api/checkout/route.ts:49`, `velocitypulse-dashboard/src/lib/stripe-pricing.ts:19` |
+| Billing portal access | Authorized billing users can open Stripe portal session | Role/permission checks and portal session creation are in place | PASS | `velocitypulse-dashboard/src/app/api/billing/portal/route.ts:35`, `velocitypulse-dashboard/src/app/api/billing/portal/route.ts:69` |
+| `checkout.session.completed` webhook | Idempotent create/update of subscription + org sync | Uses event ledger, stale-event guard, bounded updates, and upsert-style subscription handling | PASS | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:437`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:480`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:532`, `supabase/migrations/013_stripe_webhook_events.sql:4`, `supabase/migrations/014_stripe_event_freshness.sql:6` |
+| `customer.subscription.updated` webhook | Safe status + plan reconciliation for all Stripe statuses | Stripe statuses now map to valid local org/subscription states; stale events skipped | PASS | `velocitypulse-dashboard/src/lib/stripe-webhook-lifecycle.ts:6`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:604`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:660` |
+| `customer.subscription.deleted` webhook | Marks subscription/org cancelled with audit + communication | Handler now includes stale guard + deterministic local updates + audit + send wrapper | PASS | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:706`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:729`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:738`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:749` |
+| `invoice.payment_failed` webhook | Marks account `past_due`, records audit, notifies billing contacts | Stale-safe org/subscription update + audit + lifecycle email send wrapper | PASS | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:783`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:796`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:806`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:823` |
+| `invoice.payment_succeeded` webhook | Recovers from `past_due`, records recovery audit/notifications | Recovery audit added and local state reconciled; no dedicated recovery email path yet | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:857`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:883` |
 | Cancel at period end | User can schedule cancellation safely | Implemented via Stripe `cancel_at_period_end` + user audit log | PASS | `velocitypulse-dashboard/src/app/api/billing/cancel/route.ts:70`, `velocitypulse-dashboard/src/app/api/billing/cancel/route.ts:75` |
 | Reactivate scheduled cancellation | User can remove scheduled cancellation before period end | Implemented via Stripe update + user audit log | PASS | `velocitypulse-dashboard/src/app/api/billing/reactivate/route.ts:70`, `velocitypulse-dashboard/src/app/api/billing/reactivate/route.ts:75` |
-| Plan change with proration | Allowed plan transitions only, deterministic plan mapping | Proration is enabled, but unknown `priceId` coerces to `starter` | PARTIAL | `velocitypulse-dashboard/src/app/api/billing/change-plan/route.ts:78`, `velocitypulse-dashboard/src/app/api/billing/change-plan/route.ts:86` |
-| Trial expiry -> suspension -> purge | Lifecycle enforcement with warnings and grace periods | Cron jobs exist for trial warning/expiry, past_due suspension, and cancelled purge | PASS | `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:45`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:94`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:129`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:179` |
-| Duplicate/replayed webhook deliveries | Replays should be acknowledged without side effects | No event ledger/upsert strategy; duplicates can error and return 500 | FAIL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:123`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:352`, `supabase/migrations/001_multi_tenant_schema.sql:231` |
-| Out-of-order webhook deliveries | Older events must not overwrite newer state | No sequence/timestamp guard; updates apply in arrival order | FAIL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:183`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:207` |
-| Missing Stripe references (customer/subscription) | Controlled fallback + explicit operational signal | Several branches silently `break` or continue without alerting | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:86`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:164`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:231` |
-| Manual cancellation from Stripe portal | Full local reconciliation and comms | End-state cancellation handled on `subscription.deleted`; scheduled cancellation semantics not explicitly tracked locally | PARTIAL | `velocitypulse-dashboard/src/app/api/billing/portal/route.ts:69`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:228` |
-| Refund processing + post-refund policy | Refund events update local billing state/audit/comms policy | Only internal manual refund action exists; no Stripe refund/dispute webhook handling | FAIL | `velocitypulse-dashboard/src/app/api/internal/subscriptions/[id]/actions/route.ts:199`, `velocitypulse-dashboard/src/app/api/internal/subscriptions/[id]/actions/route.ts:214`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:75` |
-| Charge disputes / chargebacks | Dedicated dispute lifecycle policy + handlers | No dispute event handling in webhook switch | FAIL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:75`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:351` |
-| Payment method update flow | Setup intent + default PM updates + recoverability | Implemented for update, but no explicit lifecycle policy for repeated PM failures beyond `invoice.payment_failed` | PARTIAL | `velocitypulse-dashboard/src/components/billing/UpdatePaymentMethod.tsx:38`, `velocitypulse-dashboard/src/app/api/billing/update-payment/route.ts:70`, `velocitypulse-dashboard/src/app/api/billing/update-payment/route.ts:149` |
-| Org/subscription synchronization | Updates should be atomic or compensated | Updates occur across tables without transaction/error checks on each write | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:183`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:207` |
-| Billing audit completeness | Every billing-critical transition auditable | Many paths log audits, but recovery, replay handling, and unsupported events have gaps | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:134`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:299`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:329` |
+| Plan change with proration | Allowed plan transitions only, deterministic plan mapping | Plan change route now validates incoming `priceId` against strict allow-list | PASS | `velocitypulse-dashboard/src/app/api/billing/change-plan/route.ts:41`, `velocitypulse-dashboard/src/lib/stripe-pricing.ts:19` |
+| Trial expiry -> suspension -> purge | Lifecycle enforcement with warnings and grace periods | Cron policies still enforced; email outcomes now checked in warning/suspension paths | PASS | `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:84`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:126`, `velocitypulse-dashboard/src/app/api/cron/lifecycle/route.ts:183` |
+| Duplicate/replayed webhook deliveries | Replays should be acknowledged without side effects | Duplicate events are acknowledged via event ledger and processing-state checks | PASS | `velocitypulse-dashboard/src/lib/stripe-webhook-events.ts:22`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:437`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:438`, `supabase/migrations/013_stripe_webhook_events.sql:4` |
+| Out-of-order webhook deliveries | Older events must not overwrite newer state | Monotonic `event.created` freshness checks are in place, but no tie-breaker when events share same timestamp second | PARTIAL | `velocitypulse-dashboard/src/lib/stripe-webhook-lifecycle.ts:29`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:480`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:595`, `supabase/migrations/014_stripe_event_freshness.sql:6` |
+| Missing Stripe references (customer/subscription) | Controlled fallback + explicit operational signal | Missing-reference branches now emit explicit warning/error logs with event context | PASS | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:463`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:472`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:587` |
+| Manual cancellation from Stripe portal | Full local reconciliation and comms | End-state cancellation is reconciled; scheduled cancellation intent is still not represented as explicit local state | PARTIAL | `velocitypulse-dashboard/src/app/api/billing/portal/route.ts:69`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:685` |
+| Refund processing + post-refund policy | Refund events update local billing state/audit/comms policy | `charge.refunded` handler now exists with audit + reconciliation, but product policy (entitlement impact/comms rules) is not fully codified | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:899`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:279`, `velocitypulse-dashboard/src/app/api/internal/subscriptions/[id]/actions/route.ts:199` |
+| Charge disputes / chargebacks | Dedicated dispute lifecycle policy + handlers | Dispute handlers now exist and update suspension/audit state; final business policy remains incomplete | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:905`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:364`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:399` |
+| Payment method update flow | Setup intent + default PM updates + recoverability | Update flow is implemented; repeated failure policy beyond webhook handling still limited | PARTIAL | `velocitypulse-dashboard/src/components/billing/UpdatePaymentMethod.tsx:38`, `velocitypulse-dashboard/src/app/api/billing/update-payment/route.ts:70`, `velocitypulse-dashboard/src/app/api/billing/update-payment/route.ts:149` |
+| Org/subscription synchronization | Updates should be atomic or compensated | Error handling is improved, but cross-table webhook updates are still not transactionally atomic | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:513`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:532`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:660` |
+| Billing audit completeness | Every billing-critical transition auditable | Audit coverage improved materially (including recovery/refund/dispute), but some lifecycle policy outcomes are still policy-dependent | PARTIAL | `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:550`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:883`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:374`, `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:399` |
 
 ## Priority Findings
 
 ## P1
 
-### 1. Webhook idempotency and event ordering controls are missing
+### 1. Refund/dispute lifecycle handlers exist, but production policy is still incomplete
 
 Why this matters:
 
-- Stripe retry/replay is normal in production.
-- Current handler can hard-fail on duplicates and has no protection against stale events overwriting current state.
+- Core webhook plumbing is now present, but policy-level behavior is still underspecified for outcomes such as full refund entitlement handling, dispute-lost enforcement windows, and customer-facing comms requirements.
 
 Evidence:
 
-- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:123`
-- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:352`
-- `supabase/migrations/001_multi_tenant_schema.sql:231`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:899`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:905`
+- `docs/review/06-remediation-roadmap.md:112`
 
-### 2. Price ID trust model allows non-sanctioned subscription prices
+### 2. Org + subscription state changes are still not transactionally coupled
 
 Why this matters:
 
-- Billing routes accept arbitrary `priceId`.
-- Plan mapping fallback to `starter` can desynchronize internal plan vs Stripe price.
+- Multi-write webhook branches can still leave temporary divergence between `organizations` and `subscriptions` under mid-flow failures.
 
 Evidence:
 
-- `velocitypulse-dashboard/src/app/api/checkout/route.ts:39`
-- `velocitypulse-dashboard/src/app/api/checkout/embedded/route.ts:35`
-- `velocitypulse-dashboard/src/app/api/billing/change-plan/route.ts:78`
-
-### 3. Refund/dispute lifecycle is not implemented in webhook policy
-
-Why this matters:
-
-- Production SaaS requires deterministic behavior for refunds, disputes, and chargebacks.
-- Internal admin refund action alone is not enough for lifecycle consistency.
-
-Evidence:
-
-- `velocitypulse-dashboard/src/app/api/internal/subscriptions/[id]/actions/route.ts:199`
-- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:75`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:513`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:532`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:660`
 
 ## P2
 
-### 4. Unsupported Stripe status mapping can violate org status constraints
+### 3. Out-of-order protection lacks a tie-break for same-second Stripe events
 
 Evidence:
 
-- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:175`
-- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:196`
-- `supabase/migrations/001_multi_tenant_schema.sql:24`
+- `velocitypulse-dashboard/src/lib/stripe-webhook-lifecycle.ts:29`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:480`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:595`
 
-### 5. Billing recovery and some lifecycle transitions are not fully auditable
+### 4. Recovery communication coverage is still narrower than full lifecycle expectation
 
 Evidence:
 
-- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:329`
-- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:341`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:883`
+- `velocitypulse-dashboard/src/app/api/webhook/stripe/route.ts:887`
 
 ## Commercial Readiness Verdict (Stripe)
 
-Current status: **Not launch-ready for Stripe production lifecycle.**
+Current status: **Improved, but still not launch-ready for Stripe production lifecycle.**
 
 Launch blockers:
 
-1. Webhook idempotency + replay/out-of-order handling.
-2. Refund/dispute/chargeback lifecycle coverage.
-3. Server-side price ID allow-list enforcement.
+1. Finalize and codify refund/dispute/chargeback policy semantics (state + customer communication + support workflow).
+2. Move webhook org/subscription reconciliation to transactionally atomic path (DB function/RPC or equivalent compensation strategy).
+3. Re-run full Stripe replay/out-of-order matrix with explicit evidence for same-second event ordering behavior.
 
-## Remediation Plan (Stripe)
+## Delta Since Previous Pass
 
-1. Implement a Stripe event ledger (`event.id` uniqueness) and no-op replay acknowledgements.
-2. Introduce monotonic state transition checks (event-created timestamp/version gate).
-3. Enforce strict server-side price mapping (`starter`/`unlimited` IDs only) across checkout and plan-change APIs.
-4. Extend webhook handlers for refund/dispute events with explicit org/subscription policy and audit actions.
-5. Make org/subscription updates atomic (transaction or compensation + mandatory error checks).
-6. Add billing test matrix automation for all scenarios above, including replay/out-of-order and negative-path assertions.
+Closed from previous P1 set:
+
+1. Webhook replay idempotency gap.
+2. Server-side price ID trust gap.
+3. Missing webhook handlers for refund/dispute event types.
+
+Still open (newly narrowed scope):
+
+1. Financial policy completeness.
+2. Atomicity and edge-ordering hardening.

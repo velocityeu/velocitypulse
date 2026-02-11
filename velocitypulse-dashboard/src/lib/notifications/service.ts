@@ -2,14 +2,18 @@ import { createServiceClient } from '@/lib/db/client'
 import type {
   NotificationChannel,
   NotificationRule,
-  NotificationEventType,
-  NotificationHistory,
 } from '@/types'
 import type { NotificationEvent, NotificationResult } from './types'
 import { sendEmailNotification } from './senders/email'
 import { sendSlackNotification } from './senders/slack'
 import { sendTeamsNotification } from './senders/teams'
 import { sendWebhookNotification } from './senders/webhook'
+
+const NOTIFICATION_MAX_ATTEMPTS = 3
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
 /**
  * Main notification service
@@ -200,29 +204,54 @@ export class NotificationService {
   ): Promise<NotificationResult> {
     const payload = { event, rule, channel }
 
-    try {
-      switch (channel.channel_type) {
-        case 'email':
-          return await sendEmailNotification(payload)
-        case 'slack':
-          return await sendSlackNotification(payload)
-        case 'teams':
-          return await sendTeamsNotification(payload)
-        case 'webhook':
-          return await sendWebhookNotification(payload)
-        default:
-          return {
-            success: false,
-            channelId: channel.id,
-            error: `Unknown channel type: ${channel.channel_type}`,
-          }
+    let lastResult: NotificationResult = {
+      success: false,
+      channelId: channel.id,
+      error: 'Notification delivery failed',
+    }
+
+    for (let attempt = 1; attempt <= NOTIFICATION_MAX_ATTEMPTS; attempt++) {
+      try {
+        switch (channel.channel_type) {
+          case 'email':
+            lastResult = await sendEmailNotification(payload)
+            break
+          case 'slack':
+            lastResult = await sendSlackNotification(payload)
+            break
+          case 'teams':
+            lastResult = await sendTeamsNotification(payload)
+            break
+          case 'webhook':
+            lastResult = await sendWebhookNotification(payload)
+            break
+          default:
+            return {
+              success: false,
+              channelId: channel.id,
+              error: `Unknown channel type: ${channel.channel_type}`,
+            }
+        }
+      } catch (error) {
+        lastResult = {
+          success: false,
+          channelId: channel.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }
       }
-    } catch (error) {
-      return {
-        success: false,
-        channelId: channel.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
+
+      if (lastResult.success) {
+        return lastResult
       }
+
+      if (attempt < NOTIFICATION_MAX_ATTEMPTS) {
+        await sleep(200 * attempt)
+      }
+    }
+
+    return {
+      ...lastResult,
+      error: `${lastResult.error || 'Delivery failed'} (after ${NOTIFICATION_MAX_ATTEMPTS} attempts)`,
     }
   }
 
@@ -304,6 +333,28 @@ export async function triggerAgentNotification(
     resourceType: 'agent',
     resourceId: agentId,
     resourceName: agentName,
+    data,
+    timestamp: new Date().toISOString(),
+  })
+}
+
+/**
+ * Helper function to trigger scan completion notifications
+ */
+export async function triggerScanCompleteNotification(
+  organizationId: string,
+  segmentId: string,
+  segmentName: string,
+  data: Record<string, unknown> = {}
+): Promise<void> {
+  const service = getNotificationService()
+
+  await service.trigger({
+    type: 'scan.complete',
+    organizationId,
+    resourceType: 'segment',
+    resourceId: segmentId,
+    resourceName: segmentName,
     data,
     timestamp: new Date().toISOString(),
   })

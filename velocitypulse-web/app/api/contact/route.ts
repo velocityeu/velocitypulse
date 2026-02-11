@@ -23,12 +23,23 @@ export async function POST(request: Request) {
       console.log('Contact form submission:', { name, email, organization, subject })
     }
 
-    // Deliver via email and store in Supabase
-    await deliverContactForm({ name, email, organization, subject, message })
+    // Deliver via configured sinks with explicit success contract
+    const delivery = await deliverContactForm({ name, email, organization, subject, message })
+    if (!delivery.success) {
+      const status = delivery.configured_sinks === 0 ? 503 : 502
+      return NextResponse.json(
+        {
+          error: 'Failed to deliver your message. Please try again later.',
+          ...(isDevelopment() ? { delivery } : {}),
+        },
+        { status }
+      )
+    }
 
     return NextResponse.json({
       success: true,
       message: 'Thank you for your message. We will get back to you within 24-48 hours.',
+      degraded: delivery.failed_sinks > 0,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'

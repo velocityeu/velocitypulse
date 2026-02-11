@@ -203,10 +203,12 @@ if command -v curl &>/dev/null; then
 fi
 
 if [ -z "$DOWNLOAD_URL" ]; then
-    echo -e "${YELLOW}  Could not find a release. Is the repo private?${NC}"
-    echo -e "${YELLOW}  For private repos, set GITHUB_TOKEN before running the installer.${NC}"
-    echo -e "${YELLOW}  Falling back to main branch archive...${NC}"
-    DOWNLOAD_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
+    echo -e "${YELLOW}  Could not find a release. Falling back to main branch archive...${NC}"
+    if [ -n "$GITHUB_TOKEN" ]; then
+        DOWNLOAD_URL="https://api.github.com/repos/$REPO/tarball/main"
+    else
+        DOWNLOAD_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
+    fi
     VERSION="latest"
 fi
 
@@ -217,6 +219,14 @@ else
 fi
 if [ ! -s "$TEMP_ZIP" ]; then
     echo -e "${RED}  ERROR: Download failed. Check network or GITHUB_TOKEN.${NC}"
+    exit 1
+fi
+# Verify the download is a valid archive (private repos return HTML without auth)
+if ! tar -tzf "$TEMP_ZIP" &>/dev/null; then
+    echo -e "${RED}  ERROR: Downloaded file is not a valid archive.${NC}"
+    echo -e "${RED}  The repository may be private. Set GITHUB_TOKEN and retry:${NC}"
+    echo -e "${RED}    export GITHUB_TOKEN='ghp_your_token_here'${NC}"
+    rm -rf "$TEMP_DIR"
     exit 1
 fi
 echo -e "${GREEN}  Downloaded${NC}"
@@ -235,6 +245,11 @@ SOURCE_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
 if [ -z "$SOURCE_DIR" ]; then
     echo -e "${RED}  ERROR: Could not find extracted directory.${NC}"
     exit 1
+fi
+
+# Handle monorepo archive (main branch fallback contains full repo)
+if [ -d "$SOURCE_DIR/velocitypulse-agent" ]; then
+    SOURCE_DIR="$SOURCE_DIR/velocitypulse-agent"
 fi
 
 # Copy files

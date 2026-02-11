@@ -1,6 +1,6 @@
 # VelocityPulse Agent
 
-> **v1.2.2** — Multi-adapter scanning + secure local Agent UI login
+> **v1.2.3** — Multi-adapter scanning + secure local Agent UI login
 
 Network monitoring agent for the VelocityPulse SaaS platform. Discovers devices on your network and reports their status in real-time to your VelocityPulse dashboard.
 

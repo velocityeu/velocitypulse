@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     if (!overlapCheck.valid) {
       // If there's an overlap, check if it's an exact match (same segment already exists)
       const exactMatch = existingSegments?.find(
-        s => s.cidr === body.cidr && s.name.includes('Auto-detected')
+        s => s.cidr === body.cidr
       )
 
       if (exactMatch) {

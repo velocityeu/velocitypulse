@@ -12,18 +12,33 @@ export interface Organization {
   updated_at: string
 }
 
+function normalizeOrganizationId(value?: string | null): string | null {
+  if (!value) return null
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : null
+}
+
 /**
  * Get the organization for a user by their Clerk user ID
  * Returns the first organization the user is a member of
  */
-export async function getOrganizationForUser(userId: string): Promise<Organization | null> {
+export async function getOrganizationForUser(
+  userId: string,
+  preferredOrganizationId?: string | null
+): Promise<Organization | null> {
   const supabase = createServiceClient()
+  const requestedOrgId = normalizeOrganizationId(preferredOrganizationId)
 
   // Get user's organization membership
-  const { data: membership, error: memberError } = await supabase
+  let membershipQuery = supabase
     .from('organization_members')
     .select('organization_id')
     .eq('user_id', userId)
+  if (requestedOrgId) {
+    membershipQuery = membershipQuery.eq('organization_id', requestedOrgId)
+  }
+  const { data: membership, error: memberError } = await membershipQuery
+    .order('created_at', { ascending: true })
     .limit(1)
     .single()
 
@@ -48,13 +63,22 @@ export async function getOrganizationForUser(userId: string): Promise<Organizati
 /**
  * Get the organization ID for a user (lighter weight query)
  */
-export async function getOrganizationIdForUser(userId: string): Promise<string | null> {
+export async function getOrganizationIdForUser(
+  userId: string,
+  preferredOrganizationId?: string | null
+): Promise<string | null> {
   const supabase = createServiceClient()
+  const requestedOrgId = normalizeOrganizationId(preferredOrganizationId)
 
-  const { data: membership, error } = await supabase
+  let membershipQuery = supabase
     .from('organization_members')
     .select('organization_id')
     .eq('user_id', userId)
+  if (requestedOrgId) {
+    membershipQuery = membershipQuery.eq('organization_id', requestedOrgId)
+  }
+  const { data: membership, error } = await membershipQuery
+    .order('created_at', { ascending: true })
     .limit(1)
     .single()
 

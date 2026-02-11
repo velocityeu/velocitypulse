@@ -18,9 +18,8 @@ Current recommendation: **No-Launch (commercial deployment hold).**
 Blocking themes:
 
 1. Stripe lifecycle correctness gaps (idempotency, ordering, refunds/disputes, price validation).
-2. Email and notification reliability gaps (success reported despite delivery failure; missing alert producers).
-3. Agent/installer production safety gaps (release source drift, upgrade safety, unauthenticated local UI).
-4. Public commercial inconsistency (pricing/trial claims vs enforced product behavior).
+2. Stripe financial policy finalization gaps (refund/dispute customer-communication and entitlement policy sign-off).
+3. Remaining Wave B reliability hardening (distributed marketing rate limiting, expanded tenancy rollout, operational notification visibility).
 
 ## Priority Model
 
@@ -31,14 +30,9 @@ Blocking themes:
 
 ## Consolidated Blocker List (Must Close Pre-Launch)
 
-1. Stripe webhook idempotency and out-of-order protection (`P1`).
-2. Stripe refund/dispute/chargeback lifecycle policy and handlers (`P1`).
-3. Server-side Stripe price allow-list enforcement (`P1`).
-4. Dashboard + marketing email success contract and failure visibility (`P1`).
-5. Missing `agent.offline/online` and `scan.complete` notification producers (`P1`).
-6. Agent installer release-source alignment and upgrade safety (`P1`).
-7. Agent local UI authentication/binding hardening (`P1`).
-8. Marketing pricing/trial/entitlement claim parity with dashboard reality (`P1`).
+1. Stripe refund/dispute/chargeback lifecycle policy sign-off + operational playbooks (`P1`).
+2. Stripe webhook cross-table atomicity hardening (`P1`).
+3. Complete distributed/externally backed marketing rate limiter rollout (`P2`).
 
 ## Workstream Plan
 
@@ -92,12 +86,12 @@ Status values:
 | WS-02 Stripe financial edge handling | Backend Lead (Billing) + Billing Ops | 2026-02-18 | 2026-02-25 | In Progress | 35% | 2026-02-11 | 2026-02-18 | Implemented webhook handlers for `charge.refunded` and dispute lifecycle (`charge.dispute.created`/`charge.dispute.closed`) with deterministic org status + audit actions. Remaining: finalize explicit product policy (refund consequences, dispute-lost handling), add customer comms templates, and complete matrix retest evidence. |
 | WS-03 Email delivery contract hardening | Backend Lead + Growth Eng | 2026-02-12 | 2026-02-19 | In Progress | 78% | 2026-02-11 | 2026-02-18 | Added durable Stripe lifecycle email delivery history (`outbound_email_deliveries`) and retained strict invitation/email false-success protections + marketing sink contract. Remaining: unify lifecycle/member non-invitation email policy (strict fail vs degraded) and standardize telemetry shape across routes. |
 | WS-04 Notification parity + reliability | Backend Lead (Monitoring) | 2026-02-20 | 2026-02-28 | In Progress | 72% | 2026-02-11 | 2026-02-18 | Added DB-backed retry/dead-letter queue (`notification_retry_queue`) + cron processor (`/api/cron/notifications`) in addition to earlier producer/config validation work. Remaining: operator-facing queue/history UI and sustained-failure alerting thresholds. |
-| WS-05 Agent installer + upgrade hardening | Agent Lead + DevOps Lead | 2026-02-12 | 2026-02-24 | Not Started | 0% | 2026-02-11 | 2026-02-18 | Includes installer source alignment + upgrade rollback safety |
-| WS-06 Agent runtime security hardening | Agent Lead + Security Lead | 2026-02-12 | 2026-02-21 | Not Started | 0% | 2026-02-11 | 2026-02-18 | Local UI auth/binding is launch blocker |
-| WS-07 Marketing claim/pricing parity | Product Lead + Web Lead | 2026-02-16 | 2026-02-20 | Not Started | 0% | 2026-02-11 | 2026-02-18 | Requires final WS-01 billing policy confirmation |
-| WS-08 Multi-org context correctness | Backend Lead | 2026-02-26 | 2026-03-06 | Not Started | 0% | 2026-02-11 | 2026-03-04 | Wave B stabilization |
-| WS-09 Env validation fail-fast | Platform Lead | 2026-02-24 | 2026-02-27 | Not Started | 0% | 2026-02-11 | 2026-03-04 | Wave B stabilization, low dependency |
-| WS-10 Test matrix + release gates | QA Lead + Eng Leads | 2026-02-21 | 2026-03-07 | Not Started | 0% | 2026-02-11 | 2026-03-04 | Should begin once WS-01/03/05 changes are in PR |
+| WS-05 Agent installer + upgrade hardening | Agent Lead + DevOps Lead | 2026-02-12 | 2026-02-24 | In Progress | 92% | 2026-02-11 | 2026-02-18 | Implemented: installer source alignment (`velocityeu/velocitypulse`), archive/manifest-safe upgrader URL handling, dependency-safe upgrade (`npm ci --omit=dev`), rollback/health checks, command payload validation, and release test gating. Remaining: dedicated endpoint smoke execution against deployed `get.velocitypulse.io` in CI environment. |
+| WS-06 Agent runtime security hardening | Agent Lead + Security Lead | 2026-02-12 | 2026-02-21 | In Progress | 88% | 2026-02-11 | 2026-02-18 | Implemented localhost-default binding, token auth for UI HTTP + Socket routes, and optional disable (`AGENT_UI_ENABLED=false`). Remaining: document operator token rotation runbook and long-term session UX. |
+| WS-07 Marketing claim/pricing parity | Product Lead + Web Lead | 2026-02-16 | 2026-02-20 | In Progress | 86% | 2026-02-11 | 2026-02-18 | Implemented parity updates across pricing/hero/CTA/features metadata (14-day trial, £50/£950, enforced limits). Remaining: automated consistency assertion against canonical plan source in CI. |
+| WS-08 Multi-org context correctness | Backend Lead | 2026-02-26 | 2026-03-06 | In Progress | 58% | 2026-02-11 | 2026-03-04 | Added explicit `x-organization-id` support to high-risk billing + command + notification routes and deterministic membership ordering fallback. Remaining: broad rollout across all mutating routes and UI-selected org propagation. |
+| WS-09 Env validation fail-fast | Platform Lead | 2026-02-24 | 2026-02-27 | In Progress | 64% | 2026-02-11 | 2026-03-04 | Dashboard DB clients now resolve through validated env (`getServerEnv`/`getClientEnv`) with no placeholder fallback. Remaining: equivalent startup-level enforcement in marketing/agent runtime entrypoints for enabled integrations. |
+| WS-10 Test matrix + release gates | QA Lead + Eng Leads | 2026-02-21 | 2026-03-07 | In Progress | 72% | 2026-02-11 | 2026-03-04 | Added CI agent job + web tests + installer smoke checks; agent release now blocks on test failures. Remaining: Stripe replay/order regression suite and refund/dispute policy matrix automation. |
 
 ### Tracker Update Protocol
 

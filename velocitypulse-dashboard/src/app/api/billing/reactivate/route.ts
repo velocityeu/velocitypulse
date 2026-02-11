@@ -22,7 +22,7 @@ function getStripe(): Stripe {
   return stripe
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -30,12 +30,18 @@ export async function POST() {
     }
 
     const supabase = createServiceClient()
+    const requestedOrgId = request.headers.get('x-organization-id')?.trim()
 
     // Get user's membership and org
-    const { data: membership } = await supabase
+    let membershipQuery = supabase
       .from('organization_members')
       .select('organization_id, role, permissions')
       .eq('user_id', userId)
+    if (requestedOrgId) {
+      membershipQuery = membershipQuery.eq('organization_id', requestedOrgId)
+    }
+    const { data: membership } = await membershipQuery
+      .order('created_at', { ascending: true })
       .limit(1)
       .single()
 

@@ -20,8 +20,8 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://velocitypulse.io'),
-  title: 'VelocityPulse.io | Professional Network Monitoring from $50/year',
-  description: 'Professional network monitoring without the professional price tag. Start at $50/year for up to 100 devices. Scale to $950/year for unlimited. No per-device pricing, no surprises.',
+  title: 'VelocityPulse.io | Professional Network Monitoring from \u00a350/year',
+  description: 'Professional network monitoring without the professional price tag. Start at \u00a350/year for up to 100 devices. Scale to \u00a3950/year for larger organizations. No per-device pricing, no surprises.',
   keywords: ['network monitoring', 'infrastructure monitoring', 'IT dashboard', 'device monitoring', 'real-time alerts', 'affordable', 'VelocityPulse'],
   authors: [{ name: 'Velocity EU' }],
   icons: {
@@ -38,8 +38,8 @@ export const metadata: Metadata = {
   },
   manifest: '/manifest.json',
   openGraph: {
-    title: 'VelocityPulse.io | Professional Network Monitoring from $50/year',
-    description: 'Professional network monitoring without the professional price tag. Start at $50/year for up to 100 devices.',
+    title: 'VelocityPulse.io | Professional Network Monitoring from \u00a350/year',
+    description: 'Professional network monitoring without the professional price tag. Start at \u00a350/year for up to 100 devices.',
     url: 'https://velocitypulse.io',
     siteName: 'VelocityPulse.io',
     locale: 'en_US',
@@ -55,8 +55,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'VelocityPulse.io | Professional Network Monitoring from $50/year',
-    description: 'Professional network monitoring without the professional price tag. Start at $50/year for up to 100 devices.',
+    title: 'VelocityPulse.io | Professional Network Monitoring from \u00a350/year',
+    description: 'Professional network monitoring without the professional price tag. Start at \u00a350/year for up to 100 devices.',
     images: ['/og-image.png'],
   },
 }

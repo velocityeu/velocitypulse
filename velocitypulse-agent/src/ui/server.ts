@@ -4,6 +4,7 @@ import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { randomBytes } from 'crypto'
 import type { Logger } from '../utils/logger.js'
 import { BUILD_ID } from '../utils/version.js'
 
@@ -29,6 +30,12 @@ export interface AgentConfig {
   enabledSegments: string[] // segment IDs
   pingTimeoutMs: number
   discoveryMethods: string[] // arp, ping, mdns, ssdp
+}
+
+export interface AgentUIOptions {
+  enabled?: boolean
+  host?: string
+  authToken?: string
 }
 
 export interface AgentUIState {
@@ -81,18 +88,29 @@ export class AgentUIServer {
   private logger: Logger
   private state: AgentUIState
   private port: number
+  private host: string
+  private enabled: boolean
+  private authToken: string
   private healthInterval: ReturnType<typeof setInterval> | null = null
   private startedAt: string
 
-  constructor(port: number, logger: Logger, initialState: Partial<AgentUIState> = {}) {
+  constructor(
+    port: number,
+    logger: Logger,
+    initialState: Partial<AgentUIState> = {},
+    options: AgentUIOptions = {}
+  ) {
     this.port = port
+    this.host = options.host || '127.0.0.1'
+    this.enabled = options.enabled !== false
+    this.authToken = options.authToken?.trim() || randomBytes(24).toString('hex')
     this.logger = logger
     this.startedAt = new Date().toISOString()
     this.app = express()
     this.httpServer = createServer(this.app)
     this.io = new SocketIOServer(this.httpServer, {
       cors: {
-        origin: '*',
+        origin: [`http://${this.host}:${this.port}`, `http://localhost:${this.port}`, `http://127.0.0.1:${this.port}`],
         methods: ['GET', 'POST'],
       },
     })
@@ -137,7 +155,100 @@ export class AgentUIServer {
     this.startHealthUpdates()
   }
 
+  private parseCookies(cookieHeader?: string): Record<string, string> {
+    if (!cookieHeader) return {}
+
+    return cookieHeader
+      .split(';')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .reduce<Record<string, string>>((acc, entry) => {
+        const index = entry.indexOf('=')
+        if (index <= 0) return acc
+        const key = entry.slice(0, index).trim()
+        const value = entry.slice(index + 1).trim()
+        acc[key] = decodeURIComponent(value)
+        return acc
+      }, {})
+  }
+
+  private extractBearerToken(headerValue?: string): string | null {
+    if (!headerValue) return null
+    const [scheme, token] = headerValue.split(' ')
+    if (scheme?.toLowerCase() !== 'bearer' || !token) return null
+    return token.trim()
+  }
+
+  private getRequestToken(req: express.Request): string | null {
+    const queryToken = typeof req.query.token === 'string' ? req.query.token.trim() : ''
+    if (queryToken) return queryToken
+
+    const headerToken = req.headers['x-agent-ui-token']
+    if (typeof headerToken === 'string' && headerToken.trim()) {
+      return headerToken.trim()
+    }
+
+    const bearerToken = this.extractBearerToken(req.headers.authorization)
+    if (bearerToken) return bearerToken
+
+    const cookies = this.parseCookies(req.headers.cookie)
+    if (cookies.vp_ui_token) return cookies.vp_ui_token
+
+    return null
+  }
+
+  private getSocketToken(handshake: { headers: Record<string, unknown>; auth?: Record<string, unknown> }): string | null {
+    const authToken = typeof handshake.auth?.token === 'string' ? handshake.auth.token.trim() : ''
+    if (authToken) return authToken
+
+    const headerToken = handshake.headers['x-agent-ui-token']
+    if (typeof headerToken === 'string' && headerToken.trim()) {
+      return headerToken.trim()
+    }
+
+    const authorization = handshake.headers.authorization
+    if (typeof authorization === 'string') {
+      const bearer = this.extractBearerToken(authorization)
+      if (bearer) return bearer
+    }
+
+    const cookieHeader = handshake.headers.cookie
+    if (typeof cookieHeader === 'string') {
+      const cookies = this.parseCookies(cookieHeader)
+      if (cookies.vp_ui_token) return cookies.vp_ui_token
+    }
+
+    return null
+  }
+
+  private isTokenValid(token: string | null): boolean {
+    return !!token && token === this.authToken
+  }
+
+  private enforceRequestAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
+    const token = this.getRequestToken(req)
+    if (!this.isTokenValid(token)) {
+      if (req.path.startsWith('/api/')) {
+        res.status(401).json({ error: 'Unauthorized' })
+      } else {
+        res.status(401).send('Unauthorized. Open this UI with ?token=<AGENT_UI_AUTH_TOKEN> once to establish a session.')
+      }
+      return
+    }
+
+    // Persist a strict local-only cookie so users do not need token query params repeatedly.
+    if (typeof req.query.token === 'string' && req.query.token.trim()) {
+      res.setHeader('Set-Cookie', `vp_ui_token=${encodeURIComponent(this.authToken)}; HttpOnly; SameSite=Strict; Path=/`)
+    }
+
+    next()
+  }
+
   private setupRoutes(): void {
+    this.app.disable('x-powered-by')
+
+    this.app.use((req, res, next) => this.enforceRequestAuth(req, res, next))
+
     // Serve static files from public directory
     const publicPath = path.join(__dirname, 'public')
     this.app.use(express.static(publicPath))
@@ -166,6 +277,15 @@ export class AgentUIServer {
   }
 
   private setupSocketIO(): void {
+    this.io.use((socket, next) => {
+      const token = this.getSocketToken(socket.handshake as unknown as { headers: Record<string, unknown>; auth?: Record<string, unknown> })
+      if (!this.isTokenValid(token)) {
+        next(new Error('unauthorized'))
+        return
+      }
+      next()
+    })
+
     this.io.on('connection', (socket) => {
       this.logger.debug(`UI client connected: ${socket.id}`)
 
@@ -258,6 +378,8 @@ export class AgentUIServer {
   }
 
   private startHealthUpdates(): void {
+    if (!this.enabled) return
+
     // Update health stats every 5 seconds
     this.healthInterval = setInterval(() => {
       const mem = process.memoryUsage()
@@ -290,9 +412,14 @@ export class AgentUIServer {
 
   // Start the server
   async start(): Promise<void> {
+    if (!this.enabled) {
+      this.logger.info('Agent UI disabled (AGENT_UI_ENABLED=false)')
+      return
+    }
+
     return new Promise((resolve) => {
-      this.httpServer.listen(this.port, () => {
-        this.logger.info(`Agent UI available at http://localhost:${this.port}`)
+      this.httpServer.listen(this.port, this.host, () => {
+        this.logger.info(`Agent UI available at http://${this.host}:${this.port}`)
         resolve()
       })
     })
@@ -316,5 +443,17 @@ export class AgentUIServer {
   // Get Socket.IO instance for external event handling
   getIO(): SocketIOServer {
     return this.io
+  }
+
+  isEnabled(): boolean {
+    return this.enabled
+  }
+
+  getAuthToken(): string {
+    return this.authToken
+  }
+
+  getAccessUrl(): string {
+    return `http://${this.host}:${this.port}`
   }
 }

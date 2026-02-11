@@ -161,7 +161,7 @@ TEMP_ZIP="$TEMP_DIR/agent.tar.gz"
 
 # Try GitHub releases API (monorepo: filter for agent-v* tags)
 # Supports both public repos (unauthenticated) and private repos (with GITHUB_TOKEN)
-REPO="velocityeu/velocitypulse-agent"
+REPO="velocityeu/velocitypulse"
 RELEASES_URL="https://api.github.com/repos/$REPO/releases"
 DOWNLOAD_URL=""
 AUTH_ARGS=""
@@ -287,6 +287,8 @@ echo -e "\${GREEN}  Dependencies installed\${NC}"
 echo ""
 echo -e "\${YELLOW}[5/6] Configuring agent...\${NC}"
 
+UI_AUTH_TOKEN="\${AGENT_UI_AUTH_TOKEN:-$(node -e 'console.log(require(\"crypto\").randomBytes(24).toString(\"hex\"))')}"
+
 cat > "$INSTALL_DIR/.env" << ENVEOF
 # VelocityPulse Agent Configuration
 VELOCITYPULSE_URL=$DASHBOARD_URL
@@ -295,6 +297,9 @@ AGENT_NAME=$AGENT_NAME
 LOG_LEVEL=info
 ENABLE_AUTO_SCAN=true
 ENABLE_REALTIME=true
+AGENT_UI_ENABLED=true
+AGENT_UI_HOST=127.0.0.1
+AGENT_UI_AUTH_TOKEN=$UI_AUTH_TOKEN
 ENVEOF
 
 chmod 600 "$INSTALL_DIR/.env"
@@ -409,7 +414,7 @@ echo ""
 echo -e "\${CYAN}  Install Dir:  $INSTALL_DIR\${NC}"
 echo -e "\${CYAN}  Service Name: $SERVICE_NAME\${NC}"
 echo -e "\${CYAN}  Dashboard:    $DASHBOARD_URL\${NC}"
-echo -e "\${CYAN}  Agent UI:     http://localhost:3001\${NC}"
+echo -e "\${CYAN}  Agent UI:     http://127.0.0.1:3001/?token=$UI_AUTH_TOKEN\${NC}"
 echo ""
 
 if [ "\${OS_TYPE}" = "linux" ]; then

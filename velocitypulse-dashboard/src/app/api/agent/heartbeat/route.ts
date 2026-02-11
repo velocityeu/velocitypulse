@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { authenticateAgent } from '@/lib/api/agent-auth'
 import { createServiceClient } from '@/lib/db/client'
-import { LATEST_AGENT_VERSION, AGENT_DOWNLOAD_URL, ENFORCE_AGENT_UPDATES } from '@/lib/constants'
+import {
+  LATEST_AGENT_VERSION,
+  AGENT_DOWNLOAD_URL_TEMPLATE,
+  ENFORCE_AGENT_UPDATES,
+} from '@/lib/constants'
+import { resolveAgentDownloadUrl } from '@/lib/agent-release'
 import { logger } from '@/lib/logger'
 import { validateRequest, heartbeatRequestSchema } from '@/lib/validations'
 import { checkAgentRateLimit, checkOrgMonthlyLimit, incrementUsage } from '@/lib/api/rate-limit'
@@ -81,6 +86,11 @@ export async function POST(request: Request) {
       return NextResponse.json(validation.error, { status: 400 })
     }
     const body = validation.data
+    const resolvedDownloadUrl = resolveAgentDownloadUrl({
+      latestVersion: LATEST_AGENT_VERSION,
+      platform: body.platform,
+      override: AGENT_DOWNLOAD_URL_TEMPLATE,
+    })
 
     // Update agent info
     await supabase
@@ -135,7 +145,7 @@ export async function POST(request: Request) {
             command_type: 'upgrade',
             payload: {
               target_version: LATEST_AGENT_VERSION,
-              download_url: AGENT_DOWNLOAD_URL,
+              download_url: resolvedDownloadUrl,
               auto_queued: true,
             },
             status: 'pending',
@@ -174,7 +184,7 @@ export async function POST(request: Request) {
       supabase_url: supabaseUrl,
       supabase_anon_key: supabaseAnonKey,
       latest_agent_version: LATEST_AGENT_VERSION,
-      agent_download_url: AGENT_DOWNLOAD_URL,
+      agent_download_url: resolvedDownloadUrl,
       upgrade_available: upgradeAvailable,
       pending_commands: pendingCommands,
     }

@@ -229,5 +229,5 @@ MIT License - See LICENSE file for details.
 ## Support
 
 - Documentation: https://docs.velocitypulse.io
-- Issues: https://github.com/velocityeu/velocitypulse-agent/issues
+- Issues: https://github.com/velocityeu/velocitypulse/issues
 - Email: support@velocitypulse.io

@@ -25,6 +25,24 @@ vi.mock('./ssdp.js', () => ({
   ssdpScan: vi.fn(),
 }))
 
+vi.mock('./port-scan.js', () => ({
+  portScan: vi.fn().mockResolvedValue({ open_ports: [] }),
+  PORT_SERVICES: {},
+}))
+
+vi.mock('./banner.js', () => ({
+  grabBanners: vi.fn().mockResolvedValue([]),
+  identifyService: vi.fn().mockReturnValue(undefined),
+}))
+
+vi.mock('./os-detect.js', () => ({
+  detectOs: vi.fn().mockResolvedValue({ os_hints: [], device_type: 'unknown' }),
+}))
+
+vi.mock('./snmp.js', () => ({
+  querySnmp: vi.fn().mockResolvedValue(null),
+}))
+
 import { discoverDevices } from './discover.js'
 import { isLocalNetwork, isInCidr } from '../utils/ip-utils.js'
 import { arpScan, populateArpCache } from './arp.js'

@@ -15,7 +15,7 @@ vi.mock('@/lib/api/rate-limit', () => ({
 // Mock constants
 vi.mock('@/lib/constants', () => ({
   LATEST_AGENT_VERSION: '2.0.0',
-  AGENT_DOWNLOAD_URL: 'https://example.com/download',
+  AGENT_DOWNLOAD_URL_TEMPLATE: 'https://example.com/velocitypulse-agent-{version}.tar.gz',
   ENFORCE_AGENT_UPDATES: false,
 }))
 

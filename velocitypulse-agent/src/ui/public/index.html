@@ -572,7 +572,18 @@
     </main>
 
     <script>
-        const socket = io();
+        const query = new URLSearchParams(window.location.search);
+        const tokenFromQuery = query.get('token');
+        const tokenFromStorage = localStorage.getItem('vp_ui_token');
+        const uiToken = tokenFromQuery || tokenFromStorage || '';
+        if (tokenFromQuery) {
+            localStorage.setItem('vp_ui_token', tokenFromQuery);
+        }
+
+        const socket = io({
+            auth: uiToken ? { token: uiToken } : undefined,
+            withCredentials: true,
+        });
         let state = {
             connected: false,
             segments: [],
@@ -589,6 +600,13 @@
 
         // Socket event handlers
         socket.on('connect', () => { console.log('Socket connected'); });
+        socket.on('connect_error', (err) => {
+            console.error('Socket connect error:', err.message);
+            const text = document.getElementById('connection-text');
+            if (text) {
+                text.textContent = 'Authentication required (open with ?token=...)';
+            }
+        });
 
         socket.on('state', (newState) => {
             state = { ...state, ...newState };

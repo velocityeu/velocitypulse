@@ -34,6 +34,8 @@ export const heartbeatRequestSchema = z.object({
   version: z.string().optional(),
   hostname: z.string().optional(),
   uptime_seconds: z.number().optional(),
+  platform: z.enum(['linux', 'darwin', 'win32']).optional(),
+  arch: z.string().max(32).optional(),
 })
 
 // Status report

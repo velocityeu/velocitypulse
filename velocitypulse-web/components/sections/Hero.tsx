@@ -28,7 +28,7 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1, ease: [0.25, 0.1, 0.25, 1] }}
           >
-            From $50/year.{' '}
+            From \u00a350/year.{' '}
             <span className="text-accent">Yes, really.</span>
           </motion.h1>
 
@@ -39,7 +39,7 @@ export default function Hero() {
             transition={{ duration: 0.5, delay: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
           >
             Professional network monitoring without the professional price tag.
-            Start at $50/year for up to 100 devices. Scale to $950/year for unlimited.
+            Start at \u00a350/year for up to 100 devices. Scale to \u00a3950/year for larger organizations.
           </motion.p>
 
           <motion.div
@@ -49,7 +49,7 @@ export default function Hero() {
             transition={{ duration: 0.5, delay: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
           >
             <Button href="https://app.velocitypulse.io/sign-up" size="lg" target="_self">
-              Start 30-Day Trial
+              Start 14-Day Trial
             </Button>
             <Button href="/pricing" variant="secondary" size="lg">
               See Pricing
@@ -62,7 +62,7 @@ export default function Hero() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.4 }}
           >
-            No credit card required. Full access for 30 days.
+            No credit card required. Full access for 14 days.
           </motion.p>
         </div>
       </div>

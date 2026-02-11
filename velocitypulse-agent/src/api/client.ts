@@ -135,6 +135,8 @@ export class DashboardClient {
       version,
       hostname,
       uptime_seconds: Math.floor(process.uptime()),
+      platform: process.platform,
+      arch: process.arch,
     })
     this.logger.debug(`Heartbeat response: ${response.data.segments.length} segments, org: ${response.data.organization_id}`)
     return response.data

@@ -18,7 +18,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const org = await getOrganizationForUser(userId)
+    const org = await getOrganizationForUser(userId, request.headers.get('x-organization-id'))
     if (!org) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
@@ -52,7 +52,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const org = await getOrganizationForUser(userId)
+    const org = await getOrganizationForUser(userId, request.headers.get('x-organization-id'))
     if (!org) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
@@ -113,7 +113,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const org = await getOrganizationForUser(userId)
+    const org = await getOrganizationForUser(userId, request.headers.get('x-organization-id'))
     if (!org) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }

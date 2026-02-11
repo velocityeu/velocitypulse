@@ -9,6 +9,7 @@ jobs:
     outputs:
       dashboard: ${{ steps.filter.outputs.dashboard }}
       web: ${{ steps.filter.outputs.web }}
+      agent: ${{ steps.filter.outputs.agent }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -19,6 +20,26 @@ jobs:
               - 'velocitypulse-dashboard/**'
             web:
               - 'velocitypulse-web/**'
+            agent:
+              - 'velocitypulse-agent/**'
+              - '.github/workflows/agent-release.yml'
+
+  installer-smoke:
+    needs: changes
+    if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify installer scripts point to monorepo release source
+        run: |
+          grep -q 'REPO="velocityeu/velocitypulse"' velocitypulse-agent/scripts/install-linux.sh
+          grep -q 'REPO="velocityeu/velocitypulse"' velocitypulse-web/app/api/get/agent-sh/route.ts
+      - name: Validate latest agent release assets exist
+        run: |
+          RELEASE_JSON="$(curl -fsSL https://api.github.com/repos/velocityeu/velocitypulse/releases)"
+          echo "$RELEASE_JSON" | jq -e 'map(select(.tag_name | startswith("agent-v")))[0]' >/dev/null
+          echo "$RELEASE_JSON" | jq -e 'map(select(.tag_name | startswith("agent-v")))[0].assets | map(.name) | any(test("velocitypulse-agent-.*\\.tar\\.gz$"))' >/dev/null
+          echo "$RELEASE_JSON" | jq -e 'map(select(.tag_name | startswith("agent-v")))[0].assets | map(.name) | any(test("velocitypulse-agent-.*\\.zip$"))' >/dev/null
 
   dashboard:
     needs: changes
@@ -52,3 +73,20 @@ jobs:
           node-version: '20'
       - run: npm ci
       - run: npm run build
+      - run: npm test
+
+  agent:
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: velocitypulse-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run build
+      - run: npm test

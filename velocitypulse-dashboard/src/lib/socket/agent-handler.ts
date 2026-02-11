@@ -1,4 +1,4 @@
-import type { Socket, Server } from 'socket.io'
+import type { Socket } from 'socket.io'
 import { logger } from '@/lib/logger'
 import type {
   ClientToServerEvents,
@@ -13,6 +13,7 @@ import type {
   ServerAuthenticatedPayload,
   ServerErrorPayload,
 } from './types'
+import { resolveAgentDownloadUrl } from '@/lib/agent-release'
 
 // Lazy-load Supabase client to avoid issues during import
 let supabaseClient: ReturnType<typeof import('@/lib/db/client').createServiceClient> | null = null
@@ -26,7 +27,7 @@ async function getSupabase() {
 
 // Constants
 const LATEST_AGENT_VERSION = process.env.LATEST_AGENT_VERSION || '1.0.0'
-const AGENT_DOWNLOAD_URL = process.env.AGENT_DOWNLOAD_URL || 'https://github.com/velocityeu/velocitypulse-agent/releases/latest'
+const AGENT_DOWNLOAD_URL_TEMPLATE = process.env.AGENT_DOWNLOAD_URL || ''
 
 /**
  * Extract client IP from socket connection
@@ -84,8 +85,7 @@ function isNewerVersion(latest: string, current: string): boolean {
  * Handle agent connection and events
  */
 export function handleAgentConnection(
-  socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>,
-  io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>
+  socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>
 ) {
   logger.info(`[Socket] Agent connected: ${socket.id}`)
 
@@ -140,6 +140,11 @@ export function handleAgentConnection(
       .eq('is_enabled', true)
 
     const upgradeAvailable = isNewerVersion(LATEST_AGENT_VERSION, payload.version)
+    const downloadUrl = resolveAgentDownloadUrl({
+      latestVersion: LATEST_AGENT_VERSION,
+      platform: payload.platform,
+      override: AGENT_DOWNLOAD_URL_TEMPLATE,
+    })
 
     const response: ServerAuthenticatedPayload = {
       agent_id: authResult.agentId,
@@ -147,7 +152,7 @@ export function handleAgentConnection(
       organization_id: authResult.organizationId,
       segments: segments || [],
       latest_agent_version: LATEST_AGENT_VERSION,
-      agent_download_url: AGENT_DOWNLOAD_URL,
+      agent_download_url: downloadUrl,
       upgrade_available: upgradeAvailable,
     }
 
@@ -316,7 +321,6 @@ export function handleAgentConnection(
  * Notify an agent that its segments have been updated
  */
 export async function notifySegmentsUpdated(
-  io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>,
   agentId: string
 ) {
   const socket = connectedAgents.get(agentId)

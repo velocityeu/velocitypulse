@@ -10,12 +10,16 @@ export interface AgentAuthenticatePayload {
   apiKey: string
   version: string
   hostname: string
+  platform?: 'linux' | 'darwin' | 'win32'
+  arch?: string
 }
 
 export interface AgentHeartbeatPayload {
   version: string
   hostname: string
   uptime_seconds: number
+  platform?: 'linux' | 'darwin' | 'win32'
+  arch?: string
 }
 
 export interface AgentStatusReportPayload {
@@ -113,7 +117,7 @@ export interface ServerToClientEvents {
 }
 
 export interface InterServerEvents {
-  // For multi-server setups (not used initially)
+  [event: string]: never
 }
 
 export interface SocketData {

@@ -22,6 +22,10 @@ export interface Config {
   // Auto-upgrade settings
   enableAutoUpgrade: boolean // Default: false (opt-in)
   autoUpgradeOnMinor: boolean // Default: true (auto-upgrade minor/patch versions)
+  // Local UI settings
+  agentUiEnabled: boolean
+  agentUiHost: string
+  agentUiAuthToken?: string
 }
 
 /**
@@ -69,5 +73,9 @@ export function loadConfig(): Config {
     // Auto-upgrade settings
     enableAutoUpgrade: process.env.ENABLE_AUTO_UPGRADE === 'true', // Default: false (opt-in)
     autoUpgradeOnMinor: process.env.AUTO_UPGRADE_ON_MINOR !== 'false', // Default: true
+    // Local UI settings
+    agentUiEnabled: process.env.AGENT_UI_ENABLED !== 'false', // Default: true
+    agentUiHost: process.env.AGENT_UI_HOST || '127.0.0.1',
+    agentUiAuthToken: process.env.AGENT_UI_AUTH_TOKEN,
   }
 }

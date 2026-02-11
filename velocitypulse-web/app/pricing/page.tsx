@@ -21,13 +21,14 @@ const plans: Array<{
     id: 'trial',
     name: 'Trial',
     price: 'Free',
-    period: '30 days',
-    description: 'Full access to test everything',
+    period: '14 days',
+    description: 'Try VelocityPulse with full features',
     features: [
-      'Unlimited devices',
-      'Unlimited agents',
-      'Unlimited users',
-      'All features included',
+      'Up to 100 devices',
+      'Up to 10 agents',
+      'Up to 5 users',
+      '10,000 API calls/month',
+      'Email support',
       'No credit card required',
     ],
     cta: 'Start Free Trial',
@@ -37,18 +38,16 @@ const plans: Array<{
   {
     id: 'starter',
     name: 'Starter',
-    price: '$50',
+    price: '\u00a350',
     period: '/year',
-    description: 'For small businesses and home labs',
+    description: 'For small teams and organizations',
     features: [
       'Up to 100 devices',
-      'Unlimited agents',
-      'Unlimited users',
-      '1 year data retention',
-      'All features included',
-      'Email, Slack, Teams alerts',
-      'Full API access',
-      'Email support (48h)',
+      'Up to 10 agents',
+      'Up to 10 users',
+      '50,000 API calls/month',
+      'Priority email support',
+      'Audit logs',
     ],
     cta: 'Buy Now',
     href: 'https://app.velocitypulse.io/sign-up?plan=starter',
@@ -57,19 +56,20 @@ const plans: Array<{
   {
     id: 'unlimited',
     name: 'Unlimited',
-    price: '$950',
+    price: '\u00a3950',
     period: '/year',
-    description: 'For growing organizations',
+    description: 'For large organizations',
     features: [
       'Up to 5,000 devices',
-      'Unlimited agents',
-      'Unlimited users',
-      '1 year data retention',
-      'All features included',
-      'SSO (SAML) included',
-      'White-label option',
-      'Priority support (24h)',
-      'Dedicated onboarding call',
+      'Up to 100 agents',
+      'Up to 50 users',
+      'Unlimited API calls',
+      'Priority phone & email support',
+      'Advanced audit logs',
+      'Custom integrations',
+      'SLA guarantee',
+      'White-label branding',
+      'SSO / SAML authentication',
     ],
     cta: 'Buy Now',
     href: 'https://app.velocitypulse.io/sign-up?plan=unlimited',
@@ -80,9 +80,9 @@ const plans: Array<{
 
 const comparisonFeatures = [
   { name: 'Devices', starter: 'Up to 100', unlimited: 'Up to 5,000' },
-  { name: 'Agents', starter: 'Unlimited', unlimited: 'Unlimited' },
-  { name: 'Users', starter: 'Unlimited', unlimited: 'Unlimited' },
-  { name: 'Data retention', starter: '1 year', unlimited: '1 year' },
+  { name: 'Agents', starter: 'Up to 10', unlimited: 'Up to 100' },
+  { name: 'Users', starter: 'Up to 10', unlimited: 'Up to 50' },
+  { name: 'API calls / month', starter: '50,000', unlimited: 'Unlimited' },
   { name: 'Auto-discovery', starter: true, unlimited: true },
   { name: 'Real-time monitoring', starter: true, unlimited: true },
   { name: 'Email alerts', starter: true, unlimited: true },
@@ -91,8 +91,8 @@ const comparisonFeatures = [
   { name: 'Multi-site support', starter: true, unlimited: true },
   { name: 'SSO (SAML)', starter: false, unlimited: true },
   { name: 'White-label option', starter: false, unlimited: true },
-  { name: 'Support response', starter: '48 hours', unlimited: '24 hours' },
-  { name: 'Onboarding call', starter: false, unlimited: true },
+  { name: 'Support', starter: 'Priority email', unlimited: 'Priority phone & email' },
+  { name: 'Audit logs', starter: true, unlimited: true },
 ]
 
 const faqs = [
@@ -102,7 +102,7 @@ const faqs = [
   },
   {
     question: 'What if I have more than 100 devices?',
-    answer: 'You\'ll need the Unlimited tier at $950/year. Or remove a few devices and stay on Starter. Either way, it\'s affordable.',
+    answer: 'You\'ll need the Unlimited tier at \u00a3950/year. Or remove a few devices and stay on Starter.',
   },
   {
     question: 'What happens at 5,000 devices?',
@@ -114,7 +114,7 @@ const faqs = [
   },
   {
     question: 'Do you offer education/non-profit discounts?',
-    answer: 'No longer needed. At $50/year Starter and $950/year Unlimited, we\'re already affordable for everyone.',
+    answer: 'No longer needed. At \u00a350/year Starter and \u00a3950/year Unlimited, we keep pricing simple and transparent.',
   },
   {
     question: 'Is there a contract?',
@@ -217,8 +217,8 @@ export default function PricingPage() {
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
                   <th className="text-left p-4 font-semibold text-primary">Feature</th>
-                  <th className="text-center p-4 font-semibold text-primary">Starter ($50/yr)</th>
-                  <th className="text-center p-4 font-semibold text-primary bg-[var(--color-accent)]/5">Unlimited ($950/yr)</th>
+                  <th className="text-center p-4 font-semibold text-primary">Starter (\u00a350/yr)</th>
+                  <th className="text-center p-4 font-semibold text-primary bg-[var(--color-accent)]/5">Unlimited (\u00a3950/yr)</th>
                 </tr>
               </thead>
               <tbody>
@@ -272,7 +272,7 @@ export default function PricingPage() {
           </h2>
           <p className="text-lg text-secondary mb-6 max-w-xl mx-auto">
             Resell VelocityPulse at full retail, pay us half.
-            $25/customer/year (Starter) or $475/customer/year (Unlimited).
+            \u00a325/customer/year (Starter) or \u00a3475/customer/year (Unlimited).
             No minimums. No negotiations.
           </p>
           <Button href="/partners">

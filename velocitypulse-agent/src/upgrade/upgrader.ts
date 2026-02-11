@@ -1,4 +1,4 @@
-import { exec } from 'child_process'
+import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -10,6 +10,13 @@ import { VERSION } from '../utils/version.js'
 
 const execAsync = promisify(exec)
 const fsPromises = fs.promises
+const MAX_REDIRECTS = 5
+const DEFAULT_DOWNLOAD_TEMPLATE =
+  'https://github.com/velocityeu/velocitypulse/releases/download/agent-v{version}/velocitypulse-agent-{version}.{ext}'
+
+type ArchiveExtension = '.tar.gz' | '.zip'
+
+type RuntimePlatform = 'linux' | 'darwin' | 'win32'
 
 export interface UpgradeResult {
   success: boolean
@@ -18,30 +25,99 @@ export interface UpgradeResult {
   targetVersion?: string
 }
 
-/**
- * Download a file from a URL to a local path
- */
-function downloadFile(url: string, dest: string): Promise<void> {
+function normalizePlatform(platform: NodeJS.Platform): RuntimePlatform {
+  if (platform === 'win32' || platform === 'darwin' || platform === 'linux') {
+    return platform
+  }
+
+  return 'linux'
+}
+
+function extensionForPlatform(platform: RuntimePlatform): ArchiveExtension {
+  return platform === 'win32' ? '.zip' : '.tar.gz'
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function resolveRedirect(currentUrl: string, locationHeader: string): string {
+  return new URL(locationHeader, currentUrl).toString()
+}
+
+function detectArchiveExtension(value: string): ArchiveExtension | null {
+  const base = value.split('?')[0]?.split('#')[0] ?? value
+
+  if (base.endsWith('.tar.gz')) return '.tar.gz'
+  if (base.endsWith('.zip')) return '.zip'
+
+  return null
+}
+
+function isManifestUrl(value: string): boolean {
+  const base = value.split('?')[0]?.split('#')[0] ?? value
+  return base.endsWith('.json')
+}
+
+function resolveTemplate(input: string, targetVersion: string, platform: RuntimePlatform): string {
+  const ext = extensionForPlatform(platform).replace(/^\./, '')
+
+  return input
+    .replaceAll('{version}', targetVersion)
+    .replaceAll('{platform}', platform)
+    .replaceAll('{ext}', ext)
+}
+
+function normalizeDownloadUrl(input: string, targetVersion: string, platform: RuntimePlatform): string {
+  const raw = input.trim()
+  const withTemplate = raw || DEFAULT_DOWNLOAD_TEMPLATE
+
+  if (withTemplate.includes('/releases/latest')) {
+    return resolveTemplate(DEFAULT_DOWNLOAD_TEMPLATE, targetVersion, platform)
+  }
+
+  return resolveTemplate(withTemplate, targetVersion, platform)
+}
+
+function downloadFile(url: string, dest: string, redirects = 0): Promise<void> {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest)
     const protocol = url.startsWith('https') ? https : http
 
     protocol.get(url, (response) => {
-      // Follow redirects
-      if (response.statusCode === 301 || response.statusCode === 302) {
+      const statusCode = response.statusCode ?? 0
+      if ([301, 302, 307, 308].includes(statusCode)) {
         const redirectUrl = response.headers.location
-        if (redirectUrl) {
+        if (!redirectUrl) {
           file.close()
-          fs.unlinkSync(dest)
-          downloadFile(redirectUrl, dest).then(resolve).catch(reject)
+          try { fs.unlinkSync(dest) } catch { /* ignore */ }
+          reject(new Error(`Download failed: redirect without location (${statusCode})`))
           return
         }
+
+        if (redirects >= MAX_REDIRECTS) {
+          file.close()
+          try { fs.unlinkSync(dest) } catch { /* ignore */ }
+          reject(new Error('Download failed: too many redirects'))
+          return
+        }
+
+        const nextUrl = resolveRedirect(url, redirectUrl)
+        file.close()
+        try { fs.unlinkSync(dest) } catch { /* ignore */ }
+        downloadFile(nextUrl, dest, redirects + 1).then(resolve).catch(reject)
+        return
       }
 
-      if (response.statusCode !== 200) {
+      if (statusCode !== 200) {
         file.close()
-        fs.unlinkSync(dest)
-        reject(new Error(`Download failed: HTTP ${response.statusCode}`))
+        try { fs.unlinkSync(dest) } catch { /* ignore */ }
+        reject(new Error(`Download failed: HTTP ${statusCode}`))
         return
       }
 
@@ -58,35 +134,147 @@ function downloadFile(url: string, dest: string): Promise<void> {
   })
 }
 
-/**
- * Get the installation directory (where the agent is running from)
- */
+function downloadText(url: string, redirects = 0): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const protocol = url.startsWith('https') ? https : http
+
+    protocol.get(url, (response) => {
+      const statusCode = response.statusCode ?? 0
+      if ([301, 302, 307, 308].includes(statusCode)) {
+        const redirectUrl = response.headers.location
+        if (!redirectUrl) {
+          reject(new Error(`Manifest download failed: redirect without location (${statusCode})`))
+          return
+        }
+
+        if (redirects >= MAX_REDIRECTS) {
+          reject(new Error('Manifest download failed: too many redirects'))
+          return
+        }
+
+        const nextUrl = resolveRedirect(url, redirectUrl)
+        downloadText(nextUrl, redirects + 1).then(resolve).catch(reject)
+        return
+      }
+
+      if (statusCode !== 200) {
+        reject(new Error(`Manifest download failed: HTTP ${statusCode}`))
+        return
+      }
+
+      let body = ''
+      response.setEncoding('utf8')
+      response.on('data', (chunk) => {
+        body += chunk
+      })
+      response.on('end', () => resolve(body))
+    }).on('error', reject)
+  })
+}
+
 function getInstallDir(): string {
-  // In production, __dirname is dist/upgrade/, go up two levels
-  // In development, we use the project root
   const scriptDir = path.dirname(new URL(import.meta.url).pathname)
 
-  // Windows path fix
   const normalizedDir = process.platform === 'win32'
-    ? scriptDir.replace(/^\//, '').replace(/\//g, '\\')
+    ? scriptDir.replace(/^\//, '').replace(/\//g, '\\\\')
     : scriptDir
 
-  // Go up from upgrade/ to the installation root
   return path.resolve(normalizedDir, '..', '..')
 }
 
-/**
- * Perform a self-upgrade of the agent
- *
- * Strategy:
- * 1. Download new release to temp directory
- * 2. Extract / verify
- * 3. Backup current version to ./previous/
- * 4. Platform-specific swap:
- *    - Windows: Write PowerShell script, spawn detached, exit
- *    - Linux: Write bash script, spawn detached, exit
- * 5. The spawned script replaces files and restarts the service
- */
+function pickManifestDownloadUrl(manifest: unknown, platform: RuntimePlatform): string | null {
+  if (!manifest || typeof manifest !== 'object') return null
+  const source = manifest as Record<string, unknown>
+
+  const direct = source.download_url
+  if (typeof direct === 'string' && direct.trim()) return direct.trim()
+
+  const directUrl = source.url
+  if (typeof directUrl === 'string' && directUrl.trim()) return directUrl.trim()
+
+  const platformKeys: Record<RuntimePlatform, string[]> = {
+    linux: ['linux', 'linux_url'],
+    darwin: ['darwin', 'macos', 'darwin_url', 'macos_url'],
+    win32: ['win32', 'windows', 'windows_url', 'win32_url'],
+  }
+
+  for (const key of platformKeys[platform]) {
+    const value = source[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  const nestedKeys = ['assets', 'downloads', 'files', 'platforms']
+  for (const nestedKey of nestedKeys) {
+    const nested = source[nestedKey]
+    if (!nested || typeof nested !== 'object') continue
+
+    const nestedRecord = nested as Record<string, unknown>
+    for (const key of platformKeys[platform]) {
+      const value = nestedRecord[key]
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim()
+      }
+    }
+  }
+
+  return null
+}
+
+async function resolveDownloadSource(
+  inputUrl: string,
+  targetVersion: string,
+  platform: RuntimePlatform,
+  logger: Logger
+): Promise<{ downloadUrl: string; archiveExt: ArchiveExtension }> {
+  const normalized = normalizeDownloadUrl(inputUrl, targetVersion, platform)
+  if (!isHttpUrl(normalized)) {
+    throw new Error('Upgrade download URL must be http(s)')
+  }
+
+  const archiveExt = detectArchiveExtension(normalized)
+  if (archiveExt) {
+    return {
+      downloadUrl: normalized,
+      archiveExt,
+    }
+  }
+
+  if (!isManifestUrl(normalized)) {
+    throw new Error('Upgrade download URL must be an archive (.tar.gz/.zip) or manifest (.json) URL')
+  }
+
+  logger.info(`Resolving upgrade manifest: ${normalized}`)
+  const manifestText = await downloadText(normalized)
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(manifestText)
+  } catch {
+    throw new Error('Upgrade manifest response is not valid JSON')
+  }
+
+  const manifestDownloadUrl = pickManifestDownloadUrl(parsed, platform)
+  if (!manifestDownloadUrl) {
+    throw new Error(`Upgrade manifest does not include a download URL for platform ${platform}`)
+  }
+
+  if (!isHttpUrl(manifestDownloadUrl)) {
+    throw new Error('Upgrade manifest returned a non-http(s) download URL')
+  }
+
+  const manifestArchiveExt = detectArchiveExtension(manifestDownloadUrl)
+  if (!manifestArchiveExt) {
+    throw new Error('Upgrade manifest must point to a .tar.gz or .zip archive')
+  }
+
+  return {
+    downloadUrl: manifestDownloadUrl,
+    archiveExt: manifestArchiveExt,
+  }
+}
+
 export async function performUpgrade(
   targetVersion: string,
   downloadUrl: string,
@@ -96,54 +284,47 @@ export async function performUpgrade(
   const installDir = getInstallDir()
   const tempDir = path.join(os.tmpdir(), `vp-agent-upgrade-${Date.now()}`)
   const backupDir = path.join(installDir, 'previous')
+  const runtimePlatform = normalizePlatform(process.platform)
 
   logger.info(`Starting upgrade: ${previousVersion} -> ${targetVersion}`)
   logger.info(`Install dir: ${installDir}`)
   logger.info(`Temp dir: ${tempDir}`)
 
   try {
-    // Create temp directory
     await fsPromises.mkdir(tempDir, { recursive: true })
 
-    // Step 1: Download
-    const archiveExt = downloadUrl.endsWith('.tar.gz') ? '.tar.gz' : '.zip'
-    const archivePath = path.join(tempDir, `agent${archiveExt}`)
+    const resolvedSource = await resolveDownloadSource(downloadUrl, targetVersion, runtimePlatform, logger)
+    const archivePath = path.join(tempDir, `agent${resolvedSource.archiveExt}`)
 
-    logger.info(`Downloading from: ${downloadUrl}`)
-    await downloadFile(downloadUrl, archivePath)
+    logger.info(`Downloading from: ${resolvedSource.downloadUrl}`)
+    await downloadFile(resolvedSource.downloadUrl, archivePath)
 
-    // Verify download exists and has size
     const archiveStat = await fsPromises.stat(archivePath)
     if (archiveStat.size < 1024) {
       throw new Error(`Downloaded file too small: ${archiveStat.size} bytes`)
     }
     logger.info(`Downloaded: ${(archiveStat.size / 1024 / 1024).toFixed(1)} MB`)
 
-    // Step 2: Extract
     const extractDir = path.join(tempDir, 'extracted')
     await fsPromises.mkdir(extractDir, { recursive: true })
 
-    if (archiveExt === '.tar.gz') {
+    if (resolvedSource.archiveExt === '.tar.gz') {
       await execAsync(`tar -xzf "${archivePath}" -C "${extractDir}"`)
+    } else if (process.platform === 'win32') {
+      await execAsync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${extractDir}' -Force"`)
     } else {
-      // Use PowerShell on Windows for zip extraction
-      if (process.platform === 'win32') {
-        await execAsync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${extractDir}' -Force"`)
-      } else {
-        await execAsync(`unzip -o "${archivePath}" -d "${extractDir}"`)
-      }
+      await execAsync(`unzip -o "${archivePath}" -d "${extractDir}"`)
     }
 
     logger.info('Archive extracted successfully')
 
-    // Step 3: Backup current version
+    await fsPromises.rm(backupDir, { recursive: true, force: true })
     await fsPromises.mkdir(backupDir, { recursive: true })
 
-    // Copy key files to backup
-    const filesToBackup = ['package.json', 'dist']
-    for (const f of filesToBackup) {
-      const src = path.join(installDir, f)
-      const dest = path.join(backupDir, f)
+    const filesToBackup = ['package.json', 'package-lock.json', 'dist', 'node_modules']
+    for (const fileName of filesToBackup) {
+      const src = path.join(installDir, fileName)
+      const dest = path.join(backupDir, fileName)
       try {
         const stat = await fsPromises.stat(src)
         if (stat.isDirectory()) {
@@ -152,16 +333,15 @@ export async function performUpgrade(
           await fsPromises.copyFile(src, dest)
         }
       } catch {
-        // File may not exist, skip
+        // Skip missing files.
       }
     }
     logger.info('Current version backed up')
 
-    // Step 4: Platform-specific swap
     if (process.platform === 'win32') {
-      await windowsUpgrade(extractDir, installDir, targetVersion, logger)
+      await windowsUpgrade(extractDir, installDir, backupDir, targetVersion, logger)
     } else {
-      await linuxUpgrade(extractDir, installDir, targetVersion, logger)
+      await linuxUpgrade(extractDir, installDir, backupDir, targetVersion, logger)
     }
 
     return {
@@ -174,7 +354,6 @@ export async function performUpgrade(
     const errorMsg = error instanceof Error ? error.message : 'Unknown error'
     logger.error(`Upgrade failed: ${errorMsg}`)
 
-    // Cleanup temp
     try { await fsPromises.rm(tempDir, { recursive: true, force: true }) } catch { /* ignore */ }
 
     return {
@@ -186,12 +365,10 @@ export async function performUpgrade(
   }
 }
 
-/**
- * Windows upgrade: write PowerShell script, spawn detached, exit
- */
 async function windowsUpgrade(
   extractDir: string,
   installDir: string,
+  backupDir: string,
   targetVersion: string,
   logger: Logger
 ): Promise<void> {
@@ -204,43 +381,92 @@ Start-Sleep -Seconds 2
 
 $source = "${extractDir.replace(/\\/g, '\\\\')}"
 $dest = "${installDir.replace(/\\/g, '\\\\')}"
+$backup = "${backupDir.replace(/\\/g, '\\\\')}"
 
-# Find the extracted content (may be in a subdirectory)
-$content = Get-ChildItem -Path $source -Directory | Select-Object -First 1
-if ($content) { $source = $content.FullName }
-
-# Copy new files
-try {
-    if (Test-Path "$source\\dist") {
-        Copy-Item -Path "$source\\dist\\*" -Destination "$dest\\dist\\" -Recurse -Force
+function Restore-Backup {
+    Write-Host "[upgrade] restoring backup..."
+    if (Test-Path "$backup\\dist") {
+        Remove-Item -Path "$dest\\dist" -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path "$backup\\dist" -Destination "$dest\\dist" -Recurse -Force
     }
+    if (Test-Path "$backup\\package.json") {
+        Copy-Item -Path "$backup\\package.json" -Destination "$dest\\package.json" -Force
+    }
+    if (Test-Path "$backup\\package-lock.json") {
+        Copy-Item -Path "$backup\\package-lock.json" -Destination "$dest\\package-lock.json" -Force
+    }
+    if (Test-Path "$backup\\node_modules") {
+        Remove-Item -Path "$dest\\node_modules" -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path "$backup\\node_modules" -Destination "$dest\\node_modules" -Recurse -Force
+    }
+}
+
+function Restart-Agent {
+    $serviceName = "VelocityPulseAgent"
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+
+    if ($service) {
+        Restart-Service -Name $serviceName -Force
+        Start-Sleep -Seconds 5
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if (-not $service -or $service.Status -ne "Running") {
+            throw "Service failed health check"
+        }
+        return
+    }
+
+    if (Get-Command pm2 -ErrorAction SilentlyContinue) {
+        & pm2 restart velocitypulse-agent 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "pm2 restart failed"
+        }
+        Start-Sleep -Seconds 3
+        $status = (& pm2 describe velocitypulse-agent 2>$null | Out-String)
+        if ($status -notmatch "online") {
+            throw "pm2 process failed health check"
+        }
+        return
+    }
+
+    Start-Process -FilePath "node" -ArgumentList "$dest\\dist\\index.js" -WorkingDirectory $dest -WindowStyle Hidden
+}
+
+try {
+    # Find the extracted content (may be in a subdirectory)
+    $content = Get-ChildItem -Path $source -Directory | Select-Object -First 1
+    if ($content) { $source = $content.FullName }
+
+    if (-not (Test-Path "$source\\dist")) {
+        throw "Upgrade archive missing dist/"
+    }
+
+    Remove-Item -Path "$dest\\dist" -Recurse -Force -ErrorAction SilentlyContinue
+    Copy-Item -Path "$source\\dist" -Destination "$dest\\dist" -Recurse -Force
+
     if (Test-Path "$source\\package.json") {
         Copy-Item -Path "$source\\package.json" -Destination "$dest\\package.json" -Force
     }
-    if (Test-Path "$source\\node_modules") {
-        Copy-Item -Path "$source\\node_modules\\*" -Destination "$dest\\node_modules\\" -Recurse -Force
+    if (Test-Path "$source\\package-lock.json") {
+        Copy-Item -Path "$source\\package-lock.json" -Destination "$dest\\package-lock.json" -Force
     }
-} catch {
-    Write-Error "Failed to copy files: $_"
-    exit 1
-}
 
-# Restart the service
-try {
-    $serviceName = "VelocityPulseAgent"
-    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if ($service) {
-        Restart-Service -Name $serviceName -Force
-    } else {
-        # Fallback: try pm2
-        & pm2 restart velocitypulse-agent 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            # Start directly
-            Start-Process -FilePath "node" -ArgumentList "$dest\\dist\\index.js" -WorkingDirectory $dest -WindowStyle Hidden
-        }
+    Push-Location $dest
+    & npm ci --omit=dev --silent
+    if ($LASTEXITCODE -ne 0) {
+        throw "npm ci failed"
     }
+    Pop-Location
+
+    Restart-Agent
 } catch {
-    Write-Error "Failed to restart: $_"
+    Write-Error "Upgrade failed: $_"
+    try {
+      Restore-Backup
+      Restart-Agent
+    } catch {
+      Write-Error "Rollback failed: $_"
+    }
+    exit 1
 }
 
 # Cleanup
@@ -251,8 +477,6 @@ Remove-Item -Path $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyConti
   await fsPromises.writeFile(scriptPath, script, 'utf-8')
   logger.info(`Upgrade script written to: ${scriptPath}`)
 
-  // Spawn detached PowerShell process
-  const { spawn } = await import('child_process')
   const child = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', scriptPath], {
     detached: true,
     stdio: 'ignore',
@@ -261,55 +485,133 @@ Remove-Item -Path $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyConti
   child.unref()
 
   logger.info('Upgrade script launched, agent will exit for restart...')
-
-  // Give time for the process to start
   await new Promise(resolve => setTimeout(resolve, 500))
-
-  // Exit - the upgrade script will restart us
   process.exit(0)
 }
 
-/**
- * Linux upgrade: write bash script, spawn detached, exit
- */
 async function linuxUpgrade(
   extractDir: string,
   installDir: string,
+  backupDir: string,
   targetVersion: string,
   logger: Logger
 ): Promise<void> {
   const scriptPath = path.join(os.tmpdir(), `vp-upgrade-${Date.now()}.sh`)
 
   const script = `#!/bin/bash
+set -euo pipefail
+
 # VelocityPulse Agent Upgrade Script
 # Upgrading to version ${targetVersion}
 sleep 2
 
 SOURCE="${extractDir}"
 DEST="${installDir}"
+BACKUP="${backupDir}"
+
+restore_backup() {
+  echo "[upgrade] restoring backup..."
+
+  if [ -d "$BACKUP/dist" ]; then
+    rm -rf "$DEST/dist"
+    cp -rf "$BACKUP/dist" "$DEST/dist"
+  fi
+
+  if [ -f "$BACKUP/package.json" ]; then
+    cp -f "$BACKUP/package.json" "$DEST/package.json"
+  fi
+
+  if [ -f "$BACKUP/package-lock.json" ]; then
+    cp -f "$BACKUP/package-lock.json" "$DEST/package-lock.json"
+  fi
+
+  if [ -d "$BACKUP/node_modules" ]; then
+    rm -rf "$DEST/node_modules"
+    cp -rf "$BACKUP/node_modules" "$DEST/node_modules"
+  fi
+}
+
+restart_agent() {
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^velocitypulse-agent\\.service'; then
+    systemctl restart velocitypulse-agent
+    return 0
+  fi
+
+  if command -v pm2 >/dev/null 2>&1; then
+    pm2 restart velocitypulse-agent >/dev/null 2>&1 || return 1
+    return 0
+  fi
+
+  nohup node "$DEST/dist/index.js" >/dev/null 2>&1 &
+  return 0
+}
+
+health_check() {
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^velocitypulse-agent\\.service'; then
+    for _ in {1..10}; do
+      if systemctl is-active --quiet velocitypulse-agent; then
+        return 0
+      fi
+      sleep 2
+    done
+    return 1
+  fi
+
+  if command -v pm2 >/dev/null 2>&1; then
+    pm2 describe velocitypulse-agent 2>/dev/null | grep -qi "online"
+    return $?
+  fi
+
+  pgrep -f "$DEST/dist/index.js" >/dev/null 2>&1
+  return $?
+}
+
+rollback_and_restart() {
+  restore_backup
+
+  if [ -f "$DEST/package-lock.json" ]; then
+    (cd "$DEST" && npm ci --omit=dev --silent) || true
+  fi
+
+  restart_agent || true
+}
 
 # Find extracted content (may be in a subdirectory)
 CONTENT=$(find "$SOURCE" -mindepth 1 -maxdepth 1 -type d | head -1)
 if [ -n "$CONTENT" ]; then SOURCE="$CONTENT"; fi
 
-# Copy new files
-if [ -d "$SOURCE/dist" ]; then
-    cp -rf "$SOURCE/dist/"* "$DEST/dist/"
-fi
-if [ -f "$SOURCE/package.json" ]; then
-    cp -f "$SOURCE/package.json" "$DEST/package.json"
-fi
-if [ -d "$SOURCE/node_modules" ]; then
-    cp -rf "$SOURCE/node_modules/"* "$DEST/node_modules/"
+if [ ! -d "$SOURCE/dist" ]; then
+  echo "Upgrade archive missing dist/"
+  exit 1
 fi
 
-# Restart the service
-if systemctl is-active --quiet velocitypulse-agent 2>/dev/null; then
-    systemctl restart velocitypulse-agent
-elif command -v pm2 &>/dev/null; then
-    pm2 restart velocitypulse-agent 2>/dev/null || node "$DEST/dist/index.js" &
-else
-    node "$DEST/dist/index.js" &
+rm -rf "$DEST/dist"
+cp -rf "$SOURCE/dist" "$DEST/dist"
+
+if [ -f "$SOURCE/package.json" ]; then
+  cp -f "$SOURCE/package.json" "$DEST/package.json"
+fi
+
+if [ -f "$SOURCE/package-lock.json" ]; then
+  cp -f "$SOURCE/package-lock.json" "$DEST/package-lock.json"
+fi
+
+if ! (cd "$DEST" && npm ci --omit=dev --silent); then
+  echo "npm ci failed, rolling back"
+  rollback_and_restart
+  exit 1
+fi
+
+if ! restart_agent; then
+  echo "Restart failed, rolling back"
+  rollback_and_restart
+  exit 1
+fi
+
+if ! health_check; then
+  echo "Health check failed, rolling back"
+  rollback_and_restart
+  exit 1
 fi
 
 # Cleanup
@@ -321,8 +623,6 @@ rm -f "$0"
   await execAsync(`chmod +x "${scriptPath}"`)
   logger.info(`Upgrade script written to: ${scriptPath}`)
 
-  // Spawn detached bash process
-  const { spawn } = await import('child_process')
   const child = spawn('bash', [scriptPath], {
     detached: true,
     stdio: 'ignore',
@@ -334,9 +634,6 @@ rm -f "$0"
   process.exit(0)
 }
 
-/**
- * Rollback to previous version
- */
 export async function rollback(logger: Logger): Promise<UpgradeResult> {
   const installDir = getInstallDir()
   const backupDir = path.join(installDir, 'previous')
@@ -347,11 +644,10 @@ export async function rollback(logger: Logger): Promise<UpgradeResult> {
       return { success: false, message: 'No backup found for rollback', previousVersion: VERSION }
     }
 
-    // Copy backup files back
     const files = await fsPromises.readdir(backupDir)
-    for (const f of files) {
-      const src = path.join(backupDir, f)
-      const dest = path.join(installDir, f)
+    for (const fileName of files) {
+      const src = path.join(backupDir, fileName)
+      const dest = path.join(installDir, fileName)
       const stat = await fsPromises.stat(src)
       if (stat.isDirectory()) {
         await fsPromises.cp(src, dest, { recursive: true })

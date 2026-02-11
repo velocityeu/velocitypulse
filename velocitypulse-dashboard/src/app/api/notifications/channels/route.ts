@@ -8,14 +8,14 @@ import type { NotificationChannelType } from '@/types'
 export const dynamic = 'force-dynamic'
 
 // GET /api/notifications/channels - List all notification channels
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { userId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const org = await getOrganizationForUser(userId)
+    const org = await getOrganizationForUser(userId, request.headers.get('x-organization-id'))
     if (!org) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const org = await getOrganizationForUser(userId)
+    const org = await getOrganizationForUser(userId, request.headers.get('x-organization-id'))
     if (!org) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }

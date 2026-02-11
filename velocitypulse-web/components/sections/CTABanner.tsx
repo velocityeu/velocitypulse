@@ -15,11 +15,11 @@ export default function CTABanner() {
           transition={{ duration: 0.5 }}
         >
           <h2 className="font-display text-display text-primary mb-4">
-            Try professional monitoring free for 30 days
+            Try professional monitoring free for 14 days
           </h2>
           <p className="text-lg text-secondary mb-8 max-w-xl mx-auto">
             Full access. No credit card. No commitment.
-            Then $50/year for Starter or $950/year for Unlimited.
+            Then \u00a350/year for Starter or \u00a3950/year for Unlimited.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button href="https://app.velocitypulse.io/sign-up" size="lg" target="_self">

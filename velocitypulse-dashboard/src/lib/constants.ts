@@ -1,6 +1,7 @@
 // ==============================================
 // VelocityPulse Constants
 // ==============================================
+import { resolveAgentDownloadUrl } from '@/lib/agent-release'
 
 // Dashboard version
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '0.1.0'
@@ -8,7 +9,11 @@ export const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID || 'dev'
 
 // Agent version management
 export const LATEST_AGENT_VERSION = process.env.LATEST_AGENT_VERSION || '1.0.0'
-export const AGENT_DOWNLOAD_URL = process.env.AGENT_DOWNLOAD_URL || 'https://github.com/velocityeu/velocitypulse-agent/releases/latest'
+export const AGENT_DOWNLOAD_URL_TEMPLATE = process.env.AGENT_DOWNLOAD_URL || ''
+export const AGENT_DOWNLOAD_URL = resolveAgentDownloadUrl({
+  latestVersion: LATEST_AGENT_VERSION,
+  override: AGENT_DOWNLOAD_URL_TEMPLATE,
+})
 export const ENFORCE_AGENT_UPDATES = process.env.ENFORCE_AGENT_UPDATES === 'true'
 
 // Agent installer URLs

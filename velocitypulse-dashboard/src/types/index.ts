@@ -399,6 +399,8 @@ export interface AgentHeartbeatRequest {
   version: string
   hostname: string
   uptime_seconds?: number
+  platform?: 'linux' | 'darwin' | 'win32'
+  arch?: string
 }
 
 export interface AgentHeartbeatResponse {

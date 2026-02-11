@@ -49,7 +49,7 @@ export function initializeSocketServer(
   const agentNamespace = io.of('/agent')
 
   agentNamespace.on('connection', (socket) => {
-    handleAgentConnection(socket, io!)
+    handleAgentConnection(socket)
   })
 
   console.log('[Socket] Server initialized')

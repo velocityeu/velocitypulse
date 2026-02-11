@@ -1,4 +1,5 @@
 import os from 'os'
+import { randomBytes } from 'crypto'
 import { loadConfig } from './config.js'
 import { createLogger } from './utils/logger.js'
 import { VERSION, PRODUCT_NAME } from './utils/version.js'
@@ -71,11 +72,20 @@ async function main() {
   const client = new DashboardClient(config.dashboardUrl, config.apiKey, logger)
 
   // Create UI server
+  const uiAuthToken = config.agentUiAuthToken?.trim() || randomBytes(24).toString('hex')
   const uiServer = new AgentUIServer(UI_PORT, logger, {
     agentName: config.agentName,
     dashboardUrl: config.dashboardUrl,
     version: VERSION,
+  }, {
+    enabled: config.agentUiEnabled,
+    host: config.agentUiHost,
+    authToken: uiAuthToken,
   })
+
+  if (uiServer.isEnabled()) {
+    logger.info(`Agent UI access URL: ${uiServer.getAccessUrl()}/?token=${uiAuthToken}`)
+  }
 
   // Track segment scan states
   const segmentStates = new Map<string, SegmentState>()
@@ -166,6 +176,7 @@ async function main() {
   async function heartbeatLoop() {
     const hostname = os.hostname()
     let retryDelay = 2000
+    let lastHeartbeatSucceeded = false
 
     while (isRunning) {
       try {
@@ -239,6 +250,7 @@ async function main() {
 
         // Reset retry delay on success
         retryDelay = 2000
+        lastHeartbeatSucceeded = true
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error'
@@ -250,10 +262,14 @@ async function main() {
 
         // Exponential backoff
         retryDelay = Math.min(retryDelay * 2, 60000)
+        lastHeartbeatSucceeded = false
       }
 
-      // Wait before next heartbeat (max 60 seconds, configurable)
-      await new Promise(resolve => setTimeout(resolve, Math.min(config.heartbeatInterval, 60000)))
+      // Wait before next heartbeat (failure path uses exponential backoff)
+      const waitMs = lastHeartbeatSucceeded
+        ? Math.min(config.heartbeatInterval, 60000)
+        : retryDelay
+      await new Promise(resolve => setTimeout(resolve, waitMs))
     }
   }
 

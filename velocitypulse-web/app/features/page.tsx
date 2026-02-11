@@ -225,7 +225,7 @@ export default function FeaturesPage() {
             Ready to get started?
           </h2>
           <p className="text-lg text-secondary mb-8 max-w-xl mx-auto">
-            Try all features free for 30 days. No credit card required.
+            Try all features free for 14 days. No credit card required.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button href="https://app.velocitypulse.io/sign-up" size="lg" target="_self">

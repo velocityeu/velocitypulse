@@ -103,14 +103,12 @@ jobs:
             fi
           done
       - name: Pull Vercel production env (dashboard)
-        working-directory: velocitypulse-dashboard
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DASHBOARD_PROJECT_ID }}
         run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
       - name: Build Vercel artifact (dashboard)
-        working-directory: velocitypulse-dashboard
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -118,7 +116,6 @@ jobs:
         run: npx vercel build --prod --token="$VERCEL_TOKEN"
       - name: Deploy dashboard to Vercel
         id: deploy
-        working-directory: velocitypulse-dashboard
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -151,14 +148,12 @@ jobs:
             fi
           done
       - name: Pull Vercel production env (web)
-        working-directory: velocitypulse-web
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
         run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
       - name: Build Vercel artifact (web)
-        working-directory: velocitypulse-web
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -166,7 +161,6 @@ jobs:
         run: npx vercel build --prod --token="$VERCEL_TOKEN"
       - name: Deploy web to Vercel
         id: deploy
-        working-directory: velocitypulse-web
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

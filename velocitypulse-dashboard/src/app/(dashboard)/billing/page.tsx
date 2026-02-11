@@ -108,7 +108,10 @@ export default function BillingPage() {
           const data = await billingResponse.json()
           setBillingData(data)
         } else {
-          setError('Failed to load billing information')
+          const errData = await billingResponse.json().catch(() => null)
+          const detail = errData?.error || `HTTP ${billingResponse.status}`
+          console.error('Billing details failed:', billingResponse.status, errData)
+          setError(`Failed to load billing information: ${detail}`)
         }
       } catch (err) {
         console.error('Failed to fetch billing data:', err)

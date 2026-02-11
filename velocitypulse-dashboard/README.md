@@ -182,7 +182,9 @@ src/
 
 Deployed on Vercel with root directory set to `velocitypulse-dashboard`.
 
-**Deploy:** Run `vercel --prod` from the **repo root** (`C:\Projects\velocitypulse`). Do NOT run from inside this subdirectory.
+**Main branch CD:** Push to `main` triggers GitHub workflow `main-build-deploy.yml`, which rebuilds all components and deploys dashboard + marketing to Vercel.
+
+**Manual deploy fallback:** Run `vercel --prod` from the **repo root** (`C:\Projects\velocitypulse`). Do NOT run from inside this subdirectory.
 
 **Cron schedules:**
 

@@ -1,0 +1,224 @@
+name: Main Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: main-build-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installer-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify installer scripts point to monorepo release source
+        run: |
+          grep -q 'REPO="velocityeu/velocitypulse"' velocitypulse-agent/scripts/install-linux.sh
+          grep -q 'REPO="velocityeu/velocitypulse"' velocitypulse-web/app/api/get/agent-sh/route.ts
+      - name: Validate latest agent release assets exist
+        run: |
+          RELEASE_JSON="$(curl -fsSL https://api.github.com/repos/velocityeu/velocitypulse/releases)"
+          echo "$RELEASE_JSON" | jq -e 'map(select(.tag_name | startswith("agent-v")))[0]' >/dev/null
+          echo "$RELEASE_JSON" | jq -e 'map(select(.tag_name | startswith("agent-v")))[0].assets | map(.name) | any(test("velocitypulse-agent-.*\\.tar\\.gz$"))' >/dev/null
+          echo "$RELEASE_JSON" | jq -e 'map(select(.tag_name | startswith("agent-v")))[0].assets | map(.name) | any(test("velocitypulse-agent-.*\\.zip$"))' >/dev/null
+
+  build-dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: velocitypulse-dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: velocitypulse-dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+
+  build-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: velocitypulse-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: velocitypulse-web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  build-agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: velocitypulse-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: velocitypulse-agent/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  deploy-dashboard:
+    runs-on: ubuntu-latest
+    needs: [installer-smoke, build-dashboard, build-web, build-agent]
+    outputs:
+      deployment_url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate Vercel secrets (dashboard)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DASHBOARD_PROJECT_ID }}
+        run: |
+          for var in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!var}" ]; then
+              echo "Missing required secret: $var"
+              exit 1
+            fi
+          done
+      - name: Pull Vercel production env (dashboard)
+        working-directory: velocitypulse-dashboard
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DASHBOARD_PROJECT_ID }}
+        run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build Vercel artifact (dashboard)
+        working-directory: velocitypulse-dashboard
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DASHBOARD_PROJECT_ID }}
+        run: npx vercel build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy dashboard to Vercel
+        id: deploy
+        working-directory: velocitypulse-dashboard
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DASHBOARD_PROJECT_ID }}
+        run: |
+          URL="$(npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Dashboard deployed to: $URL"
+
+  deploy-web:
+    runs-on: ubuntu-latest
+    needs: [installer-smoke, build-dashboard, build-web, build-agent]
+    outputs:
+      deployment_url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate Vercel secrets (web)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+        run: |
+          for var in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!var}" ]; then
+              echo "Missing required secret: $var"
+              exit 1
+            fi
+          done
+      - name: Pull Vercel production env (web)
+        working-directory: velocitypulse-web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+        run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build Vercel artifact (web)
+        working-directory: velocitypulse-web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+        run: npx vercel build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy web to Vercel
+        id: deploy
+        working-directory: velocitypulse-web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+        run: |
+          URL="$(npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Marketing web deployed to: $URL"
+
+  agent-release-tag:
+    runs-on: ubuntu-latest
+    needs: [build-agent]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate agent version sync
+        id: version
+        run: |
+          PKG_VERSION="$(node -p 'require("./velocitypulse-agent/package.json").version')"
+          TS_VERSION="$(node -e "const fs=require('fs'); const m=fs.readFileSync('./velocitypulse-agent/src/utils/version.ts','utf8').match(/export const VERSION = '([^']+)'/); if(!m){process.exit(1)} process.stdout.write(m[1])")"
+          if [ "$PKG_VERSION" != "$TS_VERSION" ]; then
+            echo "Agent version mismatch: package.json=$PKG_VERSION version.ts=$TS_VERSION"
+            exit 1
+          fi
+          TAG="agent-v$PKG_VERSION"
+          echo "agent_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Check if release tag already exists
+        id: tagcheck
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag already exists: ${{ steps.version.outputs.tag }}"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create and push agent release tag
+        if: steps.tagcheck.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.version.outputs.tag }}" "${GITHUB_SHA}"
+          git push origin "${{ steps.version.outputs.tag }}"
+          echo "Created tag ${{ steps.version.outputs.tag }} (triggers agent-release workflow)."
+
+  deployment-summary:
+    runs-on: ubuntu-latest
+    needs: [deploy-dashboard, deploy-web, agent-release-tag]
+    steps:
+      - name: Summary
+        run: |
+          echo "Dashboard deployment: ${{ needs.deploy-dashboard.outputs.deployment_url }}"
+          echo "Web deployment: ${{ needs.deploy-web.outputs.deployment_url }}"
+          echo "Agent release tag step completed."

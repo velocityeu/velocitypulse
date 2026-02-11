@@ -20,27 +20,22 @@ velocitypulse/                    # Monorepo (velocityeu/velocitypulse)
 
 | Component | Deploy Method | Trigger |
 |-----------|--------------|---------|
-| Marketing website | Vercel Git Integration | Push to `main` (if `velocitypulse-web/` changed) |
-| Dashboard app | Vercel Git Integration | Push to `main` (if `velocitypulse-dashboard/` changed) |
+| Marketing website | GitHub Actions (`main-build-deploy.yml`) -> Vercel CLI | Every push to `main` |
+| Dashboard app | GitHub Actions (`main-build-deploy.yml`) -> Vercel CLI | Every push to `main` |
+| Agent build/test | GitHub Actions (`main-build-deploy.yml`) | Every push to `main` |
+| Agent release tag | GitHub Actions (`main-build-deploy.yml`) | Every push to `main` (auto-tags `agent-vX.Y.Z` if missing) |
+| Agent release archives | GitHub Actions (`agent-release.yml`) | Triggered by pushed `agent-v*` tag |
 | Database migrations | GitHub Actions (`supabase-migrate.yml`) | Push to `main` (if `supabase/` changed) |
 
-Each Vercel project uses `ignoreCommand: "git diff --quiet HEAD^ HEAD -- ."` to only deploy when its directory has changes.
+`main-build-deploy.yml` gates deployment on successful rebuilds of all three components and then deploys dashboard + marketing web to Vercel production.
 
-### Agent Releases (manual tag):
+### Agent Releases (auto tag from `main`):
 
-The agent is released via GitHub Releases using tag-prefixed releases (`agent-v*`).
+The agent release workflow remains tag-based (`agent-v*`), but tags are now created automatically from `main-build-deploy.yml` when:
+1. `velocitypulse-agent/package.json` version matches `velocitypulse-agent/src/utils/version.ts`
+2. matching tag `agent-vX.Y.Z` does not already exist
 
-```bash
-# 1. Bump version in both files:
-#    - velocitypulse-agent/package.json
-#    - velocitypulse-agent/src/utils/version.ts
-# 2. Commit and push to main
-# 3. Tag and push:
-git tag agent-v1.0.1
-git push origin agent-v1.0.1
-```
-
-This triggers `.github/workflows/agent-release.yml` which:
+When tag is created, `.github/workflows/agent-release.yml`:
 1. Verifies tag matches `package.json` and `version.ts`
 2. Injects the git SHA as build ID
 3. Builds and tests the agent
@@ -91,6 +86,13 @@ This triggers `.github/workflows/agent-release.yml` which:
 ### GitHub Actions (Agent Release)
 - No additional secrets required (uses `GITHUB_TOKEN` with `contents: write`)
 - Agent install scripts do not require user-provided GitHub tokens in normal operation
+
+### GitHub Actions (Main Build + Deploy)
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_DASHBOARD_PROJECT_ID`
+- `VERCEL_WEB_PROJECT_ID`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (dashboard build step)
 
 ### Auto-injected by Vercel
 - `VERCEL_GIT_COMMIT_SHA` - Used to derive `NEXT_PUBLIC_BUILD_ID`

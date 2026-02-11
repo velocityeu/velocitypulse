@@ -80,7 +80,9 @@ npm test             # Run Vitest unit tests
 | Auth | Clerk | clerk.velocitypulse.io |
 | DNS | GoDaddy | A record `app` → `76.76.21.21` |
 
-**Deploy dashboard:** Run `vercel --prod` from the repo root (Vercel project has root dir set to `velocitypulse-dashboard`). Do NOT run from inside the subdirectory.
+**Main branch CD:** Every push to `main` runs GitHub Actions workflow `main-build-deploy.yml`, rebuilds agent/dashboard/web, deploys dashboard+marketing to Vercel, and auto-tags agent releases when version tags are missing.
+
+**Manual deploy fallback:** Run `vercel --prod` from the repo root (Vercel project has root dir set to app subdirectory). Do NOT run from inside the app subdirectory.
 
 **Cron:** Lifecycle automation runs every 6 hours (`0 */6 * * *`) via Vercel Cron at `/api/cron/lifecycle`.
 

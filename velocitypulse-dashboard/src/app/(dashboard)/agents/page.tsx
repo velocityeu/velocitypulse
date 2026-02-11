@@ -36,7 +36,7 @@ export default function AgentsPage() {
   const [copiedKey, setCopiedKey] = useState(false)
 
   // Sonar ping
-  const { pingAgent, pingAgents: pingMultipleAgents, isPinging } = useSonarPing()
+  const { pingAgent, pingAgents: pingMultipleAgents, isPinging, getPingResult } = useSonarPing()
 
   // Delete agent dialog
   const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null)
@@ -253,6 +253,7 @@ export default function AgentsPage() {
               onSegmentAdded={(seg) => handleSegmentAdded(agent.id, seg)}
               onSegmentDeleted={(segId) => handleSegmentDeleted(agent.id, segId)}
               onSegmentUpdated={(seg) => handleSegmentUpdated(agent.id, seg)}
+              pingResult={getPingResult(agent.id)}
             />
           ))}
         </div>

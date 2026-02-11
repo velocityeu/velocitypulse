@@ -39,7 +39,7 @@ export interface AgentCommand {
   id: string
   command_type: 'scan_now' | 'scan_segment' | 'update_config' | 'restart' | 'upgrade' | 'ping'
   payload?: Record<string, unknown>
-  status: 'pending' | 'completed' | 'failed'
+  status: 'pending' | 'acknowledged' | 'completed' | 'failed'
   created_at: string
   executed_at?: string
 }
@@ -207,8 +207,19 @@ export class DashboardClient {
   }
 
   /**
-   * Send a pong response to the dashboard
-   * Used to respond to ping commands for connectivity testing
+   * Acknowledge receipt of a command (sets status to 'acknowledged')
+   * Prevents duplicate execution via heartbeat re-delivery
+   */
+  async acknowledgeReceipt(commandId: string): Promise<void> {
+    this.logger.debug(`Acknowledging receipt of command ${commandId}`)
+    await this.client.post(`/api/agent/commands/${commandId}/ack`, {
+      status: 'acknowledged',
+    })
+  }
+
+  /**
+   * @deprecated Use acknowledgeCommand() for ping command responses.
+   * Kept for standalone UI-initiated pings (no command_id).
    */
   async sendPong(commandId?: string): Promise<{ latency_ms?: number }> {
     this.logger.debug('Sending pong to dashboard')

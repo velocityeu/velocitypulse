@@ -28,7 +28,9 @@ interface PingResponse {
  *
  * Ping/pong connectivity test endpoint.
  * Agent calls this to confirm connectivity and measure latency.
- * Can also be used to respond to a ping command.
+ *
+ * @deprecated for command responses - v1.2.0+ agents use /api/agent/commands/[id]/ack instead.
+ * Kept for standalone UI-initiated pings (no command_id) and backward compat with v1.1.0 agents.
  */
 export async function POST(request: Request) {
   try {
@@ -54,18 +56,21 @@ export async function POST(request: Request) {
     let latencyMs: number | undefined
 
     // If responding to a ping command, calculate latency and acknowledge
+    // This path is used by v1.1.0 agents; v1.2.0+ use /api/agent/commands/[id]/ack
     if (body?.command_id) {
+      console.log(`[DEPRECATED] Agent ${agentContext.agentId} using /api/agent/ping for command ${body.command_id} - upgrade to v1.2.0+`)
+
       const supabase = createServiceClient()
 
       // Get the command to calculate latency
       const { data: command } = await supabase
         .from('agent_commands')
-        .select('created_at')
+        .select('created_at, status')
         .eq('id', body.command_id)
         .eq('agent_id', agentContext.agentId)
         .single()
 
-      if (command) {
+      if (command && (command.status === 'pending' || command.status === 'acknowledged')) {
         // Calculate round-trip latency from command creation to now
         const commandCreated = new Date(command.created_at).getTime()
         const now = Date.now()
@@ -80,6 +85,7 @@ export async function POST(request: Request) {
             payload: {
               pong: true,
               latency_ms: latencyMs,
+              round_trip_ms: latencyMs,
               agent_timestamp: body.agent_timestamp,
               server_timestamp: serverTimestamp,
             },

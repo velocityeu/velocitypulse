@@ -10,6 +10,7 @@ import { AgentCommandBar } from '@/components/agents/AgentCommandBar'
 import { SegmentManager } from '@/components/agents/SegmentManager'
 import { AgentSetupDialog } from '@/components/agents/AgentSetupDialog'
 import type { Agent, NetworkSegment } from '@/types'
+import type { PingResult } from '@/lib/hooks/useSonarPing'
 
 interface AgentWithSegments extends Agent {
   network_segments?: NetworkSegment[]
@@ -25,6 +26,7 @@ interface AgentCardProps {
   onSegmentAdded: (segment: NetworkSegment) => void
   onSegmentDeleted: (segmentId: string) => void
   onSegmentUpdated: (segment: NetworkSegment) => void
+  pingResult?: PingResult
 }
 
 export function AgentCard({
@@ -37,6 +39,7 @@ export function AgentCard({
   onSegmentAdded,
   onSegmentDeleted,
   onSegmentUpdated,
+  pingResult,
 }: AgentCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
@@ -109,6 +112,7 @@ export function AgentCard({
             onPing={onPing}
             onScanNow={() => onSendCommand('scan_now')}
             onUpgrade={() => onSendCommand('upgrade')}
+            pingResult={pingResult}
           />
 
           {/* Setup button for never-connected agents */}

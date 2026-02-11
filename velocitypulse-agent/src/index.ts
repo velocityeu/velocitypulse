@@ -24,6 +24,10 @@ interface SegmentState {
   scanning: boolean
 }
 
+// Deduplication: track processed command IDs to prevent duplicate execution
+const processedCommandIds = new Set<string>()
+const MAX_PROCESSED_IDS = 500
+
 // Track consecutive failures for status hysteresis
 const deviceFailureCounts = new Map<string, number>()
 const lastKnownStatus = new Map<string, 'online' | 'offline' | 'degraded' | 'unknown'>()
@@ -685,15 +689,41 @@ async function main() {
     for (const command of commands) {
       if (command.status !== 'pending') continue
 
+      // Deduplication: skip if already processed
+      if (processedCommandIds.has(command.id)) {
+        logger.debug(`Skipping duplicate command: ${command.command_type} (${command.id})`)
+        continue
+      }
+
+      // Add to processed set with FIFO pruning
+      processedCommandIds.add(command.id)
+      if (processedCommandIds.size > MAX_PROCESSED_IDS) {
+        const first = processedCommandIds.values().next().value
+        if (first) processedCommandIds.delete(first)
+      }
+
+      // Acknowledge receipt to prevent heartbeat re-delivery
+      try {
+        await client.acknowledgeReceipt(command.id)
+      } catch (err) {
+        logger.debug(`Receipt ack failed (may already be acknowledged): ${err instanceof Error ? err.message : 'Unknown'}`)
+      }
+
       logger.info(`Processing command: ${command.command_type} (${command.id})`)
 
       try {
         switch (command.command_type) {
           case 'ping': {
-            // Respond with pong and latency
-            const result = await client.sendPong(command.id)
-            logger.info(`Ping response sent, latency: ${result.latency_ms}ms`)
-            // Pong acknowledgement is handled by the ping endpoint
+            // Respond via standard ack path with pong payload
+            const agentReceivedAt = new Date().toISOString()
+            const deliveryMs = Date.now() - new Date(command.created_at).getTime()
+            await client.acknowledgeCommand(command.id, true, {
+              pong: true,
+              delivery_ms: deliveryMs,
+              agent_received_at: agentReceivedAt,
+              agent_timestamp: new Date().toISOString(),
+            })
+            logger.info(`Ping response sent, delivery: ${deliveryMs}ms`)
             break
           }
 

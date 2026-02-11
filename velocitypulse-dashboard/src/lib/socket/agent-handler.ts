@@ -313,26 +313,6 @@ export function handleAgentConnection(
 }
 
 /**
- * Send a command to a specific agent
- */
-export function sendCommandToAgent(
-  io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>,
-  agentId: string,
-  command: { command_id: string; command_type: string; payload?: Record<string, unknown> }
-) {
-  const socket = connectedAgents.get(agentId)
-  if (socket && socket.connected) {
-    socket.emit('command', {
-      command_id: command.command_id,
-      command_type: command.command_type as 'scan_now' | 'scan_segment' | 'update_config' | 'restart' | 'upgrade' | 'ping',
-      payload: command.payload,
-    })
-    return true
-  }
-  return false
-}
-
-/**
  * Notify an agent that its segments have been updated
  */
 export async function notifySegmentsUpdated(

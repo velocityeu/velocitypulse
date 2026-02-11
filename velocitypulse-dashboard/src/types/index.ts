@@ -357,7 +357,7 @@ export interface AuditLog {
 // ==============================================
 
 export type AgentCommandType = 'scan_now' | 'scan_segment' | 'update_config' | 'restart' | 'upgrade' | 'ping'
-export type AgentCommandStatus = 'pending' | 'completed' | 'failed'
+export type AgentCommandStatus = 'pending' | 'acknowledged' | 'completed' | 'failed'
 
 export interface AgentCommand {
   id: string

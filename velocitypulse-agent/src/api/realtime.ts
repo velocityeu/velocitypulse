@@ -6,7 +6,7 @@ export interface AgentCommand {
   agent_id: string
   command_type: 'scan_now' | 'scan_segment' | 'update_config' | 'restart' | 'upgrade' | 'ping'
   payload?: Record<string, unknown>
-  status: 'pending' | 'completed' | 'failed'
+  status: 'pending' | 'acknowledged' | 'completed' | 'failed'
   created_at: string
   executed_at?: string
 }

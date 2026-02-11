@@ -8,6 +8,7 @@ import { ConfigPushDialog } from '@/components/agents/ConfigPushDialog'
 import { isNewerVersion } from '@/lib/version'
 import { LATEST_AGENT_VERSION } from '@/lib/constants'
 import type { Agent } from '@/types'
+import type { PingResult } from '@/lib/hooks/useSonarPing'
 
 interface AgentCommandBarProps {
   agent: Agent
@@ -15,6 +16,7 @@ interface AgentCommandBarProps {
   onPing: () => void
   onScanNow: () => void
   onUpgrade: () => void
+  pingResult?: PingResult
 }
 
 export function AgentCommandBar({
@@ -23,6 +25,7 @@ export function AgentCommandBar({
   onPing,
   onScanNow,
   onUpgrade,
+  pingResult,
 }: AgentCommandBarProps) {
   const [showConfig, setShowConfig] = useState(false)
   const showUpgrade = agent.version ? isNewerVersion(agent.version, LATEST_AGENT_VERSION) : false
@@ -34,6 +37,7 @@ export function AgentCommandBar({
           isPinging={isPinging}
           onClick={onPing}
           disabled={!agent.is_online}
+          result={pingResult}
         />
         <Button
           variant="ghost"

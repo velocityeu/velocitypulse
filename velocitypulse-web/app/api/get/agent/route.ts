@@ -830,6 +830,30 @@ if (-not $nssmReady) {
 # ============================================
 Write-Host "[5/9] Downloading latest agent release..." -ForegroundColor Yellow
 
+$tempZip = Join-Path $env:TEMP "vp-agent-$([guid]::NewGuid().ToString('N').Substring(0,8)).zip"
+$tempExtract = Join-Path $env:TEMP "vp-agent-extract"
+$downloadedFromDashboard = $false
+$dashboardDownloadUrl = "$DashboardUrl/api/agent/download?format=zip"
+
+# First try dashboard-hosted endpoint (works even when GitHub repo is private).
+try {
+    Invoke-WebRequest -Uri $dashboardDownloadUrl -OutFile $tempZip -Headers @{ "User-Agent" = "VelocityPulse-Installer" } -ErrorAction Stop
+    $probeDir = Join-Path $env:TEMP "vp-agent-probe-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+    Expand-Archive -Path $tempZip -DestinationPath $probeDir -Force -ErrorAction Stop
+    if (Test-Path $probeDir) {
+        Remove-Item $probeDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $version = "latest"
+    $downloadedFromDashboard = $true
+    Write-Host "  Downloaded via dashboard endpoint" -ForegroundColor Green
+} catch {
+    if (Test-Path $tempZip) {
+        Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
+    }
+    Write-Host "  Dashboard download unavailable. Falling back to GitHub release source..." -ForegroundColor Yellow
+}
+
+if (-not $downloadedFromDashboard) {
 # Monorepo releases: filter for agent-v* tags
 # Supports private repos via GITHUB_TOKEN env var
 $releasesUrl = "https://api.github.com/repos/velocityeu/velocitypulse/releases"
@@ -877,9 +901,6 @@ try {
     $useApiDownload = $false
 }
 
-$tempZip = Join-Path $env:TEMP "vp-agent-$([guid]::NewGuid().ToString('N').Substring(0,8)).zip"
-$tempExtract = Join-Path $env:TEMP "vp-agent-extract"
-
 $dlHeaders = @{ "User-Agent" = "VelocityPulse-Installer" }
 if ($useApiDownload -and $env:GITHUB_TOKEN) {
     $dlHeaders["Authorization"] = "token $($env:GITHUB_TOKEN)"
@@ -887,6 +908,7 @@ if ($useApiDownload -and $env:GITHUB_TOKEN) {
 }
 Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -Headers $dlHeaders
 Write-Host "  Downloaded OK" -ForegroundColor Green
+}
 
 # ============================================
 # [6/9] Extract + npm install + verify

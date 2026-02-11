@@ -154,82 +154,93 @@ echo -e "${YELLOW}[3/6] Downloading latest agent release...${NC}"
 
 TEMP_DIR=$(mktemp -d)
 TEMP_ZIP="$TEMP_DIR/agent.tar.gz"
+DOWNLOADED_OK=false
 
-# Try GitHub releases API (monorepo: filter for agent-v* tags)
-# Supports both public repos (unauthenticated) and private repos (with GITHUB_TOKEN)
-REPO="velocityeu/velocitypulse"
-RELEASES_URL="https://api.github.com/repos/$REPO/releases"
-DOWNLOAD_URL=""
-AUTH_ARGS=""
-if [ -n "$GITHUB_TOKEN" ]; then
-    AUTH_ARGS="-H Authorization:\ token\ $GITHUB_TOKEN"
-fi
-
-if command -v curl &>/dev/null; then
-    RELEASES_TMP=$(mktemp)
-    if [ -n "$GITHUB_TOKEN" ]; then
-        curl -sL -H "User-Agent: VelocityPulse-Installer" -H "Authorization: token $GITHUB_TOKEN" "$RELEASES_URL" -o "$RELEASES_TMP" 2>/dev/null
-    else
-        curl -sL -H "User-Agent: VelocityPulse-Installer" "$RELEASES_URL" -o "$RELEASES_TMP" 2>/dev/null
-    fi
-    # Parse JSON using node (already required as a prerequisite)
-    PARSED=$(node -e "
-      const d=require('fs').readFileSync('$RELEASES_TMP','utf8');
-      try {
-        const releases=JSON.parse(d);
-        const r=releases.find(r=>r.tag_name&&r.tag_name.startsWith('agent-v'));
-        if(!r)process.exit(0);
-        const a=r.assets.find(a=>a.name.endsWith('.tar.gz'));
-        console.log(r.tag_name);
-        console.log(a?a.id:'');
-        console.log(a?a.browser_download_url:'');
-      }catch(e){}
-    " 2>/dev/null || echo "")
-    rm -f "$RELEASES_TMP"
-    AGENT_TAG=$(echo "$PARSED" | sed -n '1p')
-    ASSET_ID=$(echo "$PARSED" | sed -n '2p')
-    ASSET_BROWSER_URL=$(echo "$PARSED" | sed -n '3p')
-    if [ -n "$AGENT_TAG" ]; then
-        if [ -n "$ASSET_ID" ] && [ -n "$GITHUB_TOKEN" ]; then
-            # Private repo: use API asset endpoint (browser_download_url returns 404)
-            DOWNLOAD_URL="https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
-        elif [ -n "$ASSET_BROWSER_URL" ]; then
-            # Public repo: browser_download_url works
-            DOWNLOAD_URL="$ASSET_BROWSER_URL"
-        fi
-        VERSION="$AGENT_TAG"
-        echo -e "${GREEN}  Version: $VERSION${NC}"
-    fi
-fi
-
-if [ -z "$DOWNLOAD_URL" ]; then
-    echo -e "${YELLOW}  Could not find a release. Falling back to main branch archive...${NC}"
-    if [ -n "$GITHUB_TOKEN" ]; then
-        DOWNLOAD_URL="https://api.github.com/repos/$REPO/tarball/main"
-    else
-        DOWNLOAD_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
-    fi
+# First try dashboard-hosted download endpoint (works even when GitHub repo is private).
+DASHBOARD_DOWNLOAD_URL="${DASHBOARD_URL%/}/api/agent/download?format=tgz"
+if curl -fsSL "$DASHBOARD_DOWNLOAD_URL" -o "$TEMP_ZIP" 2>/dev/null && tar -tzf "$TEMP_ZIP" &>/dev/null; then
+    DOWNLOADED_OK=true
     VERSION="latest"
+    echo -e "${GREEN}  Downloaded via dashboard endpoint${NC}"
 fi
 
-if [ -n "$GITHUB_TOKEN" ]; then
-    curl -sL -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/octet-stream" "$DOWNLOAD_URL" -o "$TEMP_ZIP"
-else
-    curl -sL "$DOWNLOAD_URL" -o "$TEMP_ZIP"
+if [ "$DOWNLOADED_OK" != "true" ]; then
+    echo -e "${YELLOW}  Dashboard download unavailable. Falling back to GitHub release source...${NC}"
+
+    # Try GitHub releases API (monorepo: filter for agent-v* tags)
+    # Supports both public repos (unauthenticated) and private repos (with GITHUB_TOKEN)
+    REPO="velocityeu/velocitypulse"
+    RELEASES_URL="https://api.github.com/repos/$REPO/releases"
+    DOWNLOAD_URL=""
+    if command -v curl &>/dev/null; then
+        RELEASES_TMP=$(mktemp)
+        if [ -n "$GITHUB_TOKEN" ]; then
+            curl -sL -H "User-Agent: VelocityPulse-Installer" -H "Authorization: token $GITHUB_TOKEN" "$RELEASES_URL" -o "$RELEASES_TMP" 2>/dev/null
+        else
+            curl -sL -H "User-Agent: VelocityPulse-Installer" "$RELEASES_URL" -o "$RELEASES_TMP" 2>/dev/null
+        fi
+        # Parse JSON using node (already required as a prerequisite)
+        PARSED=$(node -e "
+          const d=require('fs').readFileSync('$RELEASES_TMP','utf8');
+          try {
+            const releases=JSON.parse(d);
+            const r=Array.isArray(releases)?releases.find(r=>r.tag_name&&r.tag_name.startsWith('agent-v')):null;
+            if(!r)process.exit(0);
+            const a=(r.assets||[]).find(a=>a.name&&a.name.endsWith('.tar.gz'));
+            console.log(r.tag_name);
+            console.log(a?a.id:'');
+            console.log(a?a.browser_download_url:'');
+          }catch(e){}
+        " 2>/dev/null || echo "")
+        rm -f "$RELEASES_TMP"
+        AGENT_TAG=$(echo "$PARSED" | sed -n '1p')
+        ASSET_ID=$(echo "$PARSED" | sed -n '2p')
+        ASSET_BROWSER_URL=$(echo "$PARSED" | sed -n '3p')
+        if [ -n "$AGENT_TAG" ]; then
+            if [ -n "$ASSET_ID" ] && [ -n "$GITHUB_TOKEN" ]; then
+                # Private repo: use API asset endpoint (browser_download_url returns 404)
+                DOWNLOAD_URL="https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID"
+            elif [ -n "$ASSET_BROWSER_URL" ]; then
+                # Public repo: browser_download_url works
+                DOWNLOAD_URL="$ASSET_BROWSER_URL"
+            fi
+            VERSION="$AGENT_TAG"
+            echo -e "${GREEN}  Version: $VERSION${NC}"
+        fi
+    fi
+
+    if [ -z "$DOWNLOAD_URL" ]; then
+        echo -e "${YELLOW}  Could not find a release. Falling back to main branch archive...${NC}"
+        if [ -n "$GITHUB_TOKEN" ]; then
+            DOWNLOAD_URL="https://api.github.com/repos/$REPO/tarball/main"
+        else
+            DOWNLOAD_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
+        fi
+        VERSION="latest"
+    fi
+
+    if [ -n "$GITHUB_TOKEN" ]; then
+        curl -sL -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/octet-stream" "$DOWNLOAD_URL" -o "$TEMP_ZIP"
+    else
+        curl -sL "$DOWNLOAD_URL" -o "$TEMP_ZIP"
+    fi
+    if [ ! -s "$TEMP_ZIP" ]; then
+        echo -e "${RED}  ERROR: Download failed. Check network or GITHUB_TOKEN.${NC}"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+    # Verify the download is a valid archive (private repos return HTML without auth)
+    if ! tar -tzf "$TEMP_ZIP" &>/dev/null; then
+        echo -e "${RED}  ERROR: Downloaded file is not a valid archive.${NC}"
+        echo -e "${RED}  If your GitHub repo is private, either:${NC}"
+        echo -e "${RED}    1) configure dashboard endpoint ${DASHBOARD_URL%/}/api/agent/download${NC}"
+        echo -e "${RED}    2) or set GITHUB_TOKEN and retry:${NC}"
+        echo -e "${RED}       export GITHUB_TOKEN='ghp_your_token_here'${NC}"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+    echo -e "${GREEN}  Downloaded${NC}"
 fi
-if [ ! -s "$TEMP_ZIP" ]; then
-    echo -e "${RED}  ERROR: Download failed. Check network or GITHUB_TOKEN.${NC}"
-    exit 1
-fi
-# Verify the download is a valid archive (private repos return HTML without auth)
-if ! tar -tzf "$TEMP_ZIP" &>/dev/null; then
-    echo -e "${RED}  ERROR: Downloaded file is not a valid archive.${NC}"
-    echo -e "${RED}  The repository may be private. Set GITHUB_TOKEN and retry:${NC}"
-    echo -e "${RED}    export GITHUB_TOKEN='ghp_your_token_here'${NC}"
-    rm -rf "$TEMP_DIR"
-    exit 1
-fi
-echo -e "${GREEN}  Downloaded${NC}"
 
 # ==============================================
 # Extract and install

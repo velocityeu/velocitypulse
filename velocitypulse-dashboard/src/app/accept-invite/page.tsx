@@ -87,7 +87,8 @@ function AcceptInvitePage() {
         setError(err instanceof Error ? err.message : 'Failed to accept invitation')
       })
       .finally(() => setAccepting(false))
-  }, [isLoaded, isSignedIn, invitation, token, accepting, accepted, router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, isSignedIn, invitation, token, accepting, accepted])
 
   const redirectUrl = `/accept-invite?token=${token}`
   const signInUrl = `/sign-in?redirect_url=${encodeURIComponent(redirectUrl)}`

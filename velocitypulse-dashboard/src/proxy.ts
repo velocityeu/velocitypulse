@@ -70,8 +70,7 @@ const RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
   '/api/billing/update-payment': { max: 5, windowMs: 60000 },
   '/api/billing/reactivate': { max: 5, windowMs: 60000 },
   '/api/dashboard/agents': { max: 10, windowMs: 60000 },
-  '/api/invitations/accept': { max: 10, windowMs: 60000 },
-  '/api/invitations/verify': { max: 20, windowMs: 60000 },
+  '/api/invitations/accept': { max: 30, windowMs: 60000 },
 }
 
 function checkRateLimit(ip: string, path: string): boolean {

@@ -1,9 +1,10 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { useClerk } from '@clerk/nextjs'
 import { useCurrentUser } from '@/lib/contexts/UserContext'
-import { Loader2, CheckCircle2, XCircle, Mail, AlertTriangle } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, Mail, AlertTriangle, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -33,7 +34,8 @@ export default function AcceptInvitePageWrapper() {
 function AcceptInvitePage() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { isSignedIn, isLoading: userLoading } = useCurrentUser()
+  const { signOut } = useClerk()
+  const { user, isSignedIn, isLoading: userLoading } = useCurrentUser()
   const isLoaded = !userLoading
   const token = searchParams.get('token')
 
@@ -41,6 +43,7 @@ function AcceptInvitePage() {
   const [loading, setLoading] = useState(true)
   const [accepting, setAccepting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [wrongAccount, setWrongAccount] = useState(false)
   const [accepted, setAccepted] = useState(false)
 
   // Fetch invitation metadata
@@ -76,7 +79,13 @@ function AcceptInvitePage() {
     })
       .then(async res => {
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to accept invitation')
+        if (!res.ok) {
+          // Detect "wrong account" error (403 with email mismatch)
+          if (res.status === 403 && data.error?.includes('different email')) {
+            setWrongAccount(true)
+          }
+          throw new Error(data.error || 'Failed to accept invitation')
+        }
         setAccepted(true)
         // Redirect after a short delay
         setTimeout(() => {
@@ -106,6 +115,26 @@ function AcceptInvitePage() {
             <>
               <Loader2 className="h-10 w-10 animate-spin text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">Verifying invitation...</p>
+            </>
+          ) : error && wrongAccount ? (
+            <>
+              <LogOut className="h-10 w-10 text-amber-500 mx-auto mb-4" />
+              <h2 className="text-lg font-semibold mb-2">Wrong Account</h2>
+              <p className="text-sm text-muted-foreground mb-2">
+                You&apos;re signed in as <strong>{user?.email || 'a different account'}</strong>.
+              </p>
+              <p className="text-sm text-muted-foreground mb-6">
+                This invitation was sent to <strong>{invitation?.email}</strong>.
+                Please switch to that account to accept.
+              </p>
+              <div className="flex flex-col gap-3">
+                <Button onClick={() => signOut({ redirectUrl: `/accept-invite?token=${token}` })}>
+                  Switch Account
+                </Button>
+                <Button variant="outline" onClick={() => router.push('/dashboard')}>
+                  Go to Dashboard
+                </Button>
+              </div>
             </>
           ) : error ? (
             <>

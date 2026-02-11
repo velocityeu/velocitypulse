@@ -287,8 +287,6 @@ echo -e "\${GREEN}  Dependencies installed\${NC}"
 echo ""
 echo -e "\${YELLOW}[5/6] Configuring agent...\${NC}"
 
-UI_AUTH_TOKEN="\${AGENT_UI_AUTH_TOKEN:-$(node -e 'console.log(require(\"crypto\").randomBytes(24).toString(\"hex\"))')}"
-
 cat > "$INSTALL_DIR/.env" << ENVEOF
 # VelocityPulse Agent Configuration
 VELOCITYPULSE_URL=$DASHBOARD_URL
@@ -299,7 +297,6 @@ ENABLE_AUTO_SCAN=true
 ENABLE_REALTIME=true
 AGENT_UI_ENABLED=true
 AGENT_UI_HOST=127.0.0.1
-AGENT_UI_AUTH_TOKEN=$UI_AUTH_TOKEN
 ENVEOF
 
 chmod 600 "$INSTALL_DIR/.env"
@@ -414,7 +411,12 @@ echo ""
 echo -e "\${CYAN}  Install Dir:  $INSTALL_DIR\${NC}"
 echo -e "\${CYAN}  Service Name: $SERVICE_NAME\${NC}"
 echo -e "\${CYAN}  Dashboard:    $DASHBOARD_URL\${NC}"
-echo -e "\${CYAN}  Agent UI:     http://127.0.0.1:3001/?token=$UI_AUTH_TOKEN\${NC}"
+echo -e "\${CYAN}  Agent UI:     http://127.0.0.1:3001\${NC}"
+if [ "\${OS_TYPE}" = "linux" ]; then
+    echo "  Setup code:  journalctl -u $SERVICE_NAME -n 200 | grep \"setup code\" | tail -1"
+elif [ "\${OS_TYPE}" = "macos" ]; then
+    echo "  Setup code:  tail -n 200 $INSTALL_DIR/logs/service.log | grep \"setup code\" | tail -1"
+fi
 echo ""
 
 if [ "\${OS_TYPE}" = "linux" ]; then

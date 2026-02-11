@@ -11,6 +11,9 @@ import { BUILD_ID } from '../utils/version.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+const SESSION_COOKIE_NAME = 'vp_ui_session'
+const CSRF_COOKIE_NAME = 'vp_ui_csrf'
+
 export interface HealthStats {
   uptime: number // seconds
   memoryUsedMB: number
@@ -36,6 +39,12 @@ export interface AgentUIOptions {
   enabled?: boolean
   host?: string
   authToken?: string
+  setupCode?: string
+  setupCodeTtlMinutes?: number
+  sessionTtlMinutes?: number
+  ssoEnabled?: boolean
+  dashboardUrl?: string
+  agentApiKey?: string
 }
 
 export interface AgentUIState {
@@ -81,6 +90,22 @@ export interface LogEntry {
   message: string
 }
 
+type AuthMethod = 'local' | 'sso' | 'token_fallback'
+
+interface UISession {
+  id: string
+  method: AuthMethod
+  csrfToken: string
+  expiresAt: number
+  lastSeenAt: number
+}
+
+interface AuthResult {
+  ok: boolean
+  session?: UISession
+  viaTokenFallback?: boolean
+}
+
 export class AgentUIServer {
   private app: express.Application
   private httpServer: ReturnType<typeof createServer>
@@ -93,6 +118,16 @@ export class AgentUIServer {
   private authToken: string
   private healthInterval: ReturnType<typeof setInterval> | null = null
   private startedAt: string
+  private setupCode: string
+  private setupCodeExpiresAt: number
+  private setupCodeUsed: boolean
+  private setupCodeTtlMs: number
+  private sessionTtlMs: number
+  private sessions: Map<string, UISession>
+  private pendingSsoStates: Map<string, number>
+  private ssoEnabled: boolean
+  private dashboardUrl?: string
+  private agentApiKey?: string
 
   constructor(
     port: number,
@@ -106,6 +141,23 @@ export class AgentUIServer {
     this.authToken = options.authToken?.trim() || randomBytes(24).toString('hex')
     this.logger = logger
     this.startedAt = new Date().toISOString()
+    const setupCodeTtlMinutes = Number.isFinite(options.setupCodeTtlMinutes)
+      ? Number(options.setupCodeTtlMinutes)
+      : 10
+    const sessionTtlMinutes = Number.isFinite(options.sessionTtlMinutes)
+      ? Number(options.sessionTtlMinutes)
+      : 480
+    this.setupCodeTtlMs = Math.max(1, setupCodeTtlMinutes) * 60 * 1000
+    this.sessionTtlMs = Math.max(15, sessionTtlMinutes) * 60 * 1000
+    this.setupCode = this.normalizeSetupCode(options.setupCode) || this.generateSetupCode()
+    this.setupCodeExpiresAt = Date.now() + this.setupCodeTtlMs
+    this.setupCodeUsed = false
+    this.sessions = new Map<string, UISession>()
+    this.pendingSsoStates = new Map<string, number>()
+    this.ssoEnabled = options.ssoEnabled === true
+    this.dashboardUrl = options.dashboardUrl?.replace(/\/$/, '')
+    this.agentApiKey = options.agentApiKey?.trim()
+
     this.app = express()
     this.httpServer = createServer(this.app)
     this.io = new SocketIOServer(this.httpServer, {
@@ -150,9 +202,58 @@ export class AgentUIServer {
       ...initialState,
     }
 
+    if (!this.dashboardUrl && this.state.dashboardUrl) {
+      this.dashboardUrl = this.state.dashboardUrl.replace(/\/$/, '')
+    }
+
     this.setupRoutes()
     this.setupSocketIO()
     this.startHealthUpdates()
+  }
+
+  private normalizeSetupCode(value?: string): string {
+    if (!value) return ''
+    const compact = value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (compact.length < 8) return ''
+    const normalized = compact.slice(0, 8)
+    return `${normalized.slice(0, 4)}-${normalized.slice(4, 8)}`
+  }
+
+  private generateSetupCode(): string {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    let code = ''
+    for (let i = 0; i < 8; i++) {
+      code += alphabet[Math.floor(Math.random() * alphabet.length)]
+    }
+    return `${code.slice(0, 4)}-${code.slice(4, 8)}`
+  }
+
+  private rotateSetupCode(reason: 'expired' | 'used' | 'manual' = 'manual'): string {
+    this.setupCode = this.generateSetupCode()
+    this.setupCodeExpiresAt = Date.now() + this.setupCodeTtlMs
+    this.setupCodeUsed = false
+    this.logger.info(`Agent UI setup code regenerated (${reason})`)
+    return this.setupCode
+  }
+
+  private cleanupExpiredAuthState(): void {
+    const now = Date.now()
+
+    if (now > this.setupCodeExpiresAt && !this.setupCodeUsed) {
+      this.rotateSetupCode('expired')
+    }
+
+    for (const [id, session] of this.sessions.entries()) {
+      if (session.expiresAt <= now) {
+        this.sessions.delete(id)
+      }
+    }
+
+    for (const [state, expiresAt] of this.pendingSsoStates.entries()) {
+      if (expiresAt <= now) {
+        this.pendingSsoStates.delete(state)
+      }
+    }
   }
 
   private parseCookies(cookieHeader?: string): Record<string, string> {
@@ -179,7 +280,7 @@ export class AgentUIServer {
     return token.trim()
   }
 
-  private getRequestToken(req: express.Request): string | null {
+  private getLegacyRequestToken(req: express.Request): string | null {
     const queryToken = typeof req.query.token === 'string' ? req.query.token.trim() : ''
     if (queryToken) return queryToken
 
@@ -191,13 +292,10 @@ export class AgentUIServer {
     const bearerToken = this.extractBearerToken(req.headers.authorization)
     if (bearerToken) return bearerToken
 
-    const cookies = this.parseCookies(req.headers.cookie)
-    if (cookies.vp_ui_token) return cookies.vp_ui_token
-
     return null
   }
 
-  private getSocketToken(handshake: { headers: Record<string, unknown>; auth?: Record<string, unknown> }): string | null {
+  private getLegacySocketToken(handshake: { headers: Record<string, unknown>; auth?: Record<string, unknown> }): string | null {
     const authToken = typeof handshake.auth?.token === 'string' ? handshake.auth.token.trim() : ''
     if (authToken) return authToken
 
@@ -212,42 +310,334 @@ export class AgentUIServer {
       if (bearer) return bearer
     }
 
+    return null
+  }
+
+  private isLegacyTokenValid(token: string | null): boolean {
+    return !!token && token === this.authToken
+  }
+
+  private createSession(method: AuthMethod): UISession {
+    const now = Date.now()
+    const session: UISession = {
+      id: randomBytes(24).toString('hex'),
+      method,
+      csrfToken: randomBytes(20).toString('hex'),
+      expiresAt: now + this.sessionTtlMs,
+      lastSeenAt: now,
+    }
+
+    this.sessions.set(session.id, session)
+    return session
+  }
+
+  private getSessionById(sessionId: string | null): UISession | null {
+    if (!sessionId) return null
+
+    this.cleanupExpiredAuthState()
+    const session = this.sessions.get(sessionId)
+    if (!session) return null
+
+    if (session.expiresAt <= Date.now()) {
+      this.sessions.delete(sessionId)
+      return null
+    }
+
+    session.lastSeenAt = Date.now()
+    session.expiresAt = session.lastSeenAt + this.sessionTtlMs
+    this.sessions.set(session.id, session)
+    return session
+  }
+
+  private getSessionFromRequest(req: express.Request): UISession | null {
+    const cookies = this.parseCookies(req.headers.cookie)
+    const sessionId = cookies[SESSION_COOKIE_NAME]
+    return this.getSessionById(sessionId || null)
+  }
+
+  private getSessionFromSocket(handshake: { headers: Record<string, unknown>; auth?: Record<string, unknown> }): UISession | null {
     const cookieHeader = handshake.headers.cookie
     if (typeof cookieHeader === 'string') {
       const cookies = this.parseCookies(cookieHeader)
-      if (cookies.vp_ui_token) return cookies.vp_ui_token
+      const fromCookie = this.getSessionById(cookies[SESSION_COOKIE_NAME] || null)
+      if (fromCookie) return fromCookie
+    }
+
+    const authSession = typeof handshake.auth?.session === 'string' ? handshake.auth.session.trim() : ''
+    if (authSession) {
+      return this.getSessionById(authSession)
     }
 
     return null
   }
 
-  private isTokenValid(token: string | null): boolean {
-    return !!token && token === this.authToken
+  private setSessionCookies(res: express.Response, session: UISession): void {
+    const maxAgeSeconds = Math.floor(this.sessionTtlMs / 1000)
+    res.setHeader('Set-Cookie', [
+      `${SESSION_COOKIE_NAME}=${encodeURIComponent(session.id)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAgeSeconds}`,
+      `${CSRF_COOKIE_NAME}=${encodeURIComponent(session.csrfToken)}; SameSite=Strict; Path=/; Max-Age=${maxAgeSeconds}`,
+    ])
   }
 
-  private enforceRequestAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
-    const token = this.getRequestToken(req)
-    if (!this.isTokenValid(token)) {
-      if (req.path.startsWith('/api/')) {
-        res.status(401).json({ error: 'Unauthorized' })
-      } else {
-        res.status(401).send('Unauthorized. Open this UI with ?token=<AGENT_UI_AUTH_TOKEN> once to establish a session.')
+  private clearSessionCookies(res: express.Response): void {
+    res.setHeader('Set-Cookie', [
+      `${SESSION_COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`,
+      `${CSRF_COOKIE_NAME}=; SameSite=Strict; Path=/; Max-Age=0`,
+      `vp_ui_token=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`,
+    ])
+  }
+
+  private validateCsrf(req: express.Request, session: UISession): boolean {
+    const method = req.method.toUpperCase()
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      return true
+    }
+
+    if (req.path.startsWith('/auth/')) {
+      return true
+    }
+
+    const headerToken = req.headers['x-csrf-token']
+    const csrfToken = typeof headerToken === 'string' ? headerToken.trim() : ''
+    return csrfToken.length > 0 && csrfToken === session.csrfToken
+  }
+
+  private resolveAuthFromRequest(req: express.Request, res?: express.Response): AuthResult {
+    const existingSession = this.getSessionFromRequest(req)
+    if (existingSession) {
+      return { ok: true, session: existingSession }
+    }
+
+    const legacyToken = this.getLegacyRequestToken(req)
+    if (this.isLegacyTokenValid(legacyToken) && res) {
+      const session = this.createSession('token_fallback')
+      this.setSessionCookies(res, session)
+      return { ok: true, session, viaTokenFallback: true }
+    }
+
+    return { ok: false }
+  }
+
+  private async verifySsoGrant(
+    grantId: string,
+    state: string
+  ): Promise<{ ok: boolean; organizationId?: string; error?: string }> {
+    const dashboardUrl = this.dashboardUrl || this.state.dashboardUrl
+    if (!dashboardUrl) {
+      return { ok: false, error: 'dashboard_url_unset' }
+    }
+
+    if (!this.agentApiKey) {
+      return { ok: false, error: 'agent_api_key_unset' }
+    }
+
+    if (!this.state.agentId) {
+      return { ok: false, error: 'agent_id_unset' }
+    }
+
+    try {
+      const response = await fetch(`${dashboardUrl.replace(/\/$/, '')}/api/agent-ui/sso/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.agentApiKey}`,
+        },
+        body: JSON.stringify({
+          grant_id: grantId,
+          state,
+          agent_id: this.state.agentId,
+        }),
+      })
+
+      if (!response.ok) {
+        const payload = await response.text()
+        return { ok: false, error: `verify_failed_${response.status}_${payload.slice(0, 80)}` }
       }
-      return
+
+      const payload = await response.json() as { ok?: boolean; organization_id?: string; error?: string }
+      if (!payload.ok || !payload.organization_id) {
+        return { ok: false, error: payload.error || 'invalid_verify_payload' }
+      }
+
+      if (this.state.organizationId && payload.organization_id !== this.state.organizationId) {
+        return { ok: false, error: 'organization_mismatch' }
+      }
+
+      return { ok: true, organizationId: payload.organization_id }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'verify_exception' }
+    }
+  }
+
+  private buildSsoAuthorizeUrl(state: string): string | null {
+    const dashboardUrl = (this.dashboardUrl || this.state.dashboardUrl || '').replace(/\/$/, '')
+    if (!dashboardUrl || !this.state.agentId) {
+      return null
     }
 
-    // Persist a strict local-only cookie so users do not need token query params repeatedly.
-    if (typeof req.query.token === 'string' && req.query.token.trim()) {
-      res.setHeader('Set-Cookie', `vp_ui_token=${encodeURIComponent(this.authToken)}; HttpOnly; SameSite=Strict; Path=/`)
-    }
-
-    next()
+    const callback = `${this.getAccessUrl()}/api/auth/sso/callback`
+    const url = new URL(`${dashboardUrl}/api/agent-ui/sso/authorize`)
+    url.searchParams.set('agent_id', this.state.agentId)
+    url.searchParams.set('state', state)
+    url.searchParams.set('redirect_uri', callback)
+    return url.toString()
   }
 
   private setupRoutes(): void {
     this.app.disable('x-powered-by')
+    this.app.use(express.json({ limit: '64kb' }))
 
-    this.app.use((req, res, next) => this.enforceRequestAuth(req, res, next))
+    // Public auth discovery for login UI
+    this.app.get('/api/auth/methods', (_req, res) => {
+      const dashboardUrl = (this.dashboardUrl || this.state.dashboardUrl || '').replace(/\/$/, '')
+      const ssoAvailable = this.ssoEnabled && !!dashboardUrl && !!this.state.agentId
+
+      res.json({
+        local_enabled: true,
+        sso_enabled: ssoAvailable,
+        sso_url: ssoAvailable ? '/api/auth/sso/start' : null,
+        session_ttl_minutes: Math.floor(this.sessionTtlMs / 60000),
+      })
+    })
+
+    this.app.get('/api/auth/session', (req, res) => {
+      const authResult = this.resolveAuthFromRequest(req, res)
+      if (!authResult.ok || !authResult.session) {
+        res.status(401).json({ authenticated: false })
+        return
+      }
+
+      res.json({
+        authenticated: true,
+        method: authResult.session.method,
+        expires_at: new Date(authResult.session.expiresAt).toISOString(),
+      })
+    })
+
+    this.app.post('/api/auth/local/login', (req, res) => {
+      this.cleanupExpiredAuthState()
+
+      const provided = this.normalizeSetupCode(req.body?.setup_code)
+      if (!provided) {
+        res.status(400).json({ error: 'setup_code_required' })
+        return
+      }
+
+      if (this.setupCodeUsed) {
+        res.status(401).json({ error: 'setup_code_used' })
+        return
+      }
+
+      if (Date.now() > this.setupCodeExpiresAt) {
+        this.rotateSetupCode('expired')
+        res.status(401).json({ error: 'setup_code_expired' })
+        return
+      }
+
+      if (provided !== this.setupCode) {
+        res.status(401).json({ error: 'invalid_setup_code' })
+        return
+      }
+
+      this.setupCodeUsed = true
+      const session = this.createSession('local')
+      this.setSessionCookies(res, session)
+
+      // Immediately rotate for next break-glass use.
+      const nextCode = this.rotateSetupCode('used')
+      this.logger.info(`Agent UI local login succeeded. New setup code issued for next recovery: ${nextCode}`)
+
+      res.json({ ok: true, method: 'local' })
+    })
+
+    this.app.get('/api/auth/sso/start', (req, res) => {
+      if (!this.ssoEnabled) {
+        res.status(404).json({ error: 'sso_disabled' })
+        return
+      }
+
+      const state = randomBytes(20).toString('hex')
+      const ssoUrl = this.buildSsoAuthorizeUrl(state)
+      if (!ssoUrl) {
+        res.status(400).json({ error: 'sso_not_ready', reason: 'agent_not_registered_or_dashboard_missing' })
+        return
+      }
+
+      this.pendingSsoStates.set(state, Date.now() + 10 * 60 * 1000)
+
+      const nextUrl = typeof req.query.next === 'string' ? req.query.next : '/'
+      const redirect = new URL(ssoUrl)
+      redirect.searchParams.set('next', nextUrl)
+      res.redirect(302, redirect.toString())
+    })
+
+    this.app.get('/api/auth/sso/callback', async (req, res) => {
+      if (!this.ssoEnabled) {
+        res.redirect(302, '/?auth_error=sso_disabled')
+        return
+      }
+
+      const grantId = typeof req.query.grant_id === 'string' ? req.query.grant_id.trim() : ''
+      const state = typeof req.query.state === 'string' ? req.query.state.trim() : ''
+      const next = typeof req.query.next === 'string' && req.query.next.startsWith('/')
+        ? req.query.next
+        : '/'
+
+      if (!grantId || !state) {
+        res.redirect(302, '/?auth_error=missing_sso_params')
+        return
+      }
+
+      this.cleanupExpiredAuthState()
+      const expiresAt = this.pendingSsoStates.get(state)
+      if (!expiresAt || expiresAt <= Date.now()) {
+        this.pendingSsoStates.delete(state)
+        res.redirect(302, '/?auth_error=invalid_or_expired_state')
+        return
+      }
+      this.pendingSsoStates.delete(state)
+
+      const verify = await this.verifySsoGrant(grantId, state)
+      if (!verify.ok) {
+        this.logger.warn(`Agent UI SSO verify failed: ${verify.error || 'unknown'}`)
+        res.redirect(302, '/?auth_error=sso_verify_failed')
+        return
+      }
+
+      const session = this.createSession('sso')
+      this.setSessionCookies(res, session)
+      res.redirect(302, next)
+    })
+
+    this.app.post('/api/auth/logout', (req, res) => {
+      const session = this.getSessionFromRequest(req)
+      if (session) {
+        this.sessions.delete(session.id)
+      }
+      this.clearSessionCookies(res)
+      res.json({ ok: true })
+    })
+
+    // All non-auth API routes require authenticated session.
+    this.app.use('/api', (req, res, next) => {
+      if (req.path.startsWith('/auth/')) {
+        next()
+        return
+      }
+
+      const authResult = this.resolveAuthFromRequest(req, res)
+      if (!authResult.ok || !authResult.session) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
+
+      if (!this.validateCsrf(req, authResult.session)) {
+        res.status(403).json({ error: 'Invalid CSRF token' })
+        return
+      }
+
+      next()
+    })
 
     // Serve static files from public directory
     const publicPath = path.join(__dirname, 'public')
@@ -278,12 +668,19 @@ export class AgentUIServer {
 
   private setupSocketIO(): void {
     this.io.use((socket, next) => {
-      const token = this.getSocketToken(socket.handshake as unknown as { headers: Record<string, unknown>; auth?: Record<string, unknown> })
-      if (!this.isTokenValid(token)) {
-        next(new Error('unauthorized'))
+      const session = this.getSessionFromSocket(socket.handshake as unknown as { headers: Record<string, unknown>; auth?: Record<string, unknown> })
+      if (session) {
+        next()
         return
       }
-      next()
+
+      const token = this.getLegacySocketToken(socket.handshake as unknown as { headers: Record<string, unknown>; auth?: Record<string, unknown> })
+      if (this.isLegacyTokenValid(token)) {
+        next()
+        return
+      }
+
+      next(new Error('unauthorized'))
     })
 
     this.io.on('connection', (socket) => {
@@ -390,6 +787,7 @@ export class AgentUIServer {
         cpuUsage: Math.round(os.loadavg()[0] * 100) / 100,
         startedAt: this.startedAt,
       }
+      this.cleanupExpiredAuthState()
       this.io.emit('health', this.state.health)
     }, 5000)
   }
@@ -455,5 +853,14 @@ export class AgentUIServer {
 
   getAccessUrl(): string {
     return `http://${this.host}:${this.port}`
+  }
+
+  getCurrentSetupCode(): string {
+    this.cleanupExpiredAuthState()
+    return this.setupCode
+  }
+
+  regenerateSetupCode(): string {
+    return this.rotateSetupCode('manual')
   }
 }

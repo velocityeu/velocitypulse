@@ -1153,6 +1153,7 @@ Write-Host ""
 Write-Host "  Install Dir:  $InstallDir" -ForegroundColor Cyan
 Write-Host "  Service Name: $ServiceName" -ForegroundColor Cyan
 Write-Host "  Agent UI:     http://localhost:3001" -ForegroundColor Cyan
+Write-Host "  Setup code:  Get-Content '$InstallDir\logs\service.log' -Tail 200 | Select-String 'setup code' | Select-Object -Last 1" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Commands:" -ForegroundColor Yellow
 Write-Host "    Start:     Start-Service $ServiceName" -ForegroundColor White

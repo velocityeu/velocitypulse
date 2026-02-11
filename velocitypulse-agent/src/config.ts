@@ -26,6 +26,10 @@ export interface Config {
   agentUiEnabled: boolean
   agentUiHost: string
   agentUiAuthToken?: string
+  agentUiSetupCode?: string
+  agentUiSessionTtlMinutes: number
+  agentUiSetupCodeTtlMinutes: number
+  agentUiSsoEnabled: boolean
 }
 
 /**
@@ -77,5 +81,9 @@ export function loadConfig(): Config {
     agentUiEnabled: process.env.AGENT_UI_ENABLED !== 'false', // Default: true
     agentUiHost: process.env.AGENT_UI_HOST || '127.0.0.1',
     agentUiAuthToken: process.env.AGENT_UI_AUTH_TOKEN,
+    agentUiSetupCode: process.env.AGENT_UI_SETUP_CODE,
+    agentUiSessionTtlMinutes: parseInt(process.env.AGENT_UI_SESSION_TTL_MINUTES || '480', 10),
+    agentUiSetupCodeTtlMinutes: parseInt(process.env.AGENT_UI_SETUP_CODE_TTL_MINUTES || '10', 10),
+    agentUiSsoEnabled: process.env.AGENT_UI_SSO_ENABLED === 'true',
   }
 }

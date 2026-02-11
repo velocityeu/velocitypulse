@@ -81,10 +81,20 @@ async function main() {
     enabled: config.agentUiEnabled,
     host: config.agentUiHost,
     authToken: uiAuthToken,
+    setupCode: config.agentUiSetupCode,
+    sessionTtlMinutes: config.agentUiSessionTtlMinutes,
+    setupCodeTtlMinutes: config.agentUiSetupCodeTtlMinutes,
+    ssoEnabled: config.agentUiSsoEnabled,
+    dashboardUrl: config.dashboardUrl,
+    agentApiKey: config.apiKey,
   })
 
   if (uiServer.isEnabled()) {
-    logger.info(`Agent UI access URL: ${uiServer.getAccessUrl()}/?token=${uiAuthToken}`)
+    logger.info(`Agent UI access URL: ${uiServer.getAccessUrl()}`)
+    logger.info(`Agent UI setup code (one-time): ${uiServer.getCurrentSetupCode()}`)
+    if (config.agentUiSsoEnabled) {
+      logger.info('Agent UI SSO enabled: users can sign in via dashboard in addition to local setup code')
+    }
   }
 
   // Track segment scan states

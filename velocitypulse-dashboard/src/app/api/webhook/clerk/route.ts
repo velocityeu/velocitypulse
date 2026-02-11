@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { Webhook } from 'svix'
+import * as Sentry from '@sentry/nextjs'
 import { createServiceClient } from '@/lib/db/client'
 import { logger } from '@/lib/logger'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
@@ -22,6 +23,8 @@ interface ClerkWebhookEvent {
     public_metadata?: {
       role?: string
     }
+    // session.created fields
+    user_id?: string
   }
 }
 
@@ -119,11 +122,23 @@ export async function POST(request: Request) {
 
         break
       }
+
+      case 'session.created': {
+        const sessionUserId = event.data.user_id
+        if (sessionUserId) {
+          await supabase
+            .from('users')
+            .update({ last_sign_in_at: new Date().toISOString() })
+            .eq('id', sessionUserId)
+        }
+        break
+      }
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
     logger.error('Clerk webhook handler error', error, { route: 'api/webhook/clerk' })
+    Sentry.captureException(error, { tags: { route: 'api/webhook/clerk' } })
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }

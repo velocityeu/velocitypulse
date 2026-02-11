@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { authFetch } from '@/lib/auth-fetch'
 import { useTheme } from 'next-themes'
-import { UserProfile } from '@clerk/nextjs'
+import { AccountSettings } from '@/components/settings/AccountSettings'
 import { Sun, Moon, Monitor, Settings as SettingsIcon, Palette, Paintbrush, Shield, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -122,16 +122,7 @@ export default function SettingsPage() {
 
       {/* Account Tab */}
       {activeTab === 'account' && (
-        <div className="max-w-2xl">
-          <UserProfile
-            appearance={{
-              elements: {
-                rootBox: 'w-full',
-                card: 'shadow-none border rounded-lg',
-              },
-            }}
-          />
-        </div>
+        <AccountSettings />
       )}
 
       {/* Branding Tab (Unlimited only) */}

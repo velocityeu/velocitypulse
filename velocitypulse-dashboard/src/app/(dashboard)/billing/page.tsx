@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { authFetch } from '@/lib/auth-fetch'
 import { useRouter } from 'next/navigation'
-import { useUser } from '@clerk/nextjs'
+import { useCurrentUser } from '@/lib/contexts/UserContext'
 import {
   CreditCard,
   AlertTriangle,
@@ -66,7 +66,8 @@ const formatAmount = (cents: number) => `\u00a3${(cents / 100).toFixed(2)}`
 
 export default function BillingPage() {
   const router = useRouter()
-  const { user, isLoaded } = useUser()
+  const { user, isLoading: userLoading } = useCurrentUser()
+  const isLoaded = !userLoading
   const [billingData, setBillingData] = useState<BillingData | null>(null)
   const [organizationId, setOrganizationId] = useState<string>('')
   const [fetchingData, setFetchingData] = useState(true)

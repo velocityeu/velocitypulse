@@ -1,5 +1,6 @@
-import { auth, currentUser } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
+import { ensureUserInDb } from '@/lib/api/ensure-user'
 import { NextResponse } from 'next/server'
 import type { MemberPermissions, MemberRole } from '@/types'
 
@@ -37,7 +38,7 @@ export async function authenticateUser(
       }
     }
 
-    const user = await currentUser()
+    const dbUser = await ensureUserInDb(userId)
     const supabase = createServiceClient()
 
     // Get user's membership in this organization
@@ -89,7 +90,7 @@ export async function authenticateUser(
       authorized: true,
       context: {
         userId,
-        email: user?.emailAddresses[0]?.emailAddress,
+        email: dbUser?.email,
         organizationId,
         role: membership.role as MemberRole,
         permissions: membership.permissions as MemberPermissions,

@@ -1,51 +1,13 @@
 'use client'
 
-import { RefreshCw, Bell, Settings, User, Shield } from 'lucide-react'
+import { RefreshCw, Bell, Settings, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { AgentStatusIndicator } from '@/components/dashboard/AgentStatusIndicator'
-import dynamic from 'next/dynamic'
+import { UserMenu } from '@/components/layout/UserMenu'
 import Link from 'next/link'
 import Image from 'next/image'
-
-// Dynamically import UserButton to prevent SSR issues
-const UserButton = dynamic(
-  () => import('@clerk/nextjs').then((mod) => mod.UserButton),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
-    ),
-  }
-)
-
-// Dynamically import useClerk to handle cases where Clerk is not available
-const ClerkUserSection = dynamic(
-  () =>
-    Promise.resolve(function ClerkUserSectionComponent() {
-      // This component is only rendered when Clerk is available
-      return (
-        <UserButton
-          afterSignOutUrl="/"
-          appearance={{
-            elements: {
-              avatarBox: 'h-8 w-8',
-            },
-          }}
-        />
-      )
-    }),
-  {
-    ssr: false,
-    loading: () => (
-      <Button variant="ghost" size="icon" className="h-9 w-9">
-        <User className="h-4 w-4" />
-        <span className="sr-only">User</span>
-      </Button>
-    ),
-  }
-)
 
 interface HeaderProps {
   onRefresh?: () => void
@@ -177,7 +139,7 @@ export function Header({
             </Button>
           )}
 
-          <ClerkUserSection />
+          <UserMenu />
         </div>
       </div>
     </header>

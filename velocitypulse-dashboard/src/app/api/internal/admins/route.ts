@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { verifyInternalAccess, hasAdminRole } from '@/lib/api/internal-auth'
 import { generateInvitationToken, getInvitationExpiry } from '@/lib/invitations'
@@ -120,48 +119,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'An admin invitation has already been sent to this email' }, { status: 409 })
   }
 
-  // Look up user in Clerk
-  const clerk = await clerkClient()
-  const users = await clerk.users.getUserList({ emailAddress: [email] })
+  // Look up user in DB by email
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id, email, first_name, last_name, image_url, is_staff')
+    .eq('email', email)
+    .single()
 
-  if (users.data.length > 0) {
+  if (existingUser) {
     // ===== Path A: User exists → grant staff directly =====
-    const targetUser = users.data[0]
 
-    // Check if already staff
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id, is_staff')
-      .eq('id', targetUser.id)
-      .single()
-
-    if (existingUser?.is_staff) {
+    if (existingUser.is_staff) {
       return NextResponse.json({ error: 'User is already an admin' }, { status: 409 })
     }
 
     // Set is_staff = true
-    if (existingUser) {
-      await supabase
-        .from('users')
-        .update({ is_staff: true })
-        .eq('id', targetUser.id)
-    } else {
-      // User doesn't exist in users table yet - create
-      await supabase.from('users').insert({
-        id: targetUser.id,
-        email: targetUser.emailAddresses[0]?.emailAddress || email,
-        first_name: targetUser.firstName,
-        last_name: targetUser.lastName,
-        image_url: targetUser.imageUrl,
-        is_staff: true,
-      })
-    }
+    await supabase
+      .from('users')
+      .update({ is_staff: true })
+      .eq('id', existingUser.id)
 
     // Create admin_roles row
     const { error: roleError } = await supabase
       .from('admin_roles')
       .insert({
-        user_id: targetUser.id,
+        user_id: existingUser.id,
         role: body.role,
         is_active: true,
         invited_by: authResult.userId,
@@ -178,18 +160,18 @@ export async function POST(request: NextRequest) {
       actor_email: authResult.email,
       action: 'admin.invited',
       resource_type: 'admin_role',
-      resource_id: targetUser.id,
+      resource_id: existingUser.id,
       metadata: { email, role: body.role },
     })
 
     return NextResponse.json({
       admin: {
-        user_id: targetUser.id,
-        email: targetUser.emailAddresses[0]?.emailAddress || email,
-        first_name: targetUser.firstName,
-        last_name: targetUser.lastName,
-        full_name: [targetUser.firstName, targetUser.lastName].filter(Boolean).join(' ') || 'Unknown',
-        image_url: targetUser.imageUrl,
+        user_id: existingUser.id,
+        email: existingUser.email,
+        first_name: existingUser.first_name,
+        last_name: existingUser.last_name,
+        full_name: [existingUser.first_name, existingUser.last_name].filter(Boolean).join(' ') || 'Unknown',
+        image_url: existingUser.image_url,
         role: body.role,
         is_active: true,
         invited_by: authResult.userId,

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { auth, currentUser } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/db/client'
+import { ensureUserInDb } from '@/lib/api/ensure-user'
 import { logger } from '@/lib/logger'
 
 // Force Node.js runtime (not Edge) - required for Stripe
@@ -31,8 +32,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await currentUser()
-    const email = user?.emailAddresses[0]?.emailAddress
+    const dbUser = await ensureUserInDb(userId)
+    const email = dbUser?.email
 
     const body = await request.json()
     const { priceId, organizationId } = body

@@ -1,8 +1,9 @@
 import { clearOrgCache } from '@/lib/contexts/OrganizationContext'
+import { clearUserCache } from '@/lib/contexts/UserContext'
 
 /**
  * Drop-in fetch() replacement that handles 401 session expiry.
- * On 401: clears the org cache and redirects to /sign-in.
+ * On 401: clears the org + user caches and redirects to /sign-in.
  * On other non-ok responses: throws an Error with status + response text.
  */
 export async function authFetch(
@@ -13,6 +14,7 @@ export async function authFetch(
 
   if (response.status === 401) {
     clearOrgCache()
+    clearUserCache()
     if (typeof window !== 'undefined') {
       window.location.href = '/sign-in'
     }

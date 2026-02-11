@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth, clerkClient } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
 import { PLAN_LIMITS } from '@/lib/constants'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
@@ -209,20 +209,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'An invitation has already been sent to this email' }, { status: 409 })
     }
 
-    // Check if user exists in Clerk
-    const clerk = await clerkClient()
-    const clerkUsers = await clerk.users.getUserList({ emailAddress: [email] })
+    // Check if user exists in our DB (by email)
+    const { data: existingDbUser } = await supabase
+      .from('users')
+      .select('id, email, first_name, last_name, image_url')
+      .eq('email', email)
+      .single()
 
-    if (clerkUsers.data.length > 0) {
+    if (existingDbUser) {
       // ===== Path A: User exists → add directly =====
-      const invitedUser = clerkUsers.data[0]
 
       // Check if already a member
       const { data: existingMember } = await supabase
         .from('organization_members')
         .select('id')
         .eq('organization_id', organizationId)
-        .eq('user_id', invitedUser.id)
+        .eq('user_id', existingDbUser.id)
         .single()
 
       if (existingMember) {
@@ -234,7 +236,7 @@ export async function POST(request: NextRequest) {
         .from('organization_members')
         .insert({
           organization_id: organizationId,
-          user_id: invitedUser.id,
+          user_id: existingDbUser.id,
           role,
           permissions: DEFAULT_PERMISSIONS[role],
         })
@@ -247,8 +249,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Send notification email
-      const userEmail = invitedUser.emailAddresses[0]?.emailAddress || email
-      await sendMemberAddedNotificationEmail(org.name, role, userEmail)
+      await sendMemberAddedNotificationEmail(org.name, role, existingDbUser.email)
 
       // Audit log
       await supabase.from('audit_logs').insert({
@@ -265,12 +266,12 @@ export async function POST(request: NextRequest) {
         member: {
           ...member,
           user: {
-            id: invitedUser.id,
-            email: userEmail,
-            firstName: invitedUser.firstName,
-            lastName: invitedUser.lastName,
-            fullName: [invitedUser.firstName, invitedUser.lastName].filter(Boolean).join(' ') || 'Unknown',
-            imageUrl: invitedUser.imageUrl,
+            id: existingDbUser.id,
+            email: existingDbUser.email,
+            firstName: existingDbUser.first_name,
+            lastName: existingDbUser.last_name,
+            fullName: [existingDbUser.first_name, existingDbUser.last_name].filter(Boolean).join(' ') || 'Unknown',
+            imageUrl: existingDbUser.image_url,
           },
         },
       }, { status: 201 })

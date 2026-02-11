@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { authFetch } from '@/lib/auth-fetch'
-import { useUser } from '@clerk/nextjs'
+import { useCurrentUser } from '@/lib/contexts/UserContext'
 import { APP_VERSION, LATEST_AGENT_VERSION } from '@/lib/constants'
 
 export function DashboardInfoBar() {
-  const { user } = useUser()
+  const { user } = useCurrentUser()
   const [time, setTime] = useState('')
   const [clientIp, setClientIp] = useState<string | null>(null)
 
@@ -32,7 +32,7 @@ export function DashboardInfoBar() {
       .catch(() => setClientIp(null))
   }, [])
 
-  const email = user?.primaryEmailAddress?.emailAddress
+  const email = user?.email
 
   return (
     <div className="hidden md:flex items-center justify-between px-4 h-7 border-b bg-muted/30 text-[11px] font-mono text-muted-foreground select-none">

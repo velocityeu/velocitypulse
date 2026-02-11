@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { useAuth } from '@clerk/nextjs'
+import { useCurrentUser } from '@/lib/contexts/UserContext'
 import { Loader2, CheckCircle2, XCircle, Mail, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -33,7 +33,8 @@ export default function AcceptInvitePageWrapper() {
 function AcceptInvitePage() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { isSignedIn, isLoaded } = useAuth()
+  const { isSignedIn, isLoading: userLoading } = useCurrentUser()
+  const isLoaded = !userLoading
   const token = searchParams.get('token')
 
   const [invitation, setInvitation] = useState<InvitationMeta | null>(null)

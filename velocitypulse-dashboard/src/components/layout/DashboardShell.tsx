@@ -9,23 +9,12 @@ import { Sidebar, MobileSidebar, MobileMenuButton } from '@/components/layout/Si
 import { DashboardInfoBar } from '@/components/layout/DashboardInfoBar'
 import { AgentStatusIndicator } from '@/components/dashboard/AgentStatusIndicator'
 import { useOrganization } from '@/lib/contexts/OrganizationContext'
+import { useCurrentUser } from '@/lib/contexts/UserContext'
 import { useBranding } from '@/lib/hooks/useBranding'
 import { formatTrialStatus, getTrialDaysRemaining } from '@/lib/utils'
-import { useUser } from '@clerk/nextjs'
-import dynamic from 'next/dynamic'
+import { UserMenu } from '@/components/layout/UserMenu'
 import Link from 'next/link'
 import Image from 'next/image'
-
-// Dynamically import UserButton to prevent SSR issues
-const UserButton = dynamic(
-  () => import('@clerk/nextjs').then((mod) => mod.UserButton),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
-    ),
-  }
-)
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -49,9 +38,8 @@ function getBadgeVariant(planName: string, trialDaysRemaining?: number | null): 
 }
 
 function useIsStaff(): boolean {
-  const { user } = useUser()
-  const role = (user?.publicMetadata as { role?: string })?.role
-  return role === 'staff' || role === 'admin'
+  const { user } = useCurrentUser()
+  return user?.is_staff === true
 }
 
 export function DashboardShell({ children }: DashboardShellProps) {
@@ -121,14 +109,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
             <span className="sr-only">Notifications</span>
           </Button>
 
-          <UserButton
-            afterSignOutUrl="/"
-            appearance={{
-              elements: {
-                avatarBox: 'h-8 w-8',
-              },
-            }}
-          />
+          <UserMenu />
         </div>
       </div>
     </header>

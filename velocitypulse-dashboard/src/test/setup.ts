@@ -1,11 +1,15 @@
 import { vi } from 'vitest'
 
-// Mock Clerk auth
+// Mock Clerk auth — keep auth() and currentUser() (used as fallback by ensureUserInDb)
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn().mockResolvedValue({ userId: 'test-user-id', sessionClaims: {} }),
   currentUser: vi.fn().mockResolvedValue({
     id: 'test-user-id',
     emailAddresses: [{ emailAddress: 'test@example.com' }],
+    firstName: 'Test',
+    lastName: 'User',
+    imageUrl: null,
+    publicMetadata: {},
   }),
   clerkMiddleware: vi.fn((handler) => handler),
   createRouteMatcher: vi.fn(() => () => false),
@@ -17,6 +21,7 @@ vi.mock('@/lib/db/client', () => {
     select: vi.fn().mockReturnThis(),
     insert: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
+    upsert: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),

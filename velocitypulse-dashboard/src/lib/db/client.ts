@@ -43,11 +43,17 @@ export const supabase = {
   from: (table: string) => getAdminClient().from(table),
 }
 
+// Singleton for browser-side client
+let browserClient: SupabaseClient | null = null
+
 /**
  * Create Supabase client for client-side usage
  * Uses anon key with RLS enforced
+ * Returns a singleton to avoid multiple GoTrueClient instances
  */
 export function createBrowserClient() {
+  if (browserClient) return browserClient
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -55,22 +61,16 @@ export function createBrowserClient() {
     throw new Error('Supabase environment variables not configured')
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey)
+  browserClient = createClient(supabaseUrl, supabaseAnonKey)
+  return browserClient
 }
 
 /**
  * Create Supabase client for server-side usage with service role
- * Bypasses RLS - use carefully
+ * Delegates to getAdminClient() singleton to avoid creating multiple clients
  */
-export function createServiceClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Supabase service role not configured')
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey)
+export function createServiceClient(): SupabaseClient {
+  return getAdminClient()
 }
 
 /**

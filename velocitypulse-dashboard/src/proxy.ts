@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // ---- Route matchers (from existing proxy.ts) ----
 const isPublicRoute = createRouteMatcher([
@@ -47,6 +47,8 @@ const securityHeaders: Record<string, string> = {
     "font-src 'self'",
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.clerk.accounts.dev https://clerk.velocitypulse.io https://*.ingest.sentry.io https://challenges.cloudflare.com",
     "frame-src https://js.stripe.com https://*.clerk.accounts.dev https://clerk.velocitypulse.io https://challenges.cloudflare.com",
+    "worker-src 'self' blob:",
+    "child-src 'self' blob:",
     "form-action 'self'",
   ].join('; '),
 }
@@ -90,17 +92,26 @@ function checkRateLimit(ip: string, path: string): boolean {
   return entry.count <= max
 }
 
+// ---- Singleton Supabase client for middleware ----
+let middlewareClient: SupabaseClient | null = null
+function getMiddlewareClient(): SupabaseClient | null {
+  if (middlewareClient) return middlewareClient
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  middlewareClient = createClient(url, key)
+  return middlewareClient
+}
+
 // ---- Org status check (from existing proxy.ts) ----
 async function getOrgStatus(userId: string): Promise<{
   status: string
   trial_ends_at: string | null
 } | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
+  const supabase = getMiddlewareClient()
+  if (!supabase) return null
 
   try {
-    const supabase = createClient(url, key)
     const { data: membership } = await supabase
       .from('organization_members')
       .select('organization_id')
@@ -162,21 +173,29 @@ export default clerkMiddleware(async (auth, request) => {
 
   // Internal routes require staff role (checked via Supabase users table)
   if (isInternalRoute(request)) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
     let isStaff = false
 
-    if (url && key) {
-      const sb = createClient(url, key)
-      const { data: staffUser } = await sb
-        .from('users')
-        .select('is_staff')
-        .eq('id', userId)
-        .single()
-      isStaff = staffUser?.is_staff === true
+    try {
+      const sb = getMiddlewareClient()
+      if (sb) {
+        const { data: staffUser } = await sb
+          .from('users')
+          .select('is_staff')
+          .eq('id', userId)
+          .single()
+        isStaff = staffUser?.is_staff === true
+      }
+    } catch (err) {
+      console.error('Staff check failed for user', userId, err)
     }
 
     if (!isStaff) {
+      // API routes get JSON 403, page routes get redirected
+      if (pathname.startsWith('/api/')) {
+        return addSecurityHeaders(
+          NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        )
+      }
       return addSecurityHeaders(NextResponse.redirect(new URL('/dashboard', request.url)))
     }
   }

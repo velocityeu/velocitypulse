@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { authFetch } from '@/lib/auth-fetch'
 import { useRouter } from 'next/navigation'
-import { useUser } from '@clerk/nextjs'
+import { useCurrentUser } from '@/lib/contexts/UserContext'
 import { Building2, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,7 +13,8 @@ import { EmbeddedCheckout } from '@/components/billing/EmbeddedCheckout'
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const { user, isLoaded } = useUser()
+  const { user, isLoading: userLoading } = useCurrentUser()
+  const isLoaded = !userLoading
   const [step, setStep] = useState<1 | 2>(1)
   const [orgName, setOrgName] = useState('')
   const [organizationId, setOrganizationId] = useState<string>('')
@@ -48,7 +49,7 @@ export default function OnboardingPage() {
   // Pre-fill with user's email domain
   useEffect(() => {
     if (user && !orgName) {
-      const email = user.emailAddresses[0]?.emailAddress
+      const email = user.email
       if (email) {
         const domain = email.split('@')[1]
         if (domain && !['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com'].includes(domain)) {

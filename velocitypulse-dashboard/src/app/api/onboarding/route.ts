@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { auth, currentUser } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/db/client'
+import { ensureUserInDb } from '@/lib/api/ensure-user'
 import { PLAN_LIMITS, TRIAL_DURATION_DAYS } from '@/lib/constants'
 import { generateCustomerNumber, generateUniqueSlug } from '@/lib/utils'
 import { sendWelcomeEmail } from '@/lib/emails/lifecycle'
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await currentUser()
+    const dbUser = await ensureUserInDb(userId)
 
     let rawBody: unknown
     try {
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
       resource_id: newOrg.id,
       metadata: {
         name,
-        email: user?.emailAddresses[0]?.emailAddress,
+        email: dbUser?.email,
       },
     })
 
@@ -154,7 +155,7 @@ export async function POST(request: Request) {
     }
 
     // Send welcome email (non-fatal)
-    const ownerEmail = user?.emailAddresses[0]?.emailAddress
+    const ownerEmail = dbUser?.email
     if (ownerEmail) {
       sendWelcomeEmail(name, ownerEmail).catch(err =>
         logger.error('Failed to send welcome email', err, { route: 'api/onboarding' })

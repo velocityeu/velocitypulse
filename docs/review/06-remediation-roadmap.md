@@ -17,8 +17,8 @@ Current recommendation: **No-Launch (commercial deployment hold).**
 
 Blocking themes:
 
-1. Stripe lifecycle correctness gaps (idempotency, ordering, refunds/disputes, price validation).
-2. Stripe financial policy finalization gaps (refund/dispute customer-communication and entitlement policy sign-off).
+1. Final Stripe lifecycle completeness gaps (same-second ordering tie-break, recovery communication policy).
+2. Remaining Wave A completion gaps outside Stripe (installer endpoint smoke evidence, release-gate completion).
 3. Remaining Wave B reliability hardening (distributed marketing rate limiting, expanded tenancy rollout, operational notification visibility).
 
 ## Priority Model
@@ -30,9 +30,10 @@ Blocking themes:
 
 ## Consolidated Blocker List (Must Close Pre-Launch)
 
-1. Stripe refund/dispute/chargeback lifecycle policy sign-off + operational playbooks (`P1`).
-2. Stripe webhook cross-table atomicity hardening (`P1`).
-3. Complete distributed/externally backed marketing rate limiter rollout (`P2`).
+1. Stripe same-second ordering tie-break + replay evidence (`P2`).
+2. Recovery/non-invitation lifecycle communication policy finalization (`P2`).
+3. Agent installer endpoint smoke execution against deployed `get.velocitypulse.io` in CI (`P1`).
+4. Complete distributed/externally backed marketing rate limiter rollout (`P2`).
 
 ## Workstream Plan
 
@@ -54,7 +55,7 @@ Blocking themes:
 Baseline date: 2026-02-11  
 Last updated: 2026-02-11  
 Update owner: Program lead (or delegated PM/EM)  
-Overall program health: `Red`  
+Overall program health: `Amber`  
 Health last updated: 2026-02-11
 
 Status values:
@@ -82,9 +83,9 @@ Status values:
 
 | Workstream | Owner | Target Start | Target End | Status | % Complete | Last Update | Next Update | Notes / Current Blocker |
 |---|---|---|---|---|---|---|---|---|
-| WS-01 Stripe core correctness | Backend Lead (Billing) | 2026-02-12 | 2026-02-20 | In Progress | 65% | 2026-02-11 | 2026-02-18 | Implemented: strict `priceId` allow-listing, webhook event ledger + retry semantics, monotonic event freshness columns/guards, safer Stripe status mapping, payment recovery audit, and core webhook write error handling. Remaining: end-to-end replay/order matrix rerun + atomicity hardening via DB transaction/RPC path. |
-| WS-02 Stripe financial edge handling | Backend Lead (Billing) + Billing Ops | 2026-02-18 | 2026-02-25 | In Progress | 35% | 2026-02-11 | 2026-02-18 | Implemented webhook handlers for `charge.refunded` and dispute lifecycle (`charge.dispute.created`/`charge.dispute.closed`) with deterministic org status + audit actions. Remaining: finalize explicit product policy (refund consequences, dispute-lost handling), add customer comms templates, and complete matrix retest evidence. |
-| WS-03 Email delivery contract hardening | Backend Lead + Growth Eng | 2026-02-12 | 2026-02-19 | In Progress | 78% | 2026-02-11 | 2026-02-18 | Added durable Stripe lifecycle email delivery history (`outbound_email_deliveries`) and retained strict invitation/email false-success protections + marketing sink contract. Remaining: unify lifecycle/member non-invitation email policy (strict fail vs degraded) and standardize telemetry shape across routes. |
+| WS-01 Stripe core correctness | Backend Lead (Billing) | 2026-02-12 | 2026-02-20 | In Progress | 88% | 2026-02-11 | 2026-02-18 | Implemented: strict `priceId` allow-listing, webhook event ledger + retry semantics, monotonic freshness guards, safer Stripe status mapping, and atomic org/subscription reconciliation via `apply_stripe_lifecycle_state` (migration `018`). Remaining: end-to-end replay/order matrix rerun and explicit same-second tie-break policy evidence. |
+| WS-02 Stripe financial edge handling | Backend Lead (Billing) + Billing Ops | 2026-02-18 | 2026-02-25 | In Progress | 84% | 2026-02-11 | 2026-02-18 | Implemented deterministic refund/dispute lifecycle policy with versioned metadata, audit actions, and dedicated customer comm templates (refund processed, dispute opened/closed). Remaining: finalize runbook-level support playbook wording and complete matrix retest evidence. |
+| WS-03 Email delivery contract hardening | Backend Lead + Growth Eng | 2026-02-12 | 2026-02-19 | In Progress | 86% | 2026-02-11 | 2026-02-18 | Added durable Stripe lifecycle email delivery history and expanded lifecycle template coverage for refund/dispute flows. Remaining: unify lifecycle/member non-invitation email policy (strict fail vs degraded) and standardize telemetry shape across routes. |
 | WS-04 Notification parity + reliability | Backend Lead (Monitoring) | 2026-02-20 | 2026-02-28 | In Progress | 72% | 2026-02-11 | 2026-02-18 | Added DB-backed retry/dead-letter queue (`notification_retry_queue`) + cron processor (`/api/cron/notifications`) in addition to earlier producer/config validation work. Remaining: operator-facing queue/history UI and sustained-failure alerting thresholds. |
 | WS-05 Agent installer + upgrade hardening | Agent Lead + DevOps Lead | 2026-02-12 | 2026-02-24 | In Progress | 92% | 2026-02-11 | 2026-02-18 | Implemented: installer source alignment (`velocityeu/velocitypulse`), archive/manifest-safe upgrader URL handling, dependency-safe upgrade (`npm ci --omit=dev`), rollback/health checks, command payload validation, and release test gating. Remaining: dedicated endpoint smoke execution against deployed `get.velocitypulse.io` in CI environment. |
 | WS-06 Agent runtime security hardening | Agent Lead + Security Lead | 2026-02-12 | 2026-02-21 | In Progress | 88% | 2026-02-11 | 2026-02-18 | Implemented localhost-default binding, token auth for UI HTTP + Socket routes, and optional disable (`AGENT_UI_ENABLED=false`). Remaining: document operator token rotation runbook and long-term session UX. |

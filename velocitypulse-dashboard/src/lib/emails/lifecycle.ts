@@ -184,6 +184,75 @@ export async function sendPaymentFailedEmail(
   )
 }
 
+export async function sendRefundProcessedEmail(
+  orgName: string,
+  amountFormatted: string,
+  isFullRefund: boolean,
+  recipients: string[]
+): Promise<boolean> {
+  return sendEmail(
+    recipients,
+    isFullRefund
+      ? `Full refund processed for ${orgName}`
+      : `Partial refund processed for ${orgName}`,
+    emailTemplate('Refund Processed', '#0ea5e9', `
+      <p>We've processed a ${isFullRefund ? 'full' : 'partial'} refund of <strong>${amountFormatted}</strong> for <strong>${orgName}</strong>.</p>
+      <p>${isFullRefund
+        ? 'Your subscription has been cancelled as part of this full refund.'
+        : 'Your subscription remains active. If this refund was unexpected, please contact support.'
+      }</p>
+      ${actionButton(`${APP_URL}/billing`, 'View Billing')}
+      <p style="color: #666; font-size: 14px; margin-top: 24px;">Questions? Contact <a href="mailto:support@velocitypulse.io" style="color: #2563eb;">support@velocitypulse.io</a>.</p>
+    `)
+  )
+}
+
+export async function sendDisputeOpenedEmail(
+  orgName: string,
+  amountFormatted: string,
+  reason: string,
+  recipients: string[]
+): Promise<boolean> {
+  return sendEmail(
+    recipients,
+    `[Action Required] Dispute opened for ${orgName}`,
+    emailTemplate('Payment Dispute Opened', '#f59e0b', `
+      <p>A payment dispute has been opened for <strong>${orgName}</strong> involving <strong>${amountFormatted}</strong>.</p>
+      <p><strong>Reason:</strong> ${reason}</p>
+      <p>Your account may have temporary service restrictions while this is reviewed.</p>
+      ${actionButton(`${APP_URL}/billing`, 'Review Billing')}
+      <p style="color: #666; font-size: 14px; margin-top: 24px;">Please contact <a href="mailto:support@velocitypulse.io" style="color: #2563eb;">support@velocitypulse.io</a> if you need assistance.</p>
+    `)
+  )
+}
+
+export async function sendDisputeClosedEmail(
+  orgName: string,
+  outcome: string,
+  recipients: string[]
+): Promise<boolean> {
+  const normalized = outcome.toLowerCase()
+  const isWon = normalized === 'won'
+  const isLost = normalized === 'lost'
+  const outcomeText = isWon
+    ? 'The dispute was resolved in your favor.'
+    : isLost
+    ? 'The dispute was resolved against your account.'
+    : 'The dispute has been closed.'
+
+  return sendEmail(
+    recipients,
+    `Dispute closed for ${orgName}`,
+    emailTemplate('Payment Dispute Closed', isWon ? '#16a34a' : isLost ? '#dc2626' : '#6b7280', `
+      <p>${outcomeText}</p>
+      <p>Organization: <strong>${orgName}</strong></p>
+      <p>Outcome: <strong>${normalized.toUpperCase()}</strong></p>
+      ${actionButton(`${APP_URL}/billing`, 'Open Billing')}
+      <p style="color: #666; font-size: 14px; margin-top: 24px;">If you have questions, contact <a href="mailto:support@velocitypulse.io" style="color: #2563eb;">support@velocitypulse.io</a>.</p>
+    `)
+  )
+}
+
 // ===== Invitation Email Functions =====
 
 export async function sendMemberInvitationEmail(

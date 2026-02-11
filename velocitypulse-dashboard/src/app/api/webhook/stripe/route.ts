@@ -9,6 +9,9 @@ import {
   sendSubscriptionActivatedEmail,
   sendSubscriptionCancelledEmail,
   sendPaymentFailedEmail,
+  sendRefundProcessedEmail,
+  sendDisputeOpenedEmail,
+  sendDisputeClosedEmail,
 } from '@/lib/emails/lifecycle'
 import {
   acquireStripeWebhookEventProcessing,
@@ -60,16 +63,6 @@ function getCustomerId(
   return typeof customer === 'string' ? customer : customer.id
 }
 
-function isUniqueViolation(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
-
-  const code = (error as { code?: string }).code
-  if (code === '23505') return true
-
-  const message = (error as { message?: string }).message || ''
-  return /duplicate key/i.test(message)
-}
-
 interface OrganizationStripeState {
   id: string
   name: string
@@ -78,10 +71,15 @@ interface OrganizationStripeState {
   stripe_last_event_created: number | null
 }
 
-interface SubscriptionStripeState {
-  id: string
-  stripe_last_event_created: number | null
+interface StripeLifecycleApplyResult {
+  applied?: boolean
+  reason?: string
+  error?: string
+  subscription_applied?: boolean
+  subscription_inserted?: boolean
 }
+
+const FINANCIAL_POLICY_VERSION = '2026-02-11.2'
 
 async function getOrganizationByCustomerId(
   supabase: ReturnType<typeof createServiceClient>,
@@ -100,95 +98,33 @@ async function getOrganizationByCustomerId(
   return data ?? null
 }
 
-async function getSubscriptionState(
+async function applyStripeLifecycleState(
   supabase: ReturnType<typeof createServiceClient>,
-  stripeSubscriptionId: string
-): Promise<SubscriptionStripeState | null> {
-  const { data, error } = await supabase
-    .from('subscriptions')
-    .select('id, stripe_last_event_created')
-    .eq('stripe_subscription_id', stripeSubscriptionId)
-    .maybeSingle<SubscriptionStripeState>()
-
-  if (error) {
-    throw error
-  }
-
-  return data ?? null
-}
-
-async function updateOrganizationForEvent(
-  supabase: ReturnType<typeof createServiceClient>,
+  event: Stripe.Event,
   organizationId: string,
-  event: Stripe.Event,
-  payload: Record<string, unknown>
-): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('organizations')
-    .update({
-      ...payload,
-      stripe_last_event_created: event.created,
-      stripe_last_event_id: event.id,
-    })
-    .eq('id', organizationId)
-    .lte('stripe_last_event_created', event.created)
-    .select('id')
+  stripeSubscriptionId: string | null,
+  orgPatch: Record<string, unknown>,
+  subscriptionPatch?: Record<string, unknown>
+): Promise<StripeLifecycleApplyResult> {
+  const { data, error } = await supabase.rpc('apply_stripe_lifecycle_state', {
+    p_organization_id: organizationId,
+    p_stripe_subscription_id: stripeSubscriptionId,
+    p_event_created: event.created,
+    p_event_id: event.id,
+    p_org_patch: orgPatch,
+    p_sub_patch: subscriptionPatch ?? null,
+  })
 
   if (error) {
     throw error
   }
 
-  return (data?.length ?? 0) > 0
-}
-
-async function upsertSubscriptionForEvent(
-  supabase: ReturnType<typeof createServiceClient>,
-  stripeSubscriptionId: string,
-  event: Stripe.Event,
-  payload: Record<string, unknown>
-): Promise<boolean> {
-  const { data: updatedRows, error: updateError } = await supabase
-    .from('subscriptions')
-    .update({
-      ...payload,
-      stripe_last_event_created: event.created,
-      stripe_last_event_id: event.id,
-    })
-    .eq('stripe_subscription_id', stripeSubscriptionId)
-    .lte('stripe_last_event_created', event.created)
-    .select('id')
-
-  if (updateError) {
-    throw updateError
+  const result = (data as StripeLifecycleApplyResult | null) ?? { applied: false, reason: 'empty_result' }
+  if (!result.applied && (result.reason === 'exception' || result.error)) {
+    throw new Error(result.error ?? 'apply_stripe_lifecycle_state failed')
   }
 
-  if ((updatedRows?.length ?? 0) > 0) {
-    return true
-  }
-
-  const existing = await getSubscriptionState(supabase, stripeSubscriptionId)
-  if (existing) {
-    return !isStripeEventStale(event.created, existing.stripe_last_event_created)
-  }
-
-  const { error: insertError } = await supabase
-    .from('subscriptions')
-    .insert({
-      stripe_subscription_id: stripeSubscriptionId,
-      ...payload,
-      stripe_last_event_created: event.created,
-      stripe_last_event_id: event.id,
-    })
-
-  if (!insertError) {
-    return true
-  }
-
-  if (isUniqueViolation(insertError)) {
-    return true
-  }
-
-  throw insertError
+  return result
 }
 
 async function safeInsertAuditLog(
@@ -291,6 +227,38 @@ function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   return typeof subscription === 'string' ? subscription : subscription.id
 }
 
+function mapOrganizationStatusToSubscriptionStatus(status: string): LocalSubscriptionStatus {
+  switch (status) {
+    case 'active':
+      return 'active'
+    case 'past_due':
+    case 'suspended':
+      return 'past_due'
+    case 'cancelled':
+      return 'cancelled'
+    default:
+      return 'incomplete'
+  }
+}
+
+function formatCurrencyAmount(amountCents: number, currency: string | null | undefined): string {
+  const normalized = (currency ?? 'gbp').toUpperCase()
+  return `${normalized} ${(amountCents / 100).toFixed(2)}`
+}
+
+function isFullRefund(charge: Stripe.Charge): boolean {
+  if (!charge.refunded) return false
+  if (!charge.amount || charge.amount <= 0) return false
+  return charge.amount_refunded >= charge.amount
+}
+
+function stripeTimestampToIso(value: number | null | undefined): string {
+  if (!value || value <= 0) {
+    return new Date().toISOString()
+  }
+  return new Date(value * 1000).toISOString()
+}
+
 async function handleRefundEvent(
   supabase: ReturnType<typeof createServiceClient>,
   event: Stripe.Event,
@@ -317,34 +285,16 @@ async function handleRefundEvent(
     return
   }
 
-  if (isStripeEventStale(event.created, org.stripe_last_event_created)) {
-    logger.info('Skipping stale refund event', {
-      route: 'api/webhook/stripe',
-      eventId: event.id,
-      organizationId: org.id,
-    })
-    return
-  }
+  const fullRefund = isFullRefund(charge)
+  const policyOrgStatus = fullRefund ? 'cancelled' : org.status
+  const policySubStatus = fullRefund
+    ? 'cancelled'
+    : mapOrganizationStatusToSubscriptionStatus(org.status)
+  const policyAction = fullRefund ? 'subscription.refund_full' : 'subscription.refund_partial'
+  const policyTemplate = fullRefund ? 'refund_processed_full' : 'refund_processed_partial'
 
-  await updateOrganizationForEvent(supabase, org.id, event, {
-    status: org.status,
-  })
-
-  await safeInsertAuditLog(supabase, {
-    organization_id: org.id,
-    actor_type: 'webhook',
-    actor_id: 'stripe',
-    action: 'subscription.refund_recorded',
-    resource_type: 'charge',
-    resource_id: charge.id,
-    metadata: {
-      amount_refunded: charge.amount_refunded,
-      charge_amount: charge.amount,
-      currency: charge.currency,
-      refunded: charge.refunded,
-    },
-  })
-
+  let subscriptionIdFromInvoice: string | null = null
+  let subscriptionAmountCents = charge.amount_refunded || charge.amount || 0
   const chargeInvoice = (
     charge as Stripe.Charge & {
       invoice?: string | Stripe.Invoice | null
@@ -355,17 +305,8 @@ async function handleRefundEvent(
     const invoiceId = typeof chargeInvoice === 'string' ? chargeInvoice : chargeInvoice.id
     try {
       const invoice = await stripeClient.invoices.retrieve(invoiceId)
-      const subscriptionId = getInvoiceSubscriptionId(invoice)
-      if (subscriptionId) {
-        await upsertSubscriptionForEvent(supabase, subscriptionId, event, {
-          organization_id: org.id,
-          plan: org.plan,
-          status: (charge.refunded ? 'cancelled' : 'active') as LocalSubscriptionStatus,
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          amount_cents: invoice.amount_paid || 0,
-        })
-      }
+      subscriptionIdFromInvoice = getInvoiceSubscriptionId(invoice)
+      subscriptionAmountCents = invoice.amount_paid || invoice.amount_due || subscriptionAmountCents
     } catch (invoiceError) {
       logger.error('Failed to load invoice for refund event', invoiceError, {
         route: 'api/webhook/stripe',
@@ -373,6 +314,73 @@ async function handleRefundEvent(
         chargeId: charge.id,
       })
     }
+  }
+
+  const applyResult = await applyStripeLifecycleState(
+    supabase,
+    event,
+    org.id,
+    subscriptionIdFromInvoice,
+    {
+      status: policyOrgStatus,
+      cancelled_at: fullRefund ? new Date().toISOString() : null,
+    },
+    subscriptionIdFromInvoice
+      ? {
+          organization_id: org.id,
+          plan: org.plan,
+          status: policySubStatus,
+          current_period_start: new Date().toISOString(),
+          current_period_end: new Date().toISOString(),
+          amount_cents: subscriptionAmountCents,
+        }
+      : undefined
+  )
+
+  if (!applyResult.applied) {
+    logger.info('Skipped refund event state apply', {
+      route: 'api/webhook/stripe',
+      eventId: event.id,
+      organizationId: org.id,
+      reason: applyResult.reason,
+    })
+    return
+  }
+
+  await safeInsertAuditLog(supabase, {
+    organization_id: org.id,
+    actor_type: 'webhook',
+    actor_id: 'stripe',
+    action: policyAction,
+    resource_type: 'charge',
+    resource_id: charge.id,
+    metadata: {
+      policy_version: FINANCIAL_POLICY_VERSION,
+      amount_refunded: charge.amount_refunded,
+      charge_amount: charge.amount,
+      currency: charge.currency,
+      refunded: charge.refunded,
+      full_refund: fullRefund,
+      support_followup_required: fullRefund,
+    },
+  })
+
+  const recipients = await getOrgRecipients(supabase, org.id)
+  if (recipients.length > 0) {
+    await sendWebhookLifecycleEmail(
+      supabase,
+      org.id,
+      policyTemplate,
+      recipients,
+      event.id,
+      () => sendRefundProcessedEmail(org.name, formatCurrencyAmount(charge.amount_refunded, charge.currency), fullRefund, recipients),
+      {
+        eventId: event.id,
+        organizationId: org.id,
+        emailType: policyTemplate,
+        policyVersion: FINANCIAL_POLICY_VERSION,
+      }
+    )
   }
 }
 
@@ -404,62 +412,139 @@ async function handleDisputeEvent(
     return
   }
 
-  if (isStripeEventStale(event.created, org.stripe_last_event_created)) {
-    logger.info('Skipping stale dispute event', {
+  let orgStatusTarget: string = org.status
+  let subscriptionStatusTarget: LocalSubscriptionStatus = mapOrganizationStatusToSubscriptionStatus(org.status)
+  let action: string
+  let templateKey: string
+  let metadataOutcome: string
+
+  if (event.type === 'charge.dispute.created') {
+    orgStatusTarget = 'suspended'
+    subscriptionStatusTarget = 'past_due'
+    action = 'subscription.dispute_opened'
+    templateKey = 'dispute_opened'
+    metadataOutcome = 'opened'
+  } else {
+    const disputeWon = dispute.status === 'won' || dispute.status === 'warning_closed'
+    const disputeLost = dispute.status === 'lost'
+
+    orgStatusTarget = disputeWon ? 'active' : disputeLost ? 'cancelled' : org.status
+    subscriptionStatusTarget = disputeWon
+      ? 'active'
+      : disputeLost
+      ? 'cancelled'
+      : mapOrganizationStatusToSubscriptionStatus(org.status)
+    action = 'subscription.dispute_closed'
+    templateKey = disputeWon ? 'dispute_closed_won' : disputeLost ? 'dispute_closed_lost' : 'dispute_closed'
+    metadataOutcome = disputeWon ? 'won' : disputeLost ? 'lost' : 'closed'
+  }
+
+  let subscriptionIdFromInvoice: string | null = null
+  const chargeInvoice = (
+    charge as Stripe.Charge & {
+      invoice?: string | Stripe.Invoice | null
+    }
+  ).invoice
+
+  if (chargeInvoice) {
+    const invoiceId = typeof chargeInvoice === 'string' ? chargeInvoice : chargeInvoice.id
+    try {
+      const invoice = await stripeClient.invoices.retrieve(invoiceId)
+      subscriptionIdFromInvoice = getInvoiceSubscriptionId(invoice)
+    } catch (invoiceError) {
+      logger.error('Failed to load invoice for dispute event', invoiceError, {
+        route: 'api/webhook/stripe',
+        eventId: event.id,
+        disputeId: dispute.id,
+      })
+    }
+  }
+
+  const applyResult = await applyStripeLifecycleState(
+    supabase,
+    event,
+    org.id,
+    subscriptionIdFromInvoice,
+    {
+      status: orgStatusTarget,
+      suspended_at: orgStatusTarget === 'suspended' ? new Date().toISOString() : null,
+      cancelled_at: orgStatusTarget === 'cancelled' ? new Date().toISOString() : null,
+    },
+    subscriptionIdFromInvoice
+      ? {
+          organization_id: org.id,
+          plan: org.plan,
+          status: subscriptionStatusTarget,
+          current_period_start: new Date().toISOString(),
+          current_period_end: new Date().toISOString(),
+          amount_cents: dispute.amount,
+        }
+      : undefined
+  )
+
+  if (!applyResult.applied) {
+    logger.info('Skipped dispute event state apply', {
       route: 'api/webhook/stripe',
       eventId: event.id,
       organizationId: org.id,
+      reason: applyResult.reason,
     })
     return
   }
-
-  if (event.type === 'charge.dispute.created') {
-    await updateOrganizationForEvent(supabase, org.id, event, {
-      status: 'suspended',
-      suspended_at: new Date().toISOString(),
-    })
-
-    await safeInsertAuditLog(supabase, {
-      organization_id: org.id,
-      actor_type: 'webhook',
-      actor_id: 'stripe',
-      action: 'subscription.dispute_opened',
-      resource_type: 'dispute',
-      resource_id: dispute.id,
-      metadata: {
-        amount: dispute.amount,
-        currency: dispute.currency,
-        reason: dispute.reason,
-        status: dispute.status,
-        charge_id: charge.id,
-      },
-    })
-
-    return
-  }
-
-  const disputeWon = dispute.status === 'won' || dispute.status === 'warning_closed'
-  const disputeLost = dispute.status === 'lost'
-
-  await updateOrganizationForEvent(supabase, org.id, event, {
-    status: disputeWon ? 'active' : org.status,
-  })
 
   await safeInsertAuditLog(supabase, {
     organization_id: org.id,
     actor_type: 'webhook',
     actor_id: 'stripe',
-    action: 'subscription.dispute_closed',
+    action,
     resource_type: 'dispute',
     resource_id: dispute.id,
     metadata: {
+      policy_version: FINANCIAL_POLICY_VERSION,
       amount: dispute.amount,
       currency: dispute.currency,
+      reason: dispute.reason,
       status: dispute.status,
-      outcome: disputeWon ? 'won' : disputeLost ? 'lost' : 'closed',
+      outcome: metadataOutcome,
       charge_id: charge.id,
+      support_followup_required: metadataOutcome !== 'won',
     },
   })
+
+  const recipients = await getOrgRecipients(supabase, org.id)
+  if (recipients.length > 0) {
+    if (event.type === 'charge.dispute.created') {
+      await sendWebhookLifecycleEmail(
+        supabase,
+        org.id,
+        templateKey,
+        recipients,
+        event.id,
+        () => sendDisputeOpenedEmail(org.name, formatCurrencyAmount(dispute.amount, dispute.currency), dispute.reason || 'unknown', recipients),
+        {
+          eventId: event.id,
+          organizationId: org.id,
+          emailType: templateKey,
+          policyVersion: FINANCIAL_POLICY_VERSION,
+        }
+      )
+    } else {
+      await sendWebhookLifecycleEmail(
+        supabase,
+        org.id,
+        templateKey,
+        recipients,
+        event.id,
+        () => sendDisputeClosedEmail(org.name, metadataOutcome, recipients),
+        {
+          eventId: event.id,
+          organizationId: org.id,
+          emailType: templateKey,
+          policyVersion: FINANCIAL_POLICY_VERSION,
+        }
+      )
+    }
+  }
 }
 
 export async function POST(request: Request) {
@@ -562,39 +647,39 @@ export async function POST(request: Request) {
 
         const limits = PLAN_LIMITS[plan]
 
-        const orgApplied = await updateOrganizationForEvent(supabase, org.id, event, {
-          stripe_subscription_id: subscription.id,
-          plan,
-          status: 'active',
-          device_limit: limits.devices,
-          agent_limit: limits.agents,
-          user_limit: limits.users,
-          trial_ends_at: null,
-        })
+        const applyResult = await applyStripeLifecycleState(
+          supabase,
+          event,
+          org.id,
+          subscription.id,
+          {
+            stripe_subscription_id: subscription.id,
+            plan,
+            status: 'active',
+            device_limit: limits.devices,
+            agent_limit: limits.agents,
+            user_limit: limits.users,
+            trial_ends_at: null,
+            suspended_at: null,
+            cancelled_at: null,
+          },
+          {
+            organization_id: org.id,
+            plan,
+            status: 'active',
+            current_period_start: stripeTimestampToIso(item?.current_period_start),
+            current_period_end: stripeTimestampToIso(item?.current_period_end),
+            amount_cents: item?.price.unit_amount || 0,
+          }
+        )
 
-        if (!orgApplied) {
-          logger.info('Skipped checkout.session.completed due to stale organization state', {
+        if (!applyResult.applied) {
+          logger.info('Skipped checkout.session.completed state apply', {
             route: 'api/webhook/stripe',
             eventId: event.id,
             organizationId: org.id,
-          })
-          break
-        }
-
-        const subscriptionApplied = await upsertSubscriptionForEvent(supabase, subscription.id, event, {
-          organization_id: org.id,
-          plan,
-          status: 'active',
-          current_period_start: new Date((item?.current_period_start ?? 0) * 1000).toISOString(),
-          current_period_end: new Date((item?.current_period_end ?? 0) * 1000).toISOString(),
-          amount_cents: item?.price.unit_amount || 0,
-        })
-
-        if (!subscriptionApplied) {
-          logger.info('Skipped checkout.session.completed due to stale subscription state', {
-            route: 'api/webhook/stripe',
-            eventId: event.id,
             subscriptionId: subscription.id,
+            reason: applyResult.reason,
           })
           break
         }
@@ -672,31 +757,6 @@ export async function POST(request: Request) {
           })
         }
 
-        const subscriptionPayload: Record<string, unknown> = {
-          organization_id: org.id,
-          status: mappedStatus.subscriptionStatus,
-          current_period_start: new Date((item?.current_period_start ?? 0) * 1000).toISOString(),
-          current_period_end: new Date((item?.current_period_end ?? 0) * 1000).toISOString(),
-          amount_cents: item?.price.unit_amount || 0,
-          plan: newPlan || org.plan,
-        }
-
-        const subscriptionApplied = await upsertSubscriptionForEvent(
-          supabase,
-          subscription.id,
-          event,
-          subscriptionPayload
-        )
-
-        if (!subscriptionApplied) {
-          logger.info('Skipped customer.subscription.updated due to stale subscription state', {
-            route: 'api/webhook/stripe',
-            eventId: event.id,
-            subscriptionId: subscription.id,
-          })
-          break
-        }
-
         const orgUpdate: Record<string, unknown> = {
           status: mappedStatus.organizationStatus,
           stripe_subscription_id: subscription.id,
@@ -714,12 +774,29 @@ export async function POST(request: Request) {
           orgUpdate.user_limit = limits.users
         }
 
-        const orgApplied = await updateOrganizationForEvent(supabase, org.id, event, orgUpdate)
-        if (!orgApplied) {
-          logger.info('Skipped customer.subscription.updated due to stale organization state', {
+        const applyResult = await applyStripeLifecycleState(
+          supabase,
+          event,
+          org.id,
+          subscription.id,
+          orgUpdate,
+          {
+            organization_id: org.id,
+            status: mappedStatus.subscriptionStatus,
+            current_period_start: stripeTimestampToIso(item?.current_period_start),
+            current_period_end: stripeTimestampToIso(item?.current_period_end),
+            amount_cents: item?.price.unit_amount || 0,
+            plan: newPlan || org.plan,
+          }
+        )
+
+        if (!applyResult.applied) {
+          logger.info('Skipped customer.subscription.updated state apply', {
             route: 'api/webhook/stripe',
             eventId: event.id,
             organizationId: org.id,
+            subscriptionId: subscription.id,
+            reason: applyResult.reason,
           })
           break
         }
@@ -741,6 +818,7 @@ export async function POST(request: Request) {
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
+        const item = getSubscriptionItem(subscription)
         const customerId = getCustomerId(subscription.customer)
         if (!customerId) {
           logger.warn('customer.subscription.deleted missing customer id', {
@@ -769,28 +847,35 @@ export async function POST(request: Request) {
           break
         }
 
-        const orgApplied = await updateOrganizationForEvent(supabase, org.id, event, {
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-        })
+        const applyResult = await applyStripeLifecycleState(
+          supabase,
+          event,
+          org.id,
+          subscription.id,
+          {
+            status: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+          },
+          {
+            organization_id: org.id,
+            plan: org.plan,
+            status: 'cancelled',
+            current_period_start: stripeTimestampToIso(item?.current_period_start),
+            current_period_end: stripeTimestampToIso(item?.current_period_end),
+            amount_cents: 0,
+          }
+        )
 
-        if (!orgApplied) {
-          logger.info('Skipped customer.subscription.deleted due to stale organization state', {
+        if (!applyResult.applied) {
+          logger.info('Skipped customer.subscription.deleted state apply', {
             route: 'api/webhook/stripe',
             eventId: event.id,
             organizationId: org.id,
+            subscriptionId: subscription.id,
+            reason: applyResult.reason,
           })
           break
         }
-
-        await upsertSubscriptionForEvent(supabase, subscription.id, event, {
-          organization_id: org.id,
-          plan: org.plan,
-          status: 'cancelled',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date().toISOString(),
-          amount_cents: 0,
-        })
 
         await safeInsertAuditLog(supabase, {
           organization_id: org.id,
@@ -851,18 +936,34 @@ export async function POST(request: Request) {
           break
         }
 
-        await updateOrganizationForEvent(supabase, org.id, event, { status: 'past_due' })
-
         const stripeSubscriptionId = getInvoiceSubscriptionId(invoice)
-        if (stripeSubscriptionId) {
-          await upsertSubscriptionForEvent(supabase, stripeSubscriptionId, event, {
-            organization_id: org.id,
-            plan: org.plan,
-            status: 'past_due',
-            current_period_start: new Date().toISOString(),
-            current_period_end: new Date().toISOString(),
-            amount_cents: invoice.amount_due || 0,
+        const applyResult = await applyStripeLifecycleState(
+          supabase,
+          event,
+          org.id,
+          stripeSubscriptionId,
+          { status: 'past_due' },
+          stripeSubscriptionId
+            ? {
+                organization_id: org.id,
+                plan: org.plan,
+                status: 'past_due',
+                current_period_start: stripeTimestampToIso(invoice.period_start ?? null),
+                current_period_end: stripeTimestampToIso(invoice.period_end ?? null),
+                amount_cents: invoice.amount_due || 0,
+              }
+            : undefined
+        )
+
+        if (!applyResult.applied) {
+          logger.info('Skipped invoice.payment_failed state apply', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+            subscriptionId: stripeSubscriptionId,
+            reason: applyResult.reason,
           })
+          break
         }
 
         await safeInsertAuditLog(supabase, {
@@ -930,21 +1031,37 @@ export async function POST(request: Request) {
           break
         }
 
-        await updateOrganizationForEvent(supabase, org.id, event, {
-          status: 'active',
-          suspended_at: null,
-        })
-
         const stripeSubscriptionId = getInvoiceSubscriptionId(invoice)
-        if (stripeSubscriptionId) {
-          await upsertSubscriptionForEvent(supabase, stripeSubscriptionId, event, {
-            organization_id: org.id,
-            plan: org.plan,
+        const applyResult = await applyStripeLifecycleState(
+          supabase,
+          event,
+          org.id,
+          stripeSubscriptionId,
+          {
             status: 'active',
-            current_period_start: new Date().toISOString(),
-            current_period_end: new Date().toISOString(),
-            amount_cents: invoice.amount_paid || 0,
+            suspended_at: null,
+          },
+          stripeSubscriptionId
+            ? {
+                organization_id: org.id,
+                plan: org.plan,
+                status: 'active',
+                current_period_start: stripeTimestampToIso(invoice.period_start ?? null),
+                current_period_end: stripeTimestampToIso(invoice.period_end ?? null),
+                amount_cents: invoice.amount_paid || 0,
+              }
+            : undefined
+        )
+
+        if (!applyResult.applied) {
+          logger.info('Skipped invoice.payment_succeeded state apply', {
+            route: 'api/webhook/stripe',
+            eventId: event.id,
+            organizationId: org.id,
+            subscriptionId: stripeSubscriptionId,
+            reason: applyResult.reason,
           })
+          break
         }
 
         await safeInsertAuditLog(supabase, {

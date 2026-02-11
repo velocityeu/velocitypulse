@@ -38,24 +38,13 @@ Status legend:
 | Marketing contact form delivery | Success only when at least one durable sink succeeds | API now fails when all configured sinks fail and returns degraded flag on partial success | PASS | `velocitypulse-web/lib/form-delivery.ts:62`, `velocitypulse-web/app/api/contact/route.ts:27`, `velocitypulse-web/app/api/contact/route.ts:42` |
 | Marketing partner form delivery | Same durability contract as contact form | Same sink-success contract as contact flow | PASS | `velocitypulse-web/lib/form-delivery.ts:85`, `velocitypulse-web/app/api/partners/route.ts:40`, `velocitypulse-web/app/api/partners/route.ts:68` |
 | Marketing email provider error handling | Resend non-2xx should be detected and surfaced | Resend HTTP failures now set explicit sink-level errors | PASS | `velocitypulse-web/lib/form-delivery.ts:147`, `velocitypulse-web/lib/form-delivery.ts:209` |
-| Marketing form abuse control | API POST endpoints rate-limited in production architecture | In-memory limiter remains; no distributed/shared limiter implementation yet | PARTIAL | `velocitypulse-web/middleware.ts:4`, `velocitypulse-web/middleware.ts:14`, `velocitypulse-web/middleware.ts:91` |
+| Marketing form abuse control | API POST endpoints rate-limited in production architecture | Middleware now supports Upstash Redis distributed counters with local fallback for non-configured environments | PASS | `velocitypulse-web/middleware.ts:49`, `velocitypulse-web/middleware.ts:68`, `velocitypulse-web/middleware.ts:150` |
 
 ## Priority Findings
 
 ## P2
 
-### 1. Marketing form rate-limiting is still not horizontally durable
-
-Why this matters:
-
-- Multi-instance deployments can bypass in-memory request counters.
-
-Evidence:
-
-- `velocitypulse-web/middleware.ts:4`
-- `velocitypulse-web/middleware.ts:14`
-
-### 2. Some lifecycle/member email paths still expose partial semantics rather than strict delivery guarantees
+### 1. Some lifecycle/member email paths still expose partial semantics rather than strict delivery guarantees
 
 Why this matters:
 
@@ -73,8 +62,7 @@ Current status: **Materially improved; no open P1 blockers in this matrix.**
 
 Remaining launch-relevant work:
 
-1. Implement distributed marketing POST rate limiting.
-2. Decide policy for strict-vs-degraded behavior on non-invitation lifecycle/member notification emails.
+1. Decide policy for strict-vs-degraded behavior on non-invitation lifecycle/member notification emails.
 
 ## Delta Since Previous Pass
 
@@ -88,5 +76,4 @@ Closed from previous P1 set:
 
 Still open (narrowed scope):
 
-1. Distributed rate limiter hardening for marketing POST endpoints.
-2. Policy tightening for best-effort lifecycle/member non-invitation emails.
+1. Policy tightening for best-effort lifecycle/member non-invitation emails.

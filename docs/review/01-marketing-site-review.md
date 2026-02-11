@@ -49,20 +49,21 @@ Result:
 
 ## P2
 
-### 1. Rate limiting remains in-memory (not horizontally durable)
+### 1. Distributed rate limiting now exists, but deployment must set Upstash envs to avoid fallback mode
 
 Evidence:
 
-- `velocitypulse-web/middleware.ts:4`
-- `velocitypulse-web/middleware.ts:14`
+- `velocitypulse-web/middleware.ts:49`
+- `velocitypulse-web/middleware.ts:68`
+- `velocitypulse-web/middleware.ts:150`
 
 Impact:
 
-- Multi-instance deployments can bypass counters under scale.
+- If Upstash envs are not configured, middleware falls back to local in-memory counters.
 
 Recommendation:
 
-- Move API POST limits to shared backing store (Redis/Upstash/KV).
+- Ensure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set in production environments.
 
 ### 2. Runtime env validation is defined but not startup-enforced in app entrypaths
 
